@@ -340,10 +340,16 @@ h1 {
   box-shadow: var(--sg-glow-rec);
 }
 
-.record-btn[data-state="recording"] {
+.record-btn[data-state="recording"],
+.record-btn[data-state="stopping"] {
   background: var(--sg-surface-2);
   color: var(--sg-rec);
   border-color: var(--sg-rec);
+}
+
+.record-btn[data-state="stopping"],
+.record-btn:disabled {
+  cursor: wait;
 }
 
 .sr-only {

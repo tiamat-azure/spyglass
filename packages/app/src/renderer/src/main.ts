@@ -114,11 +114,14 @@ if (api !== undefined) {
 
   api.session.onState((state: SessionStatePayload) => {
     const recording = state.state === 'recording';
-    recordBtn.dataset.state = recording ? 'recording' : 'idle';
-    recordBtn.textContent = recording ? 'Stop' : 'Record';
-    recPill.dataset.active = recording ? 'true' : 'false';
-    recPill.title = recording ? 'Recording' : 'Recording idle';
-    browserSlot.dataset.recording = recording ? 'true' : 'false';
+    const stopping = state.state === 'stopping';
+    const busy = recording || stopping;
+    recordBtn.dataset.state = stopping ? 'stopping' : recording ? 'recording' : 'idle';
+    recordBtn.textContent = stopping ? 'Stopping' : recording ? 'Stop' : 'Record';
+    recordBtn.disabled = stopping;
+    recPill.dataset.active = busy ? 'true' : 'false';
+    recPill.title = stopping ? 'Stopping' : recording ? 'Recording' : 'Recording idle';
+    browserSlot.dataset.recording = busy ? 'true' : 'false';
   });
 
   api.session.onEvent((event) => {
@@ -208,6 +211,9 @@ recordBtn.addEventListener('click', () => {
   if (api === undefined) {
     return;
   }
+  if (recordBtn.dataset.state === 'stopping' || recordBtn.disabled) {
+    return;
+  }
   const recording = recordBtn.dataset.state === 'recording';
   recordBtn.disabled = true;
   const work = recording ? api.session.stop() : api.session.start();
@@ -216,7 +222,9 @@ recordBtn.addEventListener('click', () => {
       appendLog(log, `session failed: ${error instanceof Error ? error.message : String(error)}`);
     })
     .finally(() => {
-      recordBtn.disabled = false;
+      if (recordBtn.dataset.state !== 'stopping') {
+        recordBtn.disabled = false;
+      }
     });
 });
 

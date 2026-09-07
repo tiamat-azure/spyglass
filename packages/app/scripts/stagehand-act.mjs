@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 /**
  * Lot 1 Stagehand act() proof (F-22 / I-07).
  *
@@ -7,6 +8,7 @@
  * so a successful run proves zero LLM usage.
  */
 
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
@@ -103,9 +105,14 @@ function toHttpCdpUrl(cdpUrl) {
   return cdpUrl;
 }
 
-function readActions() {
+async function readActions() {
   const fromArg = argValue('--actions');
-  const raw = fromArg ?? process.env.SPYGLASS_ACT_ACTIONS ?? '[]';
+  let raw;
+  if (fromArg !== undefined && fromArg.length > 0) {
+    raw = existsSync(fromArg) ? await readFile(fromArg, 'utf8') : fromArg;
+  } else {
+    raw = process.env.SPYGLASS_ACT_ACTIONS ?? '[]';
+  }
   const parsed = JSON.parse(raw);
   if (!Array.isArray(parsed)) {
     throw new Error('actions must be a JSON array');
@@ -172,7 +179,7 @@ async function main() {
 
   let actions;
   try {
-    actions = readActions();
+    actions = await readActions();
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error));
     return;

@@ -57,6 +57,8 @@ export class SessionOrchestrator {
   private retention: CaptureRetention | undefined;
   private eventSeq = 0;
   private stepIndex = 0;
+  private sessionStartedAt = '';
+  private sessionStartUrl = '';
   private lastDom: { kind: string; ts: number; target: ProbeElementDescriptor } | undefined;
   private lastUserActionTs = 0;
   private readonly seenEventIds = new Set<string>();
@@ -128,6 +130,8 @@ export class SessionOrchestrator {
     this.retention = retention;
     this.eventSeq = 0;
     this.stepIndex = 0;
+    this.sessionStartedAt = meta.startedAt;
+    this.sessionStartUrl = startUrl;
     this.seenEventIds.clear();
     this.lastDom = undefined;
     this.discardPendingClick();
@@ -163,6 +167,12 @@ export class SessionOrchestrator {
       let appendedStop = false;
       let raw = '';
       let eventCount = 0;
+      const revertToRecordingAndThrow = (error: unknown): never => {
+        this.state = 'recording';
+        this.since = Date.now();
+        this.emitState();
+        throw error;
+      };
       try {
         await this.flushPendingClick();
         const page = this.pageSnapshot();
@@ -178,13 +188,10 @@ export class SessionOrchestrator {
         appendedStop = true;
         raw = await readFile(journal.path, 'utf8');
         eventCount = parseJsonl(raw).length;
-        await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
+        await this.writeSealMeta(eventCount, new Date().toISOString());
       } catch (error) {
         if (!appendedStop) {
-          this.state = 'recording';
-          this.since = Date.now();
-          this.emitState();
-          throw error;
+          revertToRecordingAndThrow(error);
         }
         try {
           if (raw.length === 0) {
@@ -192,18 +199,22 @@ export class SessionOrchestrator {
           }
           eventCount = parseJsonl(raw).length;
         } catch {
-          if (eventCount === 0) {
-            eventCount = this.eventSeq;
-          }
+          eventCount = this.eventSeq;
         }
         const sealedAt = new Date().toISOString();
         try {
-          await this.patchMeta({ eventCount, sealedAt });
+          await this.writeSealMeta(eventCount, sealedAt);
         } catch {
           try {
-            await this.patchMeta({ eventCount, sealedAt });
-          } catch {
-            // journal already has record.stop
+            await this.writeSealMeta(eventCount, sealedAt);
+          } catch (metaError) {
+            revertToRecordingAndThrow(
+              new Error(
+                `Stop failed: record.stop is in the journal but meta.json could not be sealed (${
+                  metaError instanceof Error ? metaError.message : String(metaError)
+                })`
+              )
+            );
           }
         }
       }
@@ -323,6 +334,18 @@ export class SessionOrchestrator {
       }
       await this.flushPendingClick();
     });
+  }
+
+  pinReplayFailures(
+    events: Array<{ stepIndex?: number }>,
+    result: { ok: boolean; results: Array<{ success: boolean }> }
+  ): void {
+    if (this.retention === undefined) {
+      return;
+    }
+    for (const step of replayFailureStepIndexes(events, result)) {
+      this.retention.pinFailure(step);
+    }
   }
 
   private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
@@ -445,6 +468,9 @@ export class SessionOrchestrator {
     if (step !== undefined && this.retention !== undefined) {
       snapshotRef = await this.captureSnapshot(step);
       screenshotRef = await this.captureScreenshot(step);
+      if (snapshotRef === undefined || screenshotRef === undefined) {
+        this.retention.pinFailure(step);
+      }
     }
     await this.append(
       buildRawEvent({
@@ -513,14 +539,82 @@ export class SessionOrchestrator {
     return events.some((event) => event.id === eventId);
   }
 
-  private async patchMeta(patch: Partial<SessionMeta>): Promise<void> {
+  private buildSealMeta(eventCount: number, sealedAt: string): SessionMeta {
+    return {
+      sessionId: this.sessionId ?? '',
+      startedAt: this.sessionStartedAt,
+      startUrl: this.sessionStartUrl,
+      schemaVersion: 1,
+      toolVersion: '0.0.0',
+      eventCount,
+      sealedAt
+    };
+  }
+
+  private async writeSealMeta(eventCount: number, sealedAt: string): Promise<void> {
     if (this.sessionDir === undefined) {
-      return;
+      throw new Error('Cannot write session meta: no session directory');
     }
     const path = join(this.sessionDir, 'meta.json');
-    const current = JSON.parse(await readFile(path, 'utf8')) as SessionMeta;
-    await writeFile(path, `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`, 'utf8');
+    const rebuilt = this.buildSealMeta(eventCount, sealedAt);
+    let meta = rebuilt;
+    try {
+      const parsed: unknown = JSON.parse(await readFile(path, 'utf8'));
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        const current = parsed as Partial<SessionMeta>;
+        meta = {
+          ...rebuilt,
+          startedAt:
+            typeof current.startedAt === 'string' && current.startedAt.length > 0
+              ? current.startedAt
+              : rebuilt.startedAt,
+          startUrl:
+            typeof current.startUrl === 'string' && current.startUrl.length > 0
+              ? current.startUrl
+              : rebuilt.startUrl,
+          toolVersion:
+            typeof current.toolVersion === 'string' && current.toolVersion.length > 0
+              ? current.toolVersion
+              : rebuilt.toolVersion,
+          eventCount,
+          sealedAt
+        };
+      }
+    } catch {
+      // missing or corrupt JSON — write a full rebuilt meta, not a sealedAt-only patch
+    }
+    await writeFile(path, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
   }
+}
+
+export function replayFailureStepIndexes(
+  events: Array<{ stepIndex?: number }>,
+  result: { ok: boolean; results: Array<{ success: boolean }> }
+): number[] {
+  const pinned: number[] = [];
+  const add = (step: number | undefined): void => {
+    if (step !== undefined && !pinned.includes(step)) {
+      pinned.push(step);
+    }
+  };
+  let anyRowFailed = false;
+  for (let index = 0; index < result.results.length; index += 1) {
+    const row = result.results[index];
+    if (row !== undefined && !row.success) {
+      anyRowFailed = true;
+      add(events[index]?.stepIndex);
+    }
+  }
+  if (!result.ok && !anyRowFailed) {
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const step = events[index]?.stepIndex;
+      if (step !== undefined) {
+        add(step);
+        break;
+      }
+    }
+  }
+  return pinned;
 }
 
 export function screenshotLimitFromEnv(env: NodeJS.ProcessEnv = process.env): number {

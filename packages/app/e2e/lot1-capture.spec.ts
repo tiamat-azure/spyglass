@@ -154,6 +154,16 @@ test.describe('Lot 1 capture', () => {
       const events = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
       expect(events.some((event) => event.kind === 'record.start')).toBe(true);
       expect(events.some((event) => event.kind === 'record.stop')).toBe(true);
+      const sessions = await readdir(sessionsDir);
+      const sessionId = sessions.sort().at(-1);
+      if (sessionId === undefined) {
+        throw new Error('No session id');
+      }
+      const meta = JSON.parse(
+        await readFile(join(sessionsDir, sessionId, 'meta.json'), 'utf8')
+      ) as { eventCount: number; sealedAt?: string };
+      expect(meta.eventCount).toBeGreaterThan(0);
+      expect(typeof meta.sealedAt).toBe('string');
       const capture = events.filter((event) => String(event.kind).startsWith('dom.'));
       expect(capture.length).toBeGreaterThanOrEqual(8);
       expect(

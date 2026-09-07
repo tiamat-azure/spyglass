@@ -469,18 +469,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     await session.flushPendingCapture();
     const events = await session.readRawEvents();
-    const actions = events.flatMap((rawEvent) => {
+    const replayed = events.filter((rawEvent) => {
       if (rawEvent.action === undefined || rawEvent.kind === 'step.retracted') {
-        return [];
+        return false;
       }
-      const retracted = events.some(
+      return !events.some(
         (other) => other.kind === 'step.retracted' && other.retracts === rawEvent.id
       );
-      if (retracted) {
-        return [];
-      }
-      return [toObserveResult(rawEvent.action, rawEvent.kind)];
     });
+    const actions = replayed.flatMap((rawEvent) =>
+      rawEvent.action === undefined ? [] : [toObserveResult(rawEvent.action, rawEvent.kind)]
+    );
     const observeWin = winRef.current;
     if (observeWin !== undefined && !observeWin.isDestroyed()) {
       try {
@@ -490,13 +489,15 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         // pin is best-effort
       }
     }
-    return await runStagehandAct({
+    const result = await runStagehandAct({
       cdpUrl: cdpHttpUrl(cdpPort),
       guestUrl: snapshot.url,
       actions,
       appPath: app.getAppPath(),
       chromeTargetId: pinnedChromeTargetId
     });
+    session.pinReplayFailures(replayed, result);
+    return result;
   });
 
   ipcMain.on(IPC.layoutBrowserBounds, (event, raw: unknown) => {

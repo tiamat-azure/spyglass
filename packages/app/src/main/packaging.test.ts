@@ -41,6 +41,14 @@ describe('packaged Observe', () => {
     expect(act).toContain('applySetChecked');
     expect(act).toContain('deepLocator');
     expect(act).not.toContain('document.querySelector');
+    expect(act).toContain('existsSync(fromArg)');
+    expect(act).toContain('await readFile(fromArg');
+    const actSpawn = readFileSync(join(appRoot, 'src/main/stagehand-act.ts'), 'utf8');
+    expect(actSpawn).toContain("flags.push('--actions', actionsPath)");
+    expect(actSpawn).toContain('mkdtemp');
+    expect(actSpawn).toContain('rm(actionsDir');
+    expect(actSpawn).toContain('delete childEnv.SPYGLASS_ACT_ACTIONS');
+    expect(actSpawn).not.toContain('SPYGLASS_ACT_ACTIONS = JSON.stringify');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).toContain('pageMatchesPickedGuest');
     expect(matcher).toContain('pickStagehandPage');

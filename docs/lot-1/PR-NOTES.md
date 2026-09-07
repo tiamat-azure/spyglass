@@ -35,7 +35,9 @@ capture**. Events append to `raw.jsonl` with fsync (F-40). Retraction appends
 `step.retracted` and never deletes (F-19). Chrome UI Record/Stop (F-10) uses
 `webdesign.md` tokens (REC pill, magenta recording outline). Retention (D-11 /
 ADR-0011) keeps a sliding buffer of N=10 JPEG screenshots plus lightweight DOM
-snapshots; failures can be pinned.
+snapshots. Capture pins a step when its snapshot or screenshot write fails;
+`act()` pins steps whose replay rows fail (or the last step if the worker fails
+without per-row results).
 
 Stagehand `act()` replays those descriptors over CDP with `selfHeal: false`.
 The act worker's stub LLM **throws** if `createChatCompletion` is called, so a

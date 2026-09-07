@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { observeScriptPath, resolveStagehandModule, withObserveMutex } from './stagehand-bridge.ts';
@@ -77,74 +79,82 @@ async function spawnStagehandAct(options: {
   if (options.chromeTargetId !== undefined && options.chromeTargetId.length > 0) {
     flags.push('--chrome-target-id', options.chromeTargetId);
   }
+  const actionsDir = await mkdtemp(join(tmpdir(), 'spyglass-act-'));
+  const actionsPath = join(actionsDir, 'actions.json');
+  await writeFile(actionsPath, `${JSON.stringify(options.actions)}\n`, 'utf8');
+  flags.push('--actions', actionsPath);
   const childEnv: NodeJS.ProcessEnv = { ...process.env };
   if (options.appPath !== undefined && options.appPath.length > 0) {
     childEnv.SPYGLASS_APP_PATH = options.appPath;
   }
   childEnv.ELECTRON_RUN_AS_NODE = '1';
-  childEnv.SPYGLASS_ACT_ACTIONS = JSON.stringify(options.actions);
-  return await new Promise((resolve) => {
-    const child = spawn(process.execPath, [script, ...flags], {
-      env: childEnv,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-    const finish = (value: StagehandActResult): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const timer = setTimeout(() => {
-      child.kill();
-      finish({
-        ok: false,
-        llmCalls: 0,
-        results: [],
-        error: 'Stagehand act timed out',
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
+  delete childEnv.SPYGLASS_ACT_ACTIONS;
+  try {
+    return await new Promise((resolve) => {
+      const child = spawn(process.execPath, [script, ...flags], {
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'pipe']
       });
-    }, 120_000);
-    child.stdout?.on('data', (chunk: string | Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr?.on('data', (chunk: string | Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', (error) => {
-      finish({
-        ok: false,
-        llmCalls: 0,
-        results: [],
-        error: error.message,
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      const finish = (value: StagehandActResult): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const timer = setTimeout(() => {
+        child.kill();
+        finish({
+          ok: false,
+          llmCalls: 0,
+          results: [],
+          error: 'Stagehand act timed out',
+          guestUrl: options.guestUrl,
+          cdpUrl: options.cdpUrl
+        });
+      }, 120_000);
+      child.stdout?.on('data', (chunk: string | Buffer) => {
+        stdout += chunk.toString();
+      });
+      child.stderr?.on('data', (chunk: string | Buffer) => {
+        stderr += chunk.toString();
+      });
+      child.on('error', (error) => {
+        finish({
+          ok: false,
+          llmCalls: 0,
+          results: [],
+          error: error.message,
+          guestUrl: options.guestUrl,
+          cdpUrl: options.cdpUrl
+        });
+      });
+      child.on('exit', (code) => {
+        const parsed = parseActStdout(stdout);
+        if (parsed !== undefined) {
+          finish(parsed);
+          return;
+        }
+        finish({
+          ok: false,
+          llmCalls: 0,
+          results: [],
+          error:
+            stderr.trim().length > 0
+              ? stderr.trim()
+              : `Stagehand act exited ${String(code ?? 'null')} without JSON`,
+          guestUrl: options.guestUrl,
+          cdpUrl: options.cdpUrl
+        });
       });
     });
-    child.on('exit', (code) => {
-      const parsed = parseActStdout(stdout);
-      if (parsed !== undefined) {
-        finish(parsed);
-        return;
-      }
-      finish({
-        ok: false,
-        llmCalls: 0,
-        results: [],
-        error:
-          stderr.trim().length > 0
-            ? stderr.trim()
-            : `Stagehand act exited ${String(code ?? 'null')} without JSON`,
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
-      });
-    });
-  });
+  } finally {
+    await rm(actionsDir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 export function parseActStdout(stdout: string): StagehandActResult | undefined {
