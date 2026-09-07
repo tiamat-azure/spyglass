@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { isChromeUiUrl, parseCdpTargetList, pickGuestTarget } from './cdp-targets.ts';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  GUEST_FALLBACK_CHROME_WARNING,
+  isChromeUiUrl,
+  parseCdpTargetList,
+  pickGuestTarget
+} from './cdp-targets.ts';
 
 describe('pickGuestTarget', () => {
   it('prefers the displayed guest URL over the chrome renderer', () => {
@@ -28,5 +33,25 @@ describe('pickGuestTarget', () => {
       { id: 'start', type: 'page', url: 'file:///app/out/resources/start.html', title: 'start' }
     ]);
     expect(pickGuestTarget(targets)?.id).toBe('start');
+  });
+
+  it('falls back to pages[0] with a loud warning when every page is chrome UI', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const targets = parseCdpTargetList([
+        {
+          id: 'ui',
+          type: 'page',
+          url: 'file:///app/out/renderer/index.html',
+          title: 'Spyglass'
+        }
+      ]);
+      expect(pickGuestTarget(targets)?.id).toBe('ui');
+      expect(warn).toHaveBeenCalled();
+      expect(String(warn.mock.calls[0]?.[0])).toBe(GUEST_FALLBACK_CHROME_WARNING);
+      expect(String(warn.mock.calls[0]?.[0])).toMatch(/privileged chrome UI/i);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

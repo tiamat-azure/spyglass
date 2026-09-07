@@ -6,6 +6,10 @@ const CHROME_UI_HINTS = [
   '/out/renderer/index.html'
 ];
 
+/** Logged when Observe / CDP targeting falls back to a chrome-UI page. */
+export const GUEST_FALLBACK_CHROME_WARNING =
+  '[spyglass] WARNING: No non-chrome guest CDP target matched. Observe may attach to privileged chrome UI (renderer / DevTools). Falling back to the first page target.';
+
 export function isChromeUiUrl(url: string): boolean {
   if (url.length === 0 || url === 'about:blank') {
     return false;
@@ -56,7 +60,23 @@ export function pickGuestTarget(
       return byPrefix;
     }
   }
-  return guests[0] ?? pages.find((target) => !isChromeUiUrl(target.url));
+  if (guests[0] !== undefined) {
+    return guests[0];
+  }
+  const fallback = pages[0];
+  if (fallback !== undefined) {
+    warnGuestFallbackToChrome(fallback);
+    return fallback;
+  }
+  return undefined;
+}
+
+function warnGuestFallbackToChrome(target: CdpTarget): void {
+  console.warn(GUEST_FALLBACK_CHROME_WARNING, {
+    fallbackId: target.id,
+    fallbackUrl: target.url,
+    fallbackTitle: target.title
+  });
 }
 
 export function parseCdpTargetList(input: unknown): CdpTarget[] {

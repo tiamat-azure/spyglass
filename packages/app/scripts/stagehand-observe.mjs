@@ -172,7 +172,19 @@ function pickGuest(targets, guestUrl) {
       return exact;
     }
   }
-  return pages.find((target) => !isChromeUiUrl(target.url)) ?? pages[0];
+  return pages.find((target) => !isChromeUiUrl(target.url)) ?? fallbackFirstPage(pages);
+}
+
+function fallbackFirstPage(pages) {
+  const fallback = pages[0];
+  if (fallback === undefined) {
+    return undefined;
+  }
+  console.warn(
+    '[spyglass] WARNING: No non-chrome guest CDP target matched. Observe may attach to privileged chrome UI (renderer / DevTools). Falling back to the first page target.',
+    { fallbackId: fallback.id, fallbackUrl: fallback.url, fallbackTitle: fallback.title }
+  );
+  return fallback;
 }
 
 async function readCdpInfo() {
