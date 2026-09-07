@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000124",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000450,
+  "kind": "dom.input",
+  "stepIndex": 13,
+  "pageId": "page_main",
+  "target": {
+    "tag": "input",
+    "name": "password",
+    "framePath": ["main"],
+    "shadowPath": []
+  },
+  "value": {
+    "masked": true,
+    "secretRef": "SECRET_PASSWORD"
+  },
+  "action": {
+    "type": "fill",
+    "selector": "input[name='password']",
+    "selectorStrategy": "css"
+  }
+}

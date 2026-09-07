@@ -1,0 +1,39 @@
+{
+  "name": "@spyglass/app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spyglass Electron shell (Lot -1 empty app)",
+  "author": {
+    "name": "Spyglass contributors",
+    "email": "tiamat.azure@gmail.com"
+  },
+  "homepage": "https://github.com/tiamat-azure/spyglass",
+  "desktopName": "spyglass.desktop",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "engines": {
+    "node": "24.20.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "start": "electron-vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "package": "electron-vite build && electron-builder --publish never",
+    "package:linux": "electron-vite build && electron-builder --linux AppImage deb dir --publish never",
+    "package:mac": "electron-vite build && electron-builder --mac dmg --x64 --arm64 --publish never",
+    "package:win": "electron-vite build && electron-builder --win nsis --publish never",
+    "capture:shell": "electron-vite build && electron ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "typescript": "5.9.3",
+    "vite": "7.1.5",
+    "vitest": "5.0.0"
+  }
+}

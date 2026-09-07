@@ -1,0 +1,24 @@
+{
+  "name": "@spyglass/stt",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local STT sidecar scaffold. whisper.cpp packaging lands in a later lot (ADR-0013).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "engines": {
+    "node": "24.20.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  }
+}

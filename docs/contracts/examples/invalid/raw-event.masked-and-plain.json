@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000201",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000123,
+  "kind": "dom.input",
+  "value": {
+    "masked": true,
+    "secretRef": "SECRET_PASSWORD",
+    "text": "should-not-be-here"
+  }
+}

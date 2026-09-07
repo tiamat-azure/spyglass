@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000125",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000500,
+  "kind": "dom.input",
+  "stepIndex": 14,
+  "pageId": "page_main",
+  "target": {
+    "tag": "input",
+    "name": "username",
+    "framePath": ["main"],
+    "shadowPath": []
+  },
+  "value": {
+    "masked": false,
+    "text": "demo-user"
+  }
+}

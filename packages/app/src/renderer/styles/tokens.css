@@ -1,0 +1,134 @@
+/* tokens.css - Spyglass, direction D1 Nocturne Optique */
+
+:root {
+  /* Typographie */
+  --sg-font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --sg-font-display: "Inter Tight", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --sg-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --sg-text-2xs: 10px; /* horodatage, compteurs */
+  --sg-text-xs: 11px; /* bloc technique monospace */
+  --sg-text-sm: 13px; /* corps du chat - taille de référence */
+  --sg-text-md: 14px; /* UI de la coquille */
+  --sg-text-lg: 16px;
+  --sg-text-xl: 20px;
+  --sg-text-2xl: 26px;
+
+  --sg-leading-tight: 1.25;
+  --sg-leading-body: 1.45; /* chat */
+  --sg-tracking-caps: 0.08em; /* REC, étiquettes d'état */
+
+  /* Espacement - échelle indicielle, pas un multiple : l'index n'est pas la valeur.
+     Toute distance des sections 3 à 7 doit référencer un de ces tokens. */
+  --sg-space-1: 2px;
+  --sg-space-2: 4px;
+  --sg-space-3: 6px;
+  --sg-space-4: 8px;
+  --sg-space-5: 12px;
+  --sg-space-6: 16px;
+  --sg-space-7: 24px;
+  --sg-space-8: 32px;
+
+  /* Rayons */
+  --sg-radius-xs: 4px;
+  --sg-radius-sm: 6px;
+  --sg-radius-md: 10px;
+  --sg-radius-lg: 14px;
+  --sg-radius-pill: 999px;
+
+  /* Mouvement */
+  --sg-dur-fast: 120ms; /* changement d'état atomique */
+  --sg-dur-base: 160ms; /* message entrant */
+  --sg-dur-slow: 240ms; /* bascule de régime, dépli */
+  --sg-dur-pulse: 2000ms; /* période de pulsation REC */
+  --sg-dur-brand: 400ms; /* ouverture du logo au lancement */
+  --sg-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --sg-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Structure */
+  --sg-split-default: 75%; /* F-01 */
+  --sg-chat-min: 300px;
+  --sg-gutter: 8px; /* zone tampon entre la vue web et le chat */
+  --sg-rec-frame: 2px;
+
+  /* Élévation - seules valeurs de z-index autorisées */
+  --sg-z-base: 0;
+  --sg-z-sticky: 10; /* en-tête de chat, barre d'URL */
+  --sg-z-overlay: 20; /* couche d'overlay au sein d'une vue ; la surbrillance de cible,
+                          elle, vit dans une vue Electron distincte empilée (C-1 bis) */
+  --sg-z-dialog: 30;
+  --sg-z-toast: 40;
+  --sg-z-tooltip: 50;
+}
+
+/* ---------- Thème sombre (défaut) ---------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --sg-bg: #06090f;
+  --sg-bg-elev: #0b111e;
+  --sg-surface: #0e1524;
+  --sg-surface-2: #131c30;
+  --sg-border: #1e2a44;
+  --sg-border-strong: #2c3c5e;
+
+  --sg-text: #e8f0ff; /* 17,4:1 sur bg - AAA */
+  --sg-text-muted: #8fa3c8; /*  7,8:1 sur bg - AAA */
+
+  --sg-accent: #35f2ff; /* 14,5:1 - l'agent observe et désigne */
+  --sg-accent-ink: #06090f; /* texte posé sur accent */
+  --sg-rec: #ff3d9a; /*  6,1:1 - enregistrement, exclusivement */
+  --sg-success: #3dffa8; /* 15,3:1 - vérification tenue */
+  --sg-warning: #ffc44d; /* 12,6:1 - mode dégradé, weak, seuil 50 % */
+  --sg-danger: #ff6b6b; /*  7,2:1 - échec, scénario obsolète */
+
+  --sg-glow-accent: 0 0 14px color-mix(in oklab, var(--sg-accent) 55%, transparent);
+  --sg-glow-rec: 0 0 14px color-mix(in oklab, var(--sg-rec) 55%, transparent);
+  --sg-shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --sg-shadow-2: 0 6px 20px rgb(0 0 0 / 0.45);
+}
+
+/* ---------- Thème clair jumeau ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --sg-bg: #f7f9fc;
+  --sg-bg-elev: #eef2f8;
+  --sg-surface: #ffffff;
+  --sg-surface-2: #f0f4fa;
+  --sg-border: #e2e8f2;
+  --sg-border-strong: #c9d4e5;
+
+  --sg-text: #0b1220; /* 17,8:1 - AAA */
+  --sg-text-muted: #4e5d78; /*  6,3:1 - AA+ */
+
+  --sg-accent: #0072a8; /*  5,0:1 - AA */
+  --sg-accent-ink: #ffffff;
+  --sg-rec: #c2185b; /*  5,6:1 - AA */
+  --sg-success: #0f7a5a; /*  5,0:1 */
+  --sg-warning: #8a5a00; /*  5,6:1 */
+  --sg-danger: #c2261f; /*  5,5:1 */
+
+  --sg-glow-accent: none; /* pas de néon en thème clair : il n'existe pas optiquement */
+  --sg-glow-rec: none;
+  --sg-shadow-1: 0 1px 2px rgb(11 18 32 / 0.08);
+  --sg-shadow-2: 0 6px 20px rgb(11 18 32 / 0.1);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --sg-glow-accent: none;
+    --sg-glow-rec: none;
+    --sg-border: var(--sg-border-strong);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --sg-dur-fast: 0ms;
+    --sg-dur-base: 0ms;
+    --sg-dur-slow: 0ms;
+    --sg-dur-brand: 0ms;
+    /* la pulsation n'est pas raccourcie, elle est supprimée : voir 3.1 */
+  }
+}
