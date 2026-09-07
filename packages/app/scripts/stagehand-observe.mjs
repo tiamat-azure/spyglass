@@ -224,6 +224,7 @@ async function main() {
     argValue('--chrome-target-id') ?? process.env.SPYGLASS_CHROME_TARGET_ID ?? info?.chromeTargetId;
   const excludeTargetIds =
     typeof chromeTargetId === 'string' && chromeTargetId.length > 0 ? [chromeTargetId] : [];
+  // eligible[0] only — never pages[0], which would re-select pinned chrome after exclude.
   const guest = pickGuestTarget(targets, guestUrl, { excludeTargetIds });
   if (guest === undefined) {
     const failure = {

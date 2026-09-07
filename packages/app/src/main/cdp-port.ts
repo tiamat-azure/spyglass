@@ -1,5 +1,6 @@
 import { createServer } from 'node:net';
 import { app } from 'electron';
+import { isUsableCdpPort } from './cdp-loopback.ts';
 import { CDP_REMOTE_ALLOW_ORIGINS } from './cdp-origins.ts';
 
 export { CDP_REMOTE_ALLOW_ORIGINS };
@@ -32,7 +33,7 @@ export async function resolveCdpPort(): Promise<number> {
   const fromEnv = process.env.SPYGLASS_CDP_PORT;
   if (fromEnv !== undefined && fromEnv.length > 0) {
     const parsed = Number.parseInt(fromEnv, 10);
-    if (Number.isInteger(parsed) && parsed > 0 && parsed < 65536) {
+    if (Number.isInteger(parsed) && isUsableCdpPort(parsed)) {
       return parsed;
     }
   }

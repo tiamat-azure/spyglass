@@ -38,7 +38,7 @@ describe('pickGuestTarget', () => {
     expect(pickGuestTarget(targets)?.id).toBe('start');
   });
 
-  it('falls back to pages[0] with a loud warning when every page is chrome UI', () => {
+  it('falls back to the first eligible chrome page with a loud warning when every page is chrome UI', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const targets = parseCdpTargetList([
@@ -174,6 +174,24 @@ describe('pickGuestTarget', () => {
     expect(
       resolvePinnedChromeTargetId(targets, 'http://localhost:5173/', 'http://localhost:5173/')
     ).toBeUndefined();
+  });
+
+  it('does not re-select excluded chrome when no guest remains', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const targets = parseCdpTargetList([
+        {
+          id: 'chrome',
+          type: 'page',
+          url: 'file:///app/out/renderer/index.html',
+          title: 'Spyglass'
+        }
+      ]);
+      expect(pickGuestTarget(targets, undefined, { excludeTargetIds: ['chrome'] })).toBeUndefined();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

@@ -98,7 +98,7 @@ export function pickGuestTarget(targets, guestUrl, options) {
   if (guests[0] !== undefined) {
     return guests[0];
   }
-  const fallback = eligible[0] ?? pages[0];
+  const fallback = eligible[0];
   if (fallback !== undefined) {
     console.warn(GUEST_FALLBACK_CHROME_WARNING, {
       fallbackId: fallback.id,

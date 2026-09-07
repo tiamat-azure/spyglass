@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isGuestRequestToCdpPort, isLoopbackHostname } from './cdp-loopback.ts';
+import { isGuestRequestToCdpPort, isLoopbackHostname, isUsableCdpPort } from './cdp-loopback.ts';
 
 describe('isGuestRequestToCdpPort', () => {
   it('blocks loopback HTTP and WS to the active CDP port', () => {
@@ -26,5 +26,17 @@ describe('isGuestRequestToCdpPort', () => {
     expect(isGuestRequestToCdpPort('https://example.com/json/list', 9222)).toBe(false);
     expect(isGuestRequestToCdpPort('http://127.0.0.1:4173/', 9222)).toBe(false);
     expect(isGuestRequestToCdpPort('http://attacker.test:8080/json/list', 9222)).toBe(false);
+  });
+
+  it('does not treat implicit default ports 80/443 as the CDP port', () => {
+    // WHATWG URL omits the default port, so url.port is '' for http:80 and https:443.
+    expect(isGuestRequestToCdpPort('https://example.com/', 443)).toBe(false);
+    expect(isGuestRequestToCdpPort('http://example.com/', 80)).toBe(false);
+    expect(isGuestRequestToCdpPort('https://example.com/json/list', 443)).toBe(false);
+    expect(isGuestRequestToCdpPort('https://example.com:443/', 443)).toBe(false);
+    expect(isGuestRequestToCdpPort('http://example.com:80/', 80)).toBe(false);
+    expect(isUsableCdpPort(80)).toBe(false);
+    expect(isUsableCdpPort(443)).toBe(false);
+    expect(isUsableCdpPort(9222)).toBe(true);
   });
 });

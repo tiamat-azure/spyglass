@@ -17,8 +17,10 @@ export function isGuestRequestToCdpPort(requestUrl: string, cdpPort: number): bo
     ) {
       return false;
     }
-    const port = url.port.length > 0 ? url.port : defaultPortForProtocol(url.protocol);
-    return port === String(cdpPort);
+    // WHATWG URL leaves port empty for implicit (and explicit default) 80/443.
+    // Matching those would cancel every guest http(s) load if CDP were on 80/443.
+    const port = url.port;
+    return port.length > 0 && port === String(cdpPort);
   } catch {
     return false;
   }
@@ -39,9 +41,7 @@ export function isLoopbackHostname(hostname: string): boolean {
   return host === '::ffff:7f00:1' || host.startsWith('::ffff:7f');
 }
 
-function defaultPortForProtocol(protocol: string): string {
-  if (protocol === 'https:' || protocol === 'wss:') {
-    return '443';
-  }
-  return '80';
+/** CDP must not share implicit HTTP(S) ports or every `http://` / `https://` load would match. */
+export function isUsableCdpPort(port: number): boolean {
+  return Number.isInteger(port) && port > 0 && port < 65536 && port !== 80 && port !== 443;
 }

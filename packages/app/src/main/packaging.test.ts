@@ -28,7 +28,10 @@ describe('packaged Observe', () => {
     expect(observe).toContain("from './cdp-guest.mjs'");
     expect(observe).toContain('pageMatchesPickedGuest');
     expect(observe).toContain('pickGuestTarget');
+    expect(observe).toContain('No guest CDP target');
     expect(observe).not.toContain('!isChromeUiUrl(url) && url.length > 0');
+    const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
+    expect(matcher).not.toContain('eligible[0] ?? pages[0]');
   });
 
   it('asarUnpacks Stagehand runtime node_modules for packaged Observe', () => {
