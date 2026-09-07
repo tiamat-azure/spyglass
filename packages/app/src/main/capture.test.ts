@@ -258,7 +258,7 @@ describe('session env', () => {
   it('defaults screenshot retention to 10 and sessions under userData', () => {
     expect(screenshotLimitFromEnv({})).toBe(10);
     expect(screenshotLimitFromEnv({ SCREENSHOT_RETENTION: '4' })).toBe(4);
-    expect(sessionsDirFromEnv('/tmp/ud', {})).toBe('/tmp/ud/sessions');
+    expect(sessionsDirFromEnv('/tmp/ud', {})).toBe(join('/tmp/ud', 'sessions'));
     expect(sessionsDirFromEnv('/tmp/ud', { SESSIONS_DIR: '/tmp/sessions' })).toBe('/tmp/sessions');
   });
 });
