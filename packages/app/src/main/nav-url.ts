@@ -1,8 +1,108 @@
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const ALLOWED_USER_PROTOCOLS = new Set(['http:', 'https:']);
 const ALLOWED_GUEST_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
 
 function hasScheme(input: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(input);
+}
+
+function parseUrl(input: string): URL | undefined {
+  try {
+    return new URL(input);
+  } catch {
+    return undefined;
+  }
+}
+
+export function isHttpOrHttpsUrl(input: string): boolean {
+  const url = parseUrl(input);
+  return url !== undefined && (url.protocol === 'http:' || url.protocol === 'https:');
+}
+
+export function isFileUrl(input: string): boolean {
+  const url = parseUrl(input);
+  return url !== undefined && url.protocol === 'file:';
+}
+
+export function isInsideDir(dir: string, targetPath: string): boolean {
+  const root = resolve(dir);
+  const target = resolve(targetPath);
+  const rel = relative(root, target);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+export function fileUrlToPath(input: string): string | undefined {
+  const url = parseUrl(input);
+  if (url === undefined || url.protocol !== 'file:') {
+    return undefined;
+  }
+  try {
+    return fileURLToPath(url);
+  } catch {
+    return undefined;
+  }
+}
+
+export function isAppResourceFileUrl(input: string, resourcesDir: string): boolean {
+  const path = fileUrlToPath(input);
+  if (path === undefined) {
+    return false;
+  }
+  return isInsideDir(resourcesDir, path);
+}
+
+function currentAllowsAppFileNavigation(currentUrl: string): boolean {
+  if (currentUrl.length === 0 || currentUrl === 'about:blank') {
+    return true;
+  }
+  return isFileUrl(currentUrl);
+}
+
+/**
+ * Deny-by-default guest navigation: http(s) always; file: only for app start-page
+ * resources, and only when the current guest is not an http(s) page.
+ */
+export function isAllowedInViewNavigation(
+  currentUrl: string,
+  nextUrl: string,
+  resourcesDir: string
+): boolean {
+  if (nextUrl === 'about:blank' || nextUrl.startsWith('about:blank')) {
+    return true;
+  }
+  const next = parseUrl(nextUrl);
+  if (next === undefined) {
+    return false;
+  }
+  if (next.protocol === 'chrome-error:') {
+    return true;
+  }
+  if (isHttpOrHttpsUrl(nextUrl)) {
+    return true;
+  }
+  if (isFileUrl(nextUrl)) {
+    return (
+      currentAllowsAppFileNavigation(currentUrl) && isAppResourceFileUrl(nextUrl, resourcesDir)
+    );
+  }
+  return false;
+}
+
+/**
+ * Popup redirect load: same scheme policy as in-view navigation. file: is never
+ * loaded via main-process loadURL when the displayed page is http(s).
+ */
+export function isAllowedPopupRedirect(
+  currentUrl: string,
+  nextUrl: string,
+  resourcesDir: string
+): boolean {
+  if (nextUrl === 'about:blank' || nextUrl.startsWith('about:blank')) {
+    return false;
+  }
+  return isAllowedInViewNavigation(currentUrl, nextUrl, resourcesDir);
 }
 
 export function normalizeGotoUrl(input: string): string | undefined {

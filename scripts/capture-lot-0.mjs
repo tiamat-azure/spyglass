@@ -28,6 +28,7 @@ if (mode === 'navigated' || mode === 'observe') {
   env.SPYGLASS_START_URL = process.env.SPYGLASS_START_URL ?? 'https://example.com';
 }
 if (mode === 'observe') {
+  env.SPYGLASS_CDP = '1';
   env.SPYGLASS_OBSERVE_ON_START = '1';
 }
 

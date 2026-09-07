@@ -10,6 +10,7 @@ import type {
 import { IPC } from '../shared/ipc.ts';
 import { BrowserPane } from './browser-pane.ts';
 import { infoFromTarget, writeCdpInfoFile } from './cdp-info.ts';
+import { isRemoteDebuggingRequested } from './cdp-policy.ts';
 import { cdpHttpUrl, enableRemoteDebugging, resolveCdpPort } from './cdp-port.ts';
 import { parseCdpTargetList, pickGuestTarget } from './cdp-targets.ts';
 import {
@@ -18,7 +19,7 @@ import {
   parseGotoPayload,
   parseObservePayload
 } from './ipc-validate.ts';
-import { fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
+import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
 
@@ -82,6 +83,9 @@ async function fetchCdpTargets(port: number): Promise<ReturnType<typeof parseCdp
 }
 
 async function persistCdpInfo(port: number, guestUrl: string, guestTitle: string): Promise<void> {
+  if (port <= 0) {
+    return;
+  }
   const path = cdpInfoPath();
   if (path === undefined) {
     return;
@@ -212,6 +216,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
 
   ipcMain.handle(IPC.stagehandCdp, async (): Promise<StagehandCdpResponse> => {
     const snapshot = requirePane().snapshot();
+    if (cdpPort <= 0) {
+      return {
+        cdpUrl: '',
+        port: 0,
+        guestUrl: snapshot.url
+      };
+    }
     let targetId: string | undefined;
     try {
       const targets = await fetchCdpTargets(cdpPort);
@@ -242,10 +253,26 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       } satisfies StagehandObserveResponse;
     }
     const snapshot = requirePane().snapshot();
+    if (cdpPort <= 0) {
+      const disabled: StagehandObserveResponse = {
+        ok: false,
+        instruction: payload.instruction ?? '',
+        observations: [],
+        error:
+          'Remote debugging is off. Launch with SPYGLASS_CDP=1 (packaged) or use a dev build / SPYGLASS_OBSERVE_ON_START=1.',
+        guestUrl: snapshot.url
+      };
+      const disabledWin = winRef.current;
+      if (disabledWin !== undefined) {
+        emitToChrome(disabledWin, IPC.stagehandResult, disabled);
+      }
+      return disabled;
+    }
     const result = await runStagehandObserve({
       cdpUrl: cdpHttpUrl(cdpPort),
       guestUrl: snapshot.url,
-      instruction: payload.instruction
+      instruction: payload.instruction,
+      appPath: app.getAppPath()
     });
     const win = winRef.current;
     if (win !== undefined) {
@@ -264,13 +291,25 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (bounds === undefined || activePane === undefined) {
       return;
     }
-    activePane.setBounds(bounds);
+    const win = winRef.current;
+    if (win === undefined || win.isDestroyed()) {
+      return;
+    }
+    const size = win.getContentSize();
+    const clamped = clampBrowserBoundsToChrome(bounds, size[0] ?? 0, size[1] ?? 0);
+    if (clamped === undefined) {
+      return;
+    }
+    activePane.setBounds(clamped);
   });
 }
 
 void (async () => {
-  const cdpPort = await resolveCdpPort();
-  enableRemoteDebugging(cdpPort);
+  const cdpEnabled = isRemoteDebuggingRequested(process.env, app.isPackaged);
+  const cdpPort = cdpEnabled ? await resolveCdpPort() : 0;
+  if (cdpEnabled) {
+    enableRemoteDebugging(cdpPort);
+  }
 
   await app.whenReady();
 
@@ -322,13 +361,14 @@ void (async () => {
         } else {
           await pane.loadStartPage();
         }
-        if (process.env.SPYGLASS_OBSERVE_ON_START === '1') {
+        if (process.env.SPYGLASS_OBSERVE_ON_START === '1' && cdpPort > 0) {
           await waitForGuestPaint(pane.webContents);
           const snapshot = pane.snapshot();
           const result = await runStagehandObserve({
             cdpUrl: cdpHttpUrl(cdpPort),
             guestUrl: snapshot.url,
-            instruction: process.env.SPYGLASS_OBSERVE_INSTRUCTION
+            instruction: process.env.SPYGLASS_OBSERVE_INSTRUCTION,
+            appPath: app.getAppPath()
           });
           emitToChrome(win, IPC.stagehandResult, result);
           await new Promise((resolve) => setTimeout(resolve, 600));

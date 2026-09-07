@@ -16,6 +16,7 @@ async function launchEnv(): Promise<NodeJS.ProcessEnv> {
   delete env.ELECTRON_RENDERER_URL;
   env.SPYGLASS_DISABLE_GPU = '1';
   env.SPYGLASS_NO_SANDBOX = '1';
+  env.SPYGLASS_CDP = '1';
   env.SPYGLASS_USER_DATA = userData;
   env.SPYGLASS_CDP_INFO = join(userData, 'cdp.json');
   return env;

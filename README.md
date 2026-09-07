@@ -26,7 +26,7 @@ mid-v1.
 | Schemas | **ajv** 2020-12 over `docs/contracts/examples` | `@spyglass/contracts` |
 | Dev build | **electron-vite 5** | `@spyglass/app` |
 | Distribution | **electron-builder 26** | `packages/app/electron-builder.yml` |
-| Stagehand | **@browserbasehq/stagehand 3.7.3** (LOCAL + CDP, no Browserbase) | `@spyglass/app` (devDependency, Lot 0 proof) |
+| Stagehand | **@browserbasehq/stagehand 3.7.3** (LOCAL + CDP, no Browserbase) | `@spyglass/app` **dependency** (packaged Observe) |
 
 ## npm scope
 
@@ -85,10 +85,28 @@ Installers are **unsigned** and **not notarized** for internal v1. See
 
 ## Lot 0 — verify Stagehand `observe`
 
-The main process exposes Chromium remote debugging (CDP) **before** `app.ready`.
-Stagehand connects in **LOCAL** mode to that endpoint and selects the
-**displayed `WebContentsView` target** (not the chrome renderer, and not a
-browser Stagehand launched itself).
+Chromium **remote debugging (CDP)** is **opt-in when packaged**. It is enabled
+when any of these is true:
+
+- `SPYGLASS_CDP=1`
+- Observe-on-start: `SPYGLASS_OBSERVE_ON_START=1`
+- Dev / unpackaged: `pnpm dev` (`ELECTRON_RENDERER_URL`), `pnpm start`, and e2e
+  (not an electron-builder artifact)
+
+`SPYGLASS_CDP=0` forces it off even in unpackaged runs. Packaged installers do
+**not** pass `remote-debugging-port` / `remote-allow-origins` unless a flag
+above is set. `remote-allow-origins=*` is applied only together with the debug
+port.
+
+In-app Observe is bundled in the installer (`scripts/stagehand-observe.mjs` plus
+`@browserbasehq/stagehand`, `playwright-core`, and `zod`). A packaged build
+still needs CDP on:
+
+```bash
+SPYGLASS_CDP=1 /path/to/Spyglass
+```
+
+From a source checkout:
 
 1. `pnpm start` (or `pnpm dev`)
 2. Type a URL in the address bar (for example `https://example.com`) and press Enter

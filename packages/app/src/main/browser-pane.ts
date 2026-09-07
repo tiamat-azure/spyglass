@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { type BrowserWindow, type WebContents, WebContentsView } from 'electron';
 import type { BrowserBounds, NavState, PopupRedirectedPayload } from '../shared/ipc.ts';
 import { BROWSER_PARTITION } from '../shared/ipc.ts';
-import { isAllowedGuestUrl } from './nav-url.ts';
+import { isAllowedInViewNavigation, isAllowedPopupRedirect } from './nav-url.ts';
 
 export type BrowserPaneHandlers = {
   onState: (state: NavState) => void;
@@ -40,6 +40,7 @@ export class BrowserPane {
     });
     win.contentView.addChildView(this.view);
     this.attachNavigation();
+    this.attachSchemeGuard();
     this.attachPopupRedirect();
   }
 
@@ -113,6 +114,25 @@ export class BrowserPane {
     });
   }
 
+  private guestResourcesDir(): string {
+    return dirname(guestStartPagePath());
+  }
+
+  private attachSchemeGuard(): void {
+    const contents = this.webContents;
+    const denyIfDisallowed = (event: { url: string; preventDefault: () => void }): void => {
+      if (!isAllowedInViewNavigation(contents.getURL(), event.url, this.guestResourcesDir())) {
+        event.preventDefault();
+      }
+    };
+    contents.on('will-navigate', (event) => {
+      denyIfDisallowed(event);
+    });
+    contents.on('will-frame-navigate', (event) => {
+      denyIfDisallowed(event);
+    });
+  }
+
   private attachPopupRedirect(): void {
     this.webContents.setWindowOpenHandler((details) => {
       const url = details.url;
@@ -123,7 +143,7 @@ export class BrowserPane {
             ? 'target=_blank'
             : 'window.open'
       });
-      if (isAllowedGuestUrl(url) && url !== 'about:blank') {
+      if (isAllowedPopupRedirect(this.webContents.getURL(), url, this.guestResourcesDir())) {
         void this.webContents.loadURL(url);
       }
       return { action: 'deny' };

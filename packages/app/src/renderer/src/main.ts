@@ -110,6 +110,10 @@ if (api !== undefined) {
   });
 
   void api.stagehand.cdp().then((info) => {
+    if (info.port <= 0 || info.cdpUrl.length === 0) {
+      cdpStatus.textContent = 'CDP off — set SPYGLASS_CDP=1';
+      return;
+    }
     const target = info.targetId === undefined ? 'resolving' : info.targetId.slice(0, 8);
     cdpStatus.textContent = `CDP ${info.cdpUrl} · target ${target}`;
   });

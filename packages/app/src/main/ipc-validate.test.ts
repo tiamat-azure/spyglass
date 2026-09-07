@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { parseEmptyPayload, parseGotoPayload, parseObservePayload } from './ipc-validate.ts';
-import { clampSplitRatio, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
-import { parseObserveStdout } from './stagehand-bridge.ts';
+import {
+  clampBrowserBoundsToChrome,
+  clampSplitRatio,
+  fallbackBrowserBounds,
+  roundBrowserBounds
+} from './layout.ts';
+import { observeScriptPath, parseObserveStdout } from './stagehand-bridge.ts';
 
 describe('ipc payload validation', () => {
   it('accepts a goto url string and rejects junk', () => {
@@ -44,11 +49,32 @@ describe('layout', () => {
     });
     expect(roundBrowserBounds({ x: 0, y: 0, width: 0, height: 10 })).toBeUndefined();
   });
+
+  it('clamps browserBounds below the toolbar so the view cannot cover the URL bar', () => {
+    expect(clampBrowserBoundsToChrome({ x: 0, y: 0, width: 960, height: 800 }, 1280, 800)).toEqual({
+      x: 0,
+      y: 40,
+      width: 960,
+      height: 760
+    });
+    expect(clampBrowserBoundsToChrome({ x: 0, y: 40, width: 960, height: 760 }, 1280, 800)).toEqual(
+      {
+        x: 0,
+        y: 40,
+        width: 960,
+        height: 760
+      }
+    );
+  });
 });
 
 describe('parseObserveStdout', () => {
   it('reads the last JSON object from mixed logs', () => {
     const parsed = parseObserveStdout('noise\n{"ok":true,"instruction":"x","observations":[]}\n');
     expect(parsed?.ok).toBe(true);
+  });
+
+  it('resolves the observe script from the source checkout layout', () => {
+    expect(observeScriptPath()).toMatch(/stagehand-observe\.mjs$/);
   });
 });

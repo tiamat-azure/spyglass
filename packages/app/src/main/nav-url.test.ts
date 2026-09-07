@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isAllowedGuestUrl, normalizeGotoUrl } from './nav-url.ts';
+import {
+  isAllowedGuestUrl,
+  isAllowedInViewNavigation,
+  isAllowedPopupRedirect,
+  isInsideDir,
+  normalizeGotoUrl
+} from './nav-url.ts';
 
 describe('normalizeGotoUrl', () => {
   it('adds https when the scheme is missing', () => {
@@ -19,7 +25,7 @@ describe('normalizeGotoUrl', () => {
 });
 
 describe('isAllowedGuestUrl', () => {
-  it('allows http(s) and file for in-view loads', () => {
+  it('allows http(s) and file at the coarse scheme layer', () => {
     expect(isAllowedGuestUrl('https://example.com')).toBe(true);
     expect(isAllowedGuestUrl('file:///tmp/page.html')).toBe(true);
   });
@@ -27,5 +33,89 @@ describe('isAllowedGuestUrl', () => {
   it('rejects javascript and data URLs', () => {
     expect(isAllowedGuestUrl('javascript:alert(1)')).toBe(false);
     expect(isAllowedGuestUrl('data:text/html,hi')).toBe(false);
+  });
+});
+
+describe('isAllowedInViewNavigation', () => {
+  const resources = '/app/resources';
+
+  it('allows http(s) from any current guest', () => {
+    expect(
+      isAllowedInViewNavigation('https://example.com/', 'https://example.org/next', resources)
+    ).toBe(true);
+    expect(isAllowedInViewNavigation('', 'http://localhost:3000/', resources)).toBe(true);
+  });
+
+  it('allows app start-page file: only when the current guest is not http(s)', () => {
+    expect(
+      isAllowedInViewNavigation(
+        'file:///app/resources/start.html',
+        'file:///app/resources/second.html',
+        resources
+      )
+    ).toBe(true);
+    expect(isAllowedInViewNavigation('', 'file:///app/resources/start.html', resources)).toBe(true);
+    expect(
+      isAllowedInViewNavigation(
+        'https://example.com/',
+        'file:///app/resources/start.html',
+        resources
+      )
+    ).toBe(false);
+  });
+
+  it('rejects file: outside the app resource dir, including ../ escapes', () => {
+    expect(
+      isAllowedInViewNavigation(
+        'file:///app/resources/start.html',
+        'file:///tmp/page.html',
+        resources
+      )
+    ).toBe(false);
+    expect(
+      isAllowedInViewNavigation(
+        'file:///app/resources/start.html',
+        'file:///app/secret.html',
+        resources
+      )
+    ).toBe(false);
+    expect(isInsideDir(resources, '/app/resources/../secret.html')).toBe(false);
+  });
+
+  it('rejects javascript and data even when the current page is the start file', () => {
+    expect(
+      isAllowedInViewNavigation(
+        'file:///app/resources/start.html',
+        'javascript:alert(1)',
+        resources
+      )
+    ).toBe(false);
+    expect(
+      isAllowedInViewNavigation('file:///app/resources/start.html', 'data:text/html,hi', resources)
+    ).toBe(false);
+  });
+});
+
+describe('isAllowedPopupRedirect', () => {
+  const resources = '/app/resources';
+
+  it('refuses file: loadURL when the displayed guest is http(s)', () => {
+    expect(
+      isAllowedPopupRedirect('https://example.com/', 'file:///app/resources/start.html', resources)
+    ).toBe(false);
+  });
+
+  it('allows same-origin app start-page popups (F-04 start.html → second.html)', () => {
+    expect(
+      isAllowedPopupRedirect(
+        'file:///app/resources/start.html',
+        'file:///app/resources/second.html',
+        resources
+      )
+    ).toBe(true);
+  });
+
+  it('does not load about:blank via main-process loadURL', () => {
+    expect(isAllowedPopupRedirect('https://example.com/', 'about:blank', resources)).toBe(false);
   });
 });
