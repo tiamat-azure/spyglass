@@ -30,5 +30,11 @@ comporte comme l'enregistrement.
 
 - `observe`, `act` et `extract` sont disponibles pendant et après l'enregistrement, sur la
   page réellement visible.
+- Le port de débogage distant n'est **pas** ouvert en permanence dans les artefacts
+  packagés : il faut `SPYGLASS_CDP=1` et/ou le mode observe (`SPYGLASS_OBSERVE_ON_START=1`).
+  Les exécutions non packagées (dev / `pnpm start`) l'activent par défaut.
+- Quand le port est ouvert, `--remote-allow-origins` est la chaîne vide (pas `*`) :
+  Stagehand/Playwright (Node, sans en-tête `Origin`) se connectent ; un CDP avec
+  origine navigateur est refusé.
 - Point d'implémentation ouvert : résolution de la cible CDP et maintien de la liaison à
   travers les navigations et les recréations de contexte (I-01).

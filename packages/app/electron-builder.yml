@@ -12,6 +12,22 @@ directories:
 files:
   - out/**/*
   - package.json
+  - from: scripts
+    to: scripts
+    filter:
+      - stagehand-observe.mjs
+      - cdp-guest.mjs
+# D1: unpack Stagehand runtime so packaged Observe can import from disk
+# (ELECTRON_RUN_AS_NODE spawn of extraResources/scripts/stagehand-observe.mjs).
+asarUnpack:
+  - scripts/stagehand-observe.mjs
+  - scripts/cdp-guest.mjs
+  - node_modules/**
+extraResources:
+  - from: scripts/stagehand-observe.mjs
+    to: scripts/stagehand-observe.mjs
+  - from: scripts/cdp-guest.mjs
+    to: scripts/cdp-guest.mjs
 asar: true
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 linux:
@@ -22,7 +38,7 @@ linux:
   category: Development
   icon: build/icon.png
   synopsis: Spyglass — AI-assisted web scenario recorder (internal v1, unsigned)
-  description: Empty Electron shell for the Spyglass tooling socle (Lot -1).
+  description: Spyglass Lot 0 shell — two-zone WebContentsView with Stagehand CDP.
   maintainer: Spyglass contributors <tiamat.azure@gmail.com>
 mac:
   # identity: null disables signing. Replace with a Developer ID later.

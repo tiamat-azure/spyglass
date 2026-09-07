@@ -16,3 +16,4 @@ playwright-report/
 test-results/
 packages/app/test-results/
 packages/app/playwright-report/
+.tmp-lot0-capture/

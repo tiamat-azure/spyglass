@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_SHELL_LOT, formatShellTitle, isProductUiEnabled } from './shell-meta.ts';
+import { formatShellTitle, isProductUiEnabled, SHELL_LOT } from './shell-meta.ts';
 
-describe('empty shell (Lot -1)', () => {
-  it('identifies the tooling lot', () => {
-    expect(EMPTY_SHELL_LOT).toBe('-1');
+describe('Lot 0 shell meta', () => {
+  it('identifies the socle lot', () => {
+    expect(SHELL_LOT).toBe('0');
     expect(formatShellTitle()).toBe('Spyglass');
   });
 
-  it('does not enable product UI in this lot', () => {
-    expect(isProductUiEnabled(EMPTY_SHELL_LOT)).toBe(false);
+  it('enables product UI for Lot 0', () => {
+    expect(isProductUiEnabled(SHELL_LOT)).toBe(true);
+    expect(isProductUiEnabled('-1')).toBe(false);
   });
 });

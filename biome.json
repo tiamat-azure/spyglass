@@ -17,6 +17,7 @@
       "!**/.lavish",
       "!**/pnpm-lock.yaml",
       "!**/docs/lot-m1/screenshots",
+      "!**/docs/lot-0/screenshots",
       "!**/assets/icons",
       "!**/docs/contracts/schemas"
     ]

@@ -2,7 +2,7 @@
   "name": "@spyglass/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass Electron shell (Lot -1 empty app)",
+  "description": "Spyglass Electron shell (Lot 0 two-zone WebContentsView)",
   "author": {
     "name": "Spyglass contributors",
     "email": "tiamat.azure@gmail.com"
@@ -25,7 +25,14 @@
     "package:linux": "electron-vite build && electron-builder --linux AppImage deb dir --publish never",
     "package:mac": "electron-vite build && electron-builder --mac dmg --x64 --arm64 --publish never",
     "package:win": "electron-vite build && electron-builder --win nsis --publish never",
-    "capture:shell": "electron-vite build && electron ."
+    "capture:shell": "electron-vite build && electron .",
+    "observe": "node scripts/stagehand-observe.mjs",
+    "test:packaged-observe": "node scripts/packaged-observe-smoke.mjs"
+  },
+  "dependencies": {
+    "@browserbasehq/stagehand": "3.7.3",
+    "playwright-core": "1.63.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
