@@ -489,15 +489,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         // pin is best-effort
       }
     }
-    const result = await runStagehandAct({
+    return await runStagehandAct({
       cdpUrl: cdpHttpUrl(cdpPort),
       guestUrl: snapshot.url,
       actions,
       appPath: app.getAppPath(),
       chromeTargetId: pinnedChromeTargetId
     });
-    session.pinReplayFailures(replayed, result);
-    return result;
   });
 
   ipcMain.on(IPC.layoutBrowserBounds, (event, raw: unknown) => {

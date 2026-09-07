@@ -316,18 +316,6 @@ export class SessionOrchestrator {
     });
   }
 
-  pinReplayFailures(
-    events: Array<{ stepIndex?: number }>,
-    result: { ok: boolean; results: Array<{ success: boolean }> }
-  ): void {
-    if (this.retention === undefined) {
-      return;
-    }
-    for (const step of replayFailureStepIndexes(events, result)) {
-      this.retention.pinFailure(step);
-    }
-  }
-
   private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
     const run = this.writeChain.then(task, task);
     this.writeChain = run.then(
@@ -641,36 +629,6 @@ function wrapSealFailure(error: unknown): Error {
   return new Error(
     `Stop failed: record.stop is in the journal but meta.json could not be sealed (${detail}). Retry Stop to repair meta.`
   );
-}
-
-export function replayFailureStepIndexes(
-  events: Array<{ stepIndex?: number }>,
-  result: { ok: boolean; results: Array<{ success: boolean }> }
-): number[] {
-  const pinned: number[] = [];
-  const add = (step: number | undefined): void => {
-    if (step !== undefined && !pinned.includes(step)) {
-      pinned.push(step);
-    }
-  };
-  let anyRowFailed = false;
-  for (let index = 0; index < result.results.length; index += 1) {
-    const row = result.results[index];
-    if (row !== undefined && !row.success) {
-      anyRowFailed = true;
-      add(events[index]?.stepIndex);
-    }
-  }
-  if (!result.ok && !anyRowFailed) {
-    for (let index = events.length - 1; index >= 0; index -= 1) {
-      const step = events[index]?.stepIndex;
-      if (step !== undefined) {
-        add(step);
-        break;
-      }
-    }
-  }
-  return pinned;
 }
 
 export function screenshotLimitFromEnv(env: NodeJS.ProcessEnv = process.env): number {

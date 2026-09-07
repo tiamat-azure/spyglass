@@ -10,7 +10,6 @@ import { parseJsonl, RawJournal } from './raw-journal.ts';
 import { CaptureRetention } from './retention.ts';
 import { formatEventId, newSessionId } from './session-ids.ts';
 import {
-  replayFailureStepIndexes,
   SessionOrchestrator,
   screenshotLimitFromEnv,
   sessionsDirFromEnv
@@ -57,7 +56,7 @@ describe('raw journal', () => {
 });
 
 describe('retention', () => {
-  it('keeps the last N screenshots and pins failures', async () => {
+  it('keeps the last N screenshots and capture-time pinned failures', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-ret-'));
     const retention = new CaptureRetention(dir, { screenshotLimit: 3 });
     await retention.init();
@@ -408,23 +407,6 @@ describe('session stop after record.stop append', () => {
     };
     expect(meta.eventCount).toBe(result.eventCount);
     expect(typeof meta.sealedAt).toBe('string');
-  });
-});
-
-describe('replay failure pins', () => {
-  it('pins failed act rows and the last step when the worker fails with no row errors', () => {
-    expect(
-      replayFailureStepIndexes([{ stepIndex: 1 }, { stepIndex: 2 }, { stepIndex: 3 }], {
-        ok: false,
-        results: [{ success: true }, { success: false }, { success: true }]
-      })
-    ).toEqual([2]);
-    expect(
-      replayFailureStepIndexes([{ stepIndex: 4 }, { stepIndex: 9 }], {
-        ok: false,
-        results: []
-      })
-    ).toEqual([9]);
   });
 });
 

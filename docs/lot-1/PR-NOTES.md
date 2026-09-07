@@ -35,9 +35,8 @@ capture**. Events append to `raw.jsonl` with fsync (F-40). Retraction appends
 `step.retracted` and never deletes (F-19). Chrome UI Record/Stop (F-10) uses
 `webdesign.md` tokens (REC pill, magenta recording outline). Retention (D-11 /
 ADR-0011) keeps a sliding buffer of N=10 JPEG screenshots plus lightweight DOM
-snapshots. Capture pins a step when its snapshot or screenshot write fails;
-`act()` pins steps whose replay rows fail (or the last step if the worker fails
-without per-row results).
+snapshots. Capture pins a step when its snapshot or screenshot write fails
+(P1a). `act()` does not pin or un-prune JPEGs.
 
 Stagehand `act()` replays those descriptors over CDP with `selfHeal: false`.
 The act worker's stub LLM **throws** if `createChatCompletion` is called, so a
@@ -108,6 +107,9 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
   enters `sealed-failed` (appends frozen, Record cannot continue that session).
   Retry Stop repairs `meta.json` / force-seals only — it does not append a
   second `record.stop`. Do not revert to `recording` after a durable stop.
+- **P1a (captain / Firstmate): applied.** D-11 pins are **capture-time only**
+  (snapshot or screenshot write miss). `act()` does not pin failures and does
+  not preserve already-pruned JPEGs.
 - Replay of masked values uses the `SECRET_*` ref string, not the clear
   secret (F-15). Fixture proof fills `SECRET_PASSWORD` after reload.
 
