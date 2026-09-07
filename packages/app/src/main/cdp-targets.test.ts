@@ -5,6 +5,7 @@ import {
   pageMatchesPickedGuest,
   parseCdpTargetList,
   pickGuestTarget,
+  pickStagehandPage,
   resolvePinnedChromeTargetId,
   urlsMatchOriginAndPathname
 } from './cdp-targets.ts';
@@ -296,6 +297,14 @@ describe('isChromeUiUrl', () => {
     expect(isChromeUiUrl('http://[::1]:3000/__vite_ping')).toBe(true);
     expect(isChromeUiUrl('http://[::1]:3000/')).toBe(false);
   });
+
+  it('treats the entire 127.0.0.0/8 range as local chrome for path and Vite hints', () => {
+    expect(isChromeUiUrl('http://127.0.0.2:4173/')).toBe(true);
+    expect(isChromeUiUrl('http://127.1.2.3:8080/out/renderer/index.html')).toBe(true);
+    expect(isChromeUiUrl('http://127.255.255.255:3000/@vite/client')).toBe(true);
+    expect(isChromeUiUrl('http://126.0.0.1:4173/')).toBe(false);
+    expect(isChromeUiUrl('http://128.0.0.1:4173/')).toBe(false);
+  });
 });
 
 describe('pageMatchesPickedGuest', () => {
@@ -310,5 +319,40 @@ describe('pageMatchesPickedGuest', () => {
       false
     );
     expect(pageMatchesPickedGuest('https://example.com/other', 'https://example.com/')).toBe(false);
+  });
+});
+
+describe('pickStagehandPage', () => {
+  const colliding = 'http://localhost:5173/';
+
+  it('prefers the page whose target id equals the picked guest id', () => {
+    const guest = { id: 'guest', url: colliding };
+    const pages = [
+      { id: 'chrome', url: colliding },
+      { id: 'guest', url: colliding }
+    ];
+    expect(pickStagehandPage(pages, guest)?.id).toBe('guest');
+    expect(pickStagehandPage([...pages].reverse(), guest)?.id).toBe('guest');
+  });
+
+  it('fails closed when multiple URL matches do not include guest.id', () => {
+    const guest = { id: 'guest', url: colliding };
+    const pages = [
+      { id: 'chrome', url: colliding },
+      { id: 'other', url: colliding }
+    ];
+    expect(pickStagehandPage(pages, guest)).toBeUndefined();
+  });
+
+  it('fails closed when URL matches are ambiguous and pages have no target id', () => {
+    const guest = { id: 'guest', url: colliding };
+    const pages = [{ url: colliding }, { url: colliding }];
+    expect(pickStagehandPage(pages, guest)).toBeUndefined();
+  });
+
+  it('returns the sole URL match when target ids are unavailable', () => {
+    const guest = { id: 'guest', url: 'https://example.com/' };
+    const pages = [{ url: 'https://example.com/' }];
+    expect(pickStagehandPage(pages, guest)?.url).toBe('https://example.com/');
   });
 });

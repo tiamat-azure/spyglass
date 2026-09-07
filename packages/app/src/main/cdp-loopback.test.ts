@@ -18,6 +18,11 @@ describe('isGuestRequestToCdpPort', () => {
     expect(isGuestRequestToCdpPort('http://[::ffff:127.0.0.1]:9222/json/list', 9222)).toBe(true);
     expect(isLoopbackHostname(new URL('http://[::1]:9222/').hostname)).toBe(true);
     expect(isLoopbackHostname(new URL('http://[::ffff:127.0.0.1]:9222/').hostname)).toBe(true);
+    expect(isLoopbackHostname('127.0.0.2')).toBe(true);
+    expect(isLoopbackHostname('127.255.255.255')).toBe(true);
+    expect(isLoopbackHostname('::ffff:127.0.0.2')).toBe(true);
+    expect(isLoopbackHostname('126.0.0.1')).toBe(false);
+    expect(isLoopbackHostname('8.8.8.8')).toBe(false);
   });
 
   it('does not block other ports or when CDP is off', () => {

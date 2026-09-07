@@ -26,13 +26,17 @@ describe('packaged Observe', () => {
   it('observe worker imports the shared guest matcher and fails closed on page match', () => {
     const observe = readFileSync(join(appRoot, 'scripts/stagehand-observe.mjs'), 'utf8');
     expect(observe).toContain("from './cdp-guest.mjs'");
-    expect(observe).toContain('pageMatchesPickedGuest');
     expect(observe).toContain('pickGuestTarget');
+    expect(observe).toContain('pickStagehandPage');
     expect(observe).toContain('No guest CDP target');
+    expect(observe).not.toContain('matching[matching.length - 1]');
     expect(observe).not.toContain('!isChromeUiUrl(url) && url.length > 0');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
+    expect(matcher).toContain('pageMatchesPickedGuest');
+    expect(matcher).toContain('pickStagehandPage');
     expect(matcher).not.toContain('eligible[0] ?? pages[0]');
     expect(matcher).toContain('isLoopbackHostname');
+    expect(matcher).toContain('isDottedIpv4Loopback');
     const main = readFileSync(join(appRoot, 'src/main/index.ts'), 'utf8');
     expect(main).toContain('getOrCreateDevToolsTargetId');
   });

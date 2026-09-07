@@ -3,6 +3,7 @@ import {
   isChromeUiUrl,
   pageMatchesPickedGuest,
   pickGuestTarget as pickGuestTargetImpl,
+  pickStagehandPage as pickStagehandPageImpl,
   resolvePinnedChromeTargetId,
   urlsMatchOriginAndPathname
 } from '../../scripts/cdp-guest.mjs';
@@ -22,6 +23,14 @@ export function pickGuestTarget(
   options?: { excludeTargetIds?: readonly string[] }
 ): CdpTarget | undefined {
   return pickGuestTargetImpl(targets, guestUrl, options);
+}
+
+export function pickStagehandPage<T>(
+  pages: readonly T[],
+  guest: { id?: string; url?: string } | undefined,
+  options?: { excludeTargetIds?: readonly string[] }
+): T | undefined {
+  return pickStagehandPageImpl(pages, guest, options);
 }
 
 export function parseCdpTargetList(input: unknown): CdpTarget[] {

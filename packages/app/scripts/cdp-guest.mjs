@@ -20,14 +20,41 @@ export function isLoopbackHostname(hostname) {
   if (host.startsWith('[') && host.endsWith(']')) {
     host = host.slice(1, -1);
   }
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+  if (host === 'localhost' || host === '::1') {
     return true;
   }
-  if (host === '::ffff:127.0.0.1' || host.startsWith('::ffff:127.')) {
+  if (isDottedIpv4Loopback(host)) {
     return true;
   }
-  // WHATWG URL may serialize IPv4-mapped 127.0.0.1 as ::ffff:7f00:1
-  return host === '::ffff:7f00:1' || host.startsWith('::ffff:7f');
+  if (host.startsWith('::ffff:')) {
+    const mapped = host.slice('::ffff:'.length);
+    if (isDottedIpv4Loopback(mapped)) {
+      return true;
+    }
+    // IPv4-mapped hex: 127.x.x.x is 7fxx:xxxx (Chromium 127.0.0.0/8).
+    return mapped.startsWith('7f');
+  }
+  return false;
+}
+
+/** Chromium treats the entire 127.0.0.0/8 range as loopback, not only 127.0.0.1. */
+function isDottedIpv4Loopback(host) {
+  const parts = host.split('.');
+  if (parts.length !== 4) {
+    return false;
+  }
+  const octets = [];
+  for (const part of parts) {
+    if (!/^(0|[1-9]\d{0,2})$/.test(part)) {
+      return false;
+    }
+    const n = Number.parseInt(part, 10);
+    if (n > 255) {
+      return false;
+    }
+    octets.push(n);
+  }
+  return octets[0] === 127;
 }
 
 export function isChromeUiUrl(url) {
@@ -87,6 +114,84 @@ export function pageMatchesPickedGuest(pageUrl, guestUrl) {
     return true;
   }
   return urlsMatchOriginAndPathname(pageUrl, guestUrl);
+}
+
+/** Playwright/Stagehand CDP target id for a page (public id, then Playwright internals). */
+export function pageCdpTargetId(page) {
+  if (page === undefined || page === null || typeof page !== 'object') {
+    return undefined;
+  }
+  if (typeof page._targetId === 'string' && page._targetId.length > 0) {
+    return page._targetId;
+  }
+  if (typeof page.target === 'function') {
+    try {
+      const target = page.target();
+      if (target && typeof target._targetId === 'string' && target._targetId.length > 0) {
+        return target._targetId;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof page.id === 'string' && page.id.length > 0) {
+    return page.id;
+  }
+  return undefined;
+}
+
+function pageUrlString(page) {
+  if (page === undefined || page === null || typeof page !== 'object') {
+    return '';
+  }
+  if (typeof page.url === 'function') {
+    try {
+      const url = page.url();
+      return typeof url === 'string' ? url : '';
+    } catch {
+      return '';
+    }
+  }
+  return typeof page.url === 'string' ? page.url : '';
+}
+
+/**
+ * After pickGuestTarget, attach only to the Stagehand page whose CDP id is guest.id.
+ * A unique URL match is allowed when no target id is available. Multi-match without
+ * an id (or several ids matching guest.id) fails closed — never matching[last].
+ */
+export function pickStagehandPage(pages, guest, options) {
+  if (guest === undefined || guest === null || typeof guest !== 'object') {
+    return undefined;
+  }
+  if (!Array.isArray(pages)) {
+    return undefined;
+  }
+  const excluded = excludeTargetIdSet(options);
+  const matching = pages.filter((page) => {
+    if (!pageMatchesPickedGuest(pageUrlString(page), guest.url)) {
+      return false;
+    }
+    const id = pageCdpTargetId(page);
+    if (typeof id === 'string' && excluded.has(id)) {
+      return false;
+    }
+    return true;
+  });
+  const guestId = typeof guest.id === 'string' && guest.id.length > 0 ? guest.id : undefined;
+  if (guestId !== undefined) {
+    const byId = matching.filter((page) => pageCdpTargetId(page) === guestId);
+    if (byId.length === 1) {
+      return byId[0];
+    }
+    if (byId.length > 1) {
+      return undefined;
+    }
+  }
+  if (matching.length === 1) {
+    return matching[0];
+  }
+  return undefined;
 }
 
 export function pickGuestTarget(targets, guestUrl, options) {
