@@ -91,7 +91,35 @@ export function asProbeWireEvent(input: unknown): ProbeWireEvent | undefined {
   return event;
 }
 
+function toJournalTarget(target: ProbeElementDescriptor): ElementDescriptor {
+  const rest = { ...target };
+  delete rest.htmlFor;
+  return rest;
+}
+
+/** Origin + path only — drop userinfo, query, and fragment before jsonl. */
+export function redactNetRequestUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.password = '';
+    url.username = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    const noHash = raw.split('#')[0] ?? raw;
+    const queryAt = noHash.indexOf('?');
+    return queryAt === -1 ? noHash : noHash.slice(0, queryAt);
+  }
+}
+
 function capturedValue(wire: ProbeWireEvent): CapturedValue | undefined {
+  if (wire.kind === 'dom.check') {
+    if (typeof wire.checked === 'boolean') {
+      return { masked: false, text: wire.checked ? 'true' : 'false' };
+    }
+    return undefined;
+  }
   const field = {
     type: wire.type,
     autocomplete: wire.autocomplete,
@@ -172,7 +200,7 @@ export function buildRawEvent(options: {
     event.page = page;
   }
   if (wire.target !== undefined) {
-    event.target = wire.target as ElementDescriptor;
+    event.target = toJournalTarget(wire.target);
   }
   const value = capturedValue(wire);
   if (value !== undefined) {

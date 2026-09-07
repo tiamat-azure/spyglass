@@ -29,6 +29,8 @@ export type ProbeElementDescriptor = {
   siblingIndex?: number;
   ancestors?: string[];
   boundingBox?: { x: number; y: number; w: number; h: number };
+  /** Label `htmlFor` / associated control id (in-memory denoise only; stripped from jsonl). */
+  htmlFor?: string;
 };
 
 export type ObserveCompatibleAction = {

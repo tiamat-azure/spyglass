@@ -5,6 +5,7 @@ export type DenoiseTargetKey = {
   testId?: string;
   id?: string;
   tag?: string;
+  htmlFor?: string;
 };
 
 export const CLICK_CHANGE_WINDOW_MS = 400;
@@ -56,7 +57,7 @@ export function isRedundantClickBeforeChange(
   return targetKey(clickTarget) === targetKey(changeTarget);
 }
 
-/** Label click that toggles a checkbox/select in the same frame (F-16). */
+/** Label click that toggles its associated control (`htmlFor` / control id). */
 export function isLabelClickForControlChange(
   clickKind: string,
   changeKind: string,
@@ -69,13 +70,20 @@ export function isLabelClickForControlChange(
   if (clickKind !== 'dom.click' || clickTarget.tag !== 'label') {
     return false;
   }
+  const labelFor = clickTarget.htmlFor;
+  if (labelFor === undefined || labelFor.length === 0) {
+    return false;
+  }
   if (changeKind !== 'dom.change' && changeKind !== 'dom.check' && changeKind !== 'dom.select') {
     return false;
   }
   if (changeTs - clickTs > windowMs || changeTs < clickTs) {
     return false;
   }
-  return clickTarget.framePath.join('>') === changeTarget.framePath.join('>');
+  if (clickTarget.framePath.join('>') !== changeTarget.framePath.join('>')) {
+    return false;
+  }
+  return labelFor === changeTarget.id;
 }
 
 export function isDenoisedClickForChange(

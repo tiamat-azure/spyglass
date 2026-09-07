@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateRawEvent } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
-import { buildRawEvent } from './capture-pipeline.ts';
+import { buildRawEvent, redactNetRequestUrl } from './capture-pipeline.ts';
+import { iframeNameSelector } from './probe-host.ts';
 import { parseJsonl, RawJournal } from './raw-journal.ts';
 import { CaptureRetention } from './retention.ts';
 import { formatEventId, newSessionId } from './session-ids.ts';
@@ -160,7 +161,29 @@ describe('capture pipeline', () => {
     });
     expect(event.action?.type).toBe('check');
     expect(event.action?.arguments).toBeUndefined();
-    expect(event.value).toEqual({ masked: false, text: 'on' });
+    expect(event.value).toEqual({ masked: false, text: 'true' });
+    expect(JSON.stringify(event)).not.toContain('"on"');
+    expect(validateRawEvent(event).valid).toBe(true);
+  });
+
+  it('strips in-memory htmlFor from journaled targets', () => {
+    const event = buildRawEvent({
+      id: 'evt_000014',
+      sessionId: 'ses_test',
+      wire: {
+        kind: 'dom.click',
+        ts: 14,
+        target: {
+          tag: 'label',
+          framePath: ['main'],
+          shadowPath: [],
+          htmlFor: 'agree',
+          testId: 'agree-label'
+        }
+      },
+      stepIndex: 14
+    });
+    expect(event.target).not.toHaveProperty('htmlFor');
     expect(validateRawEvent(event).valid).toBe(true);
   });
 
@@ -206,5 +229,25 @@ describe('session env', () => {
     expect(screenshotLimitFromEnv({ SCREENSHOT_RETENTION: '4' })).toBe(4);
     expect(sessionsDirFromEnv('/tmp/ud', {})).toBe('/tmp/ud/sessions');
     expect(sessionsDirFromEnv('/tmp/ud', { SESSIONS_DIR: '/tmp/sessions' })).toBe('/tmp/sessions');
+  });
+});
+
+describe('iframe name selector', () => {
+  it('never treats WebFrameMain.name as an element id', () => {
+    expect(iframeNameSelector('lot1-frame')).toBe('iframe[name="lot1-frame"]');
+    expect(iframeNameSelector('lot1-frame')).not.toContain('#');
+    expect(iframeNameSelector('a"b')).toBe('iframe[name="a\\"b"]');
+  });
+});
+
+describe('net request URL redaction', () => {
+  it('keeps origin and path, drops query, hash, and userinfo', () => {
+    expect(redactNetRequestUrl('https://api.example.test/v1/me?access_token=sekrit#frag')).toBe(
+      'https://api.example.test/v1/me'
+    );
+    expect(redactNetRequestUrl('https://user:pass@api.example.test/v1/me')).toBe(
+      'https://api.example.test/v1/me'
+    );
+    expect(redactNetRequestUrl('not a url?token=abc#x')).toBe('not a url');
   });
 });

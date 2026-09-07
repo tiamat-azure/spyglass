@@ -455,7 +455,9 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         guestUrl: snapshot.url
       };
     }
-    const events = await requireSession().readRawEvents();
+    const session = requireSession();
+    await session.flushPendingCapture();
+    const events = await session.readRawEvents();
     const actions = events.flatMap((rawEvent) => {
       if (rawEvent.action === undefined || rawEvent.kind === 'step.retracted') {
         return [];

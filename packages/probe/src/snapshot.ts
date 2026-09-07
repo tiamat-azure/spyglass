@@ -17,6 +17,19 @@ export function snapshotScript(framePath: string[]): string {
 }
 
 export function collectSnapshot(framePath: string[]): LightweightSnapshot {
+  const cssEscapeAttr = (value: string): string =>
+    value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+  const isCssIdent = (value: string): boolean => /^[A-Za-z_][\w-]*$/.test(value);
+  const idSelector = (id: string): string => {
+    if (isCssIdent(id)) {
+      return `#${id}`;
+    }
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return `#${CSS.escape(id)}`;
+    }
+    return `[id="${cssEscapeAttr(id)}"]`;
+  };
+
   const interactive: LightweightSnapshot['interactive'] = [];
   const headings: LightweightSnapshot['headings'] = [];
   const seen = new Set<Element>();
@@ -71,11 +84,12 @@ export function collectSnapshot(framePath: string[]): LightweightSnapshot {
         interactive.push(item);
       }
       if (node.shadowRoot) {
+        const hostTestId = node.getAttribute('data-testid');
         const hostSel =
           node.id.length > 0
-            ? `#${node.id}`
-            : node.getAttribute('data-testid') !== null
-              ? `[data-testid="${node.getAttribute('data-testid')}"]`
+            ? idSelector(node.id)
+            : hostTestId !== null
+              ? `[data-testid="${cssEscapeAttr(hostTestId)}"]`
               : tag;
         visit(node.shadowRoot, [...shadow, hostSel]);
       }

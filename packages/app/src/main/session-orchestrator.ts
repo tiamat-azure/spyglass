@@ -16,7 +16,9 @@ import {
   asProbeWireEvent,
   buildControlEvent,
   buildRawEvent,
-  isCaptureStepKind
+  isCaptureStepKind,
+  type ProbeWireEvent,
+  redactNetRequestUrl
 } from './capture-pipeline.ts';
 import { ProbeHost } from './probe-host.ts';
 import { parseJsonl, RawJournal } from './raw-journal.ts';
@@ -41,7 +43,7 @@ export type SessionOrchestratorHandlers = {
 };
 
 type PendingClick = {
-  event: RawEvent;
+  wire: ProbeWireEvent;
   target: ProbeElementDescriptor;
   ts: number;
 };
@@ -158,7 +160,6 @@ export class SessionOrchestrator {
     const sessionId = this.sessionId;
     const journal = this.journal;
     return await this.enqueueWrite(async () => {
-      let raw = '';
       try {
         await this.flushPendingClick();
         const page = this.pageSnapshot();
@@ -172,14 +173,18 @@ export class SessionOrchestrator {
             page
           })
         );
-        raw = await readFile(journal.path, 'utf8');
+        const raw = await readFile(journal.path, 'utf8');
         const eventCount = parseJsonl(raw).length;
         await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
-        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
-      } finally {
         this.state = 'sealed';
         this.since = Date.now();
         this.emitState();
+        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
+      } catch (error) {
+        this.state = 'recording';
+        this.since = Date.now();
+        this.emitState();
+        throw error;
       }
     });
   }
@@ -264,7 +269,7 @@ export class SessionOrchestrator {
           sessionId: this.sessionId,
           kind: 'net.request',
           ts: Date.now(),
-          page: { url, title: this.pane().snapshot().title }
+          page: { url: redactNetRequestUrl(url), title: this.pane().snapshot().title }
         })
       );
     });
@@ -284,6 +289,15 @@ export class SessionOrchestrator {
     }
     const raw = await readFile(this.journal.path, 'utf8');
     return parseJsonl(raw) as RawEvent[];
+  }
+
+  async flushPendingCapture(): Promise<void> {
+    await this.enqueueWrite(async () => {
+      if (this.state !== 'recording') {
+        return;
+      }
+      await this.flushPendingClick();
+    });
   }
 
   private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
@@ -322,9 +336,10 @@ export class SessionOrchestrator {
       this.pendingClickTimer = undefined;
     }
     this.pendingClick = undefined;
-    if (pending !== undefined) {
-      await this.append(pending.event);
+    if (pending === undefined || this.sessionId === undefined) {
+      return;
     }
+    await this.commitProbeEvent(pending.wire);
   }
 
   private pendingMatchesChange(wire: {
@@ -378,6 +393,18 @@ export class SessionOrchestrator {
       return;
     }
 
+    if (wire.kind === 'dom.click' && wire.target !== undefined) {
+      this.pendingClick = { wire, target: wire.target, ts: wire.ts };
+      this.schedulePendingClickFlush();
+      return;
+    }
+    await this.commitProbeEvent(wire);
+  }
+
+  private async commitProbeEvent(wire: ProbeWireEvent): Promise<void> {
+    if (this.sessionId === undefined) {
+      return;
+    }
     const id = this.nextId();
     let step: number | undefined;
     if (isCaptureStepKind(wire.kind)) {
@@ -394,21 +421,17 @@ export class SessionOrchestrator {
       snapshotRef = await this.captureSnapshot(step);
       screenshotRef = await this.captureScreenshot(step);
     }
-    const event = buildRawEvent({
-      id,
-      sessionId: this.sessionId,
-      wire,
-      stepIndex: step,
-      snapshotRef,
-      screenshotRef,
-      pageFallback: this.pageSnapshot()
-    });
-    if (wire.kind === 'dom.click' && wire.target !== undefined) {
-      this.pendingClick = { event, target: wire.target, ts: wire.ts };
-      this.schedulePendingClickFlush();
-      return;
-    }
-    await this.append(event);
+    await this.append(
+      buildRawEvent({
+        id,
+        sessionId: this.sessionId,
+        wire,
+        stepIndex: step,
+        snapshotRef,
+        screenshotRef,
+        pageFallback: this.pageSnapshot()
+      })
+    );
   }
 
   private async captureSnapshot(stepIndex: number): Promise<string | undefined> {

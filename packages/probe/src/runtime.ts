@@ -8,24 +8,27 @@ export type ProbeInjectConfig = {
 /**
  * Self-contained page-world probe. Stringified into the guest (and every iframe).
  * Passive: capture-phase listeners, never preventDefault / stopPropagation.
- * No guessable globals: install flag is `nonce`-suffixed and non-enumerable.
+ * No guessable globals: install mark is nonce-free; the auth nonce stays in
+ * the IIFE closure used only for `SPYGLASS:${nonce}:` console lines.
  * Must not close over module bindings — `Function.prototype.toString` is the
  * injectable source, so imported constants would be ReferenceErrors in the page.
  */
 export function spyglassProbeMain(config: ProbeInjectConfig): void {
-  const flag = `__s${config.nonce}`;
-  if (Object.hasOwn(window, flag)) {
+  const installMark = '__sgInstalled';
+  if (Object.hasOwn(window, installMark)) {
     return;
   }
-  Object.defineProperty(window, flag, {
+  Object.defineProperty(window, installMark, {
     value: 1,
     enumerable: false,
     configurable: false,
     writable: false
   });
+  const authToken = config.nonce;
 
   const TEXT_MAX = 512;
   let scrollAccum = 0;
+  const lastScrollTop = new WeakMap<EventTarget, number>();
   const inputTimers = new Map<EventTarget, number>();
   const inputLatest = new Map<EventTarget, Record<string, unknown>>();
   const PASSWORD_AC = new Set(['current-password', 'new-password', 'one-time-code', 'password']);
@@ -105,7 +108,7 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
 
   const emit = (payload: Record<string, unknown>): void => {
     try {
-      console.log(`SPYGLASS:${config.nonce}:${JSON.stringify(redactForConsole(payload))}`);
+      console.log(`SPYGLASS:${authToken}:${JSON.stringify(redactForConsole(payload))}`);
     } catch {
       // never throw into the page
     }
@@ -322,6 +325,17 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     const name = el.getAttribute('name');
     if (name) {
       desc.name = name;
+    }
+    if (el instanceof HTMLLabelElement) {
+      const associated =
+        el.htmlFor.length > 0
+          ? el.htmlFor
+          : el.control instanceof Element && el.control.id.length > 0
+            ? el.control.id
+            : '';
+      if (associated.length > 0) {
+        desc.htmlFor = associated;
+      }
     }
     const css = uniqueCss(el);
     if (css !== undefined) {
@@ -559,16 +573,17 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   };
 
   const onScroll = (event: Event): void => {
-    const el = composedElement(event) ?? document.documentElement;
-    let delta = 0;
-    if (event instanceof WheelEvent) {
-      delta = event.deltaY;
-    } else if (el instanceof Element) {
-      delta = el.scrollTop;
+    const el = composedElement(event) ?? document.scrollingElement ?? document.documentElement;
+    const target = el instanceof Element ? el : document.documentElement;
+    const current = target.scrollTop;
+    const prev = lastScrollTop.get(target) ?? 0;
+    lastScrollTop.set(target, current);
+    const delta = current - prev;
+    if (delta === 0) {
+      return;
     }
     scrollAccum += delta;
     if (Math.abs(scrollAccum) >= config.scrollThresholdPx) {
-      const target = el instanceof Element ? el : document.documentElement;
       emitDom('dom.scroll', target, { scrollDelta: scrollAccum });
       scrollAccum = 0;
     }
@@ -609,6 +624,5 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   window.addEventListener('keydown', onKeyDown, opts);
   window.addEventListener('submit', onSubmit, opts);
   window.addEventListener('scroll', onScroll, opts);
-  window.addEventListener('wheel', onScroll, opts);
   window.addEventListener('focusout', onBlur, opts);
 }

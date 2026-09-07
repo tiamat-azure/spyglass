@@ -14,6 +14,7 @@ import {
   stagehandMethodFor,
   toObserveResult
 } from './replay.ts';
+import { snapshotScript } from './snapshot.ts';
 import { buildProbeSource } from './source.ts';
 
 describe('@spyglass/probe', () => {
@@ -76,12 +77,32 @@ describe('@spyglass/probe', () => {
       isLabelClickForControlChange(
         'dom.click',
         'dom.check',
-        { framePath: ['main'], shadowPath: [], tag: 'label' },
+        { framePath: ['main'], shadowPath: [], tag: 'label', htmlFor: 'agree' },
         { framePath: ['main'], shadowPath: [], id: 'agree' },
         10,
         40
       )
     ).toBe(true);
+    expect(
+      isLabelClickForControlChange(
+        'dom.click',
+        'dom.check',
+        { framePath: ['main'], shadowPath: [], tag: 'label', htmlFor: 'other' },
+        { framePath: ['main'], shadowPath: [], id: 'agree' },
+        10,
+        40
+      )
+    ).toBe(false);
+    expect(
+      isLabelClickForControlChange(
+        'dom.click',
+        'dom.check',
+        { framePath: ['main'], shadowPath: [], tag: 'label' },
+        { framePath: ['main'], shadowPath: [], id: 'agree' },
+        10,
+        40
+      )
+    ).toBe(false);
     expect(shouldCaptureScroll(199, 200)).toBe(false);
     expect(shouldCaptureScroll(200, 200)).toBe(true);
   });
@@ -143,5 +164,15 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('htmlFor');
     expect(source).toContain('CSS.escape');
     expect(source).toContain('[id="');
+    expect(source).toContain('__sgInstalled');
+    expect(source).not.toContain('__sdeadbeef');
+    expect(source).not.toContain("addEventListener('wheel'");
+  });
+
+  it('escapes shadow host ids in the snapshot script', () => {
+    const source = snapshotScript(['main']);
+    expect(source).toContain('CSS.escape');
+    expect(source).toContain('[data-testid="');
+    expect(source).not.toMatch(/`#\$\{node\.id\}`/);
   });
 });

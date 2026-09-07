@@ -11,15 +11,18 @@ export type ProbeHostHandlers = {
   onProbeEvent: (payload: unknown, framePath: string[]) => void;
 };
 
+/** Electron `WebFrameMain.name` is the frame name, not the element id. Never `#`. */
+export function iframeNameSelector(name: string): string {
+  const escaped = name.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+  return `iframe[name="${escaped}"]`;
+}
+
 function frameSelector(frame: WebFrameMain, isRoot: boolean): string {
   if (isRoot) {
     return 'main';
   }
   if (frame.name.length > 0) {
-    if (/^[A-Za-z_][\w-]*$/.test(frame.name)) {
-      return `iframe#${frame.name}`;
-    }
-    return `iframe[name="${frame.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"]`;
+    return iframeNameSelector(frame.name);
   }
   try {
     const url = new URL(frame.url);
