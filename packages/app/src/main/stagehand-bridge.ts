@@ -8,19 +8,25 @@ import type { StagehandObservation, StagehandObserveResponse } from '../shared/i
 export const DEFAULT_OBSERVE_INSTRUCTION = 'Find interactive elements on the displayed page';
 
 export function observeScriptPath(appPath?: string): string | undefined {
-  const candidates: string[] = [
-    join(import.meta.dirname, '../../scripts/stagehand-observe.mjs'),
-    join(import.meta.dirname, '../../../scripts/stagehand-observe.mjs')
-  ];
-  if (appPath !== undefined && appPath.length > 0) {
-    candidates.push(join(appPath, 'scripts/stagehand-observe.mjs'));
-  }
+  const candidates: string[] = [];
   const resourcesPath = electronResourcesPath();
   if (resourcesPath !== undefined) {
+    // Packaged extraResources is a real file; prefer it over asar overlay paths.
     candidates.push(join(resourcesPath, 'scripts/stagehand-observe.mjs'));
     candidates.push(join(resourcesPath, 'stagehand-observe.mjs'));
     candidates.push(join(resourcesPath, 'app.asar.unpacked/scripts/stagehand-observe.mjs'));
   }
+  if (appPath !== undefined && appPath.length > 0) {
+    candidates.push(join(appPath, 'scripts/stagehand-observe.mjs'));
+    const unpacked = unpackedAsarPath(appPath);
+    if (unpacked !== undefined) {
+      candidates.push(join(unpacked, 'scripts/stagehand-observe.mjs'));
+    }
+  }
+  candidates.push(
+    join(import.meta.dirname, '../../scripts/stagehand-observe.mjs'),
+    join(import.meta.dirname, '../../../scripts/stagehand-observe.mjs')
+  );
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       return candidate;
@@ -143,15 +149,6 @@ async function spawnStagehandObserve(options: {
     childEnv.SPYGLASS_APP_PATH = options.appPath;
   }
 
-  const viaUtility = await runObserveViaUtilityProcess(script, flags, childEnv, {
-    instruction,
-    guestUrl: options.guestUrl,
-    cdpUrl: options.cdpUrl
-  });
-  if (viaUtility !== undefined) {
-    return viaUtility;
-  }
-
   childEnv.ELECTRON_RUN_AS_NODE = '1';
   return await runObserveViaSpawn(script, flags, childEnv, {
     instruction,
@@ -165,46 +162,6 @@ type ObserveContext = {
   guestUrl: string;
   cdpUrl: string;
 };
-
-async function runObserveViaUtilityProcess(
-  script: string,
-  flags: string[],
-  env: NodeJS.ProcessEnv,
-  context: ObserveContext
-): Promise<StagehandObserveResponse | undefined> {
-  let utilityProcess: UtilityProcessApi | undefined;
-  try {
-    const electronMod = (await import('electron')) as { utilityProcess?: UtilityProcessApi };
-    utilityProcess = electronMod.utilityProcess;
-  } catch {
-    return undefined;
-  }
-  if (utilityProcess === undefined || typeof utilityProcess.fork !== 'function') {
-    return undefined;
-  }
-  const api = utilityProcess;
-
-  return await new Promise((resolve) => {
-    let child: UtilityChild | undefined;
-    try {
-      child = api.fork(script, flags, {
-        env,
-        stdio: 'pipe',
-        serviceName: 'spyglass-observe'
-      });
-    } catch {
-      resolve(undefined);
-      return;
-    }
-    if (child === undefined) {
-      resolve(undefined);
-      return;
-    }
-    collectObserveChild(child, context, (value) => {
-      resolve(value);
-    });
-  });
-}
 
 async function runObserveViaSpawn(
   script: string,
@@ -221,19 +178,7 @@ async function runObserveViaSpawn(
   });
 }
 
-type UtilityProcessApi = {
-  fork: (
-    modulePath: string,
-    args?: string[],
-    options?: {
-      env?: NodeJS.ProcessEnv;
-      stdio?: 'pipe' | 'ignore' | 'inherit';
-      serviceName?: string;
-    }
-  ) => UtilityChild;
-};
-
-type UtilityChild = {
+type ObserveChild = {
   stdout?: { on: (event: 'data', listener: (chunk: string | Uint8Array) => void) => void } | null;
   stderr?: { on: (event: 'data', listener: (chunk: string | Uint8Array) => void) => void } | null;
   on: (event: 'exit' | 'error', listener: (...args: unknown[]) => void) => void;
@@ -241,7 +186,7 @@ type UtilityChild = {
 };
 
 function collectObserveChild(
-  child: UtilityChild,
+  child: ObserveChild,
   context: ObserveContext,
   resolve: (value: StagehandObserveResponse) => void
 ): void {
