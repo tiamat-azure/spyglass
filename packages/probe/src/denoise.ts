@@ -4,7 +4,10 @@ export type DenoiseTargetKey = {
   cssSelector?: string;
   testId?: string;
   id?: string;
+  tag?: string;
 };
+
+export const CLICK_CHANGE_WINDOW_MS = 400;
 
 export type PendingInput = {
   key: string;
@@ -39,7 +42,7 @@ export function isRedundantClickBeforeChange(
   changeTarget: DenoiseTargetKey,
   clickTs: number,
   changeTs: number,
-  windowMs = 400
+  windowMs = CLICK_CHANGE_WINDOW_MS
 ): boolean {
   if (clickKind !== 'dom.click') {
     return false;
@@ -51,6 +54,59 @@ export function isRedundantClickBeforeChange(
     return false;
   }
   return targetKey(clickTarget) === targetKey(changeTarget);
+}
+
+/** Label click that toggles a checkbox/select in the same frame (F-16). */
+export function isLabelClickForControlChange(
+  clickKind: string,
+  changeKind: string,
+  clickTarget: DenoiseTargetKey,
+  changeTarget: DenoiseTargetKey,
+  clickTs: number,
+  changeTs: number,
+  windowMs = CLICK_CHANGE_WINDOW_MS
+): boolean {
+  if (clickKind !== 'dom.click' || clickTarget.tag !== 'label') {
+    return false;
+  }
+  if (changeKind !== 'dom.change' && changeKind !== 'dom.check' && changeKind !== 'dom.select') {
+    return false;
+  }
+  if (changeTs - clickTs > windowMs || changeTs < clickTs) {
+    return false;
+  }
+  return clickTarget.framePath.join('>') === changeTarget.framePath.join('>');
+}
+
+export function isDenoisedClickForChange(
+  clickKind: string,
+  changeKind: string,
+  clickTarget: DenoiseTargetKey,
+  changeTarget: DenoiseTargetKey,
+  clickTs: number,
+  changeTs: number,
+  windowMs = CLICK_CHANGE_WINDOW_MS
+): boolean {
+  return (
+    isRedundantClickBeforeChange(
+      clickKind,
+      changeKind,
+      clickTarget,
+      changeTarget,
+      clickTs,
+      changeTs,
+      windowMs
+    ) ||
+    isLabelClickForControlChange(
+      clickKind,
+      changeKind,
+      clickTarget,
+      changeTarget,
+      clickTs,
+      changeTs,
+      windowMs
+    )
+  );
 }
 
 export class InputAggregator {

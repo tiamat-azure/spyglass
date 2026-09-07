@@ -9,6 +9,8 @@ import {
   maskCapturedValue,
   PAGE_ID_MAIN,
   type ProbeElementDescriptor,
+  secretRefFor,
+  shouldMaskField,
   templateNarration
 } from '@spyglass/probe';
 
@@ -26,6 +28,8 @@ export type ProbeWireEvent = {
   scrollDelta?: number;
   selectedValue?: string;
   checked?: boolean;
+  masked?: boolean;
+  secretRef?: string;
 };
 
 export function asProbeWireEvent(input: unknown): ProbeWireEvent | undefined {
@@ -78,19 +82,36 @@ export function asProbeWireEvent(input: unknown): ProbeWireEvent | undefined {
   if (typeof record.checked === 'boolean') {
     event.checked = record.checked;
   }
+  if (record.masked === true) {
+    event.masked = true;
+  }
+  if (typeof record.secretRef === 'string') {
+    event.secretRef = record.secretRef;
+  }
   return event;
 }
 
 function capturedValue(wire: ProbeWireEvent): CapturedValue | undefined {
-  if (wire.valueText === undefined && wire.selectedValue === undefined && wire.key === undefined) {
-    return undefined;
-  }
-  const text = wire.valueText ?? wire.selectedValue ?? wire.key ?? '';
-  return maskCapturedValue(text, {
+  const field = {
     type: wire.type,
     autocomplete: wire.autocomplete,
     name: wire.name ?? wire.target?.name
-  });
+  };
+  if (
+    wire.masked === true &&
+    typeof wire.secretRef === 'string' &&
+    wire.secretRef.startsWith('SECRET_')
+  ) {
+    return { masked: true, secretRef: wire.secretRef };
+  }
+  if (wire.valueText === undefined && wire.selectedValue === undefined && wire.key === undefined) {
+    if (shouldMaskField(field) && (wire.kind === 'dom.input' || wire.kind === 'dom.change')) {
+      return { masked: true, secretRef: secretRefFor(field) };
+    }
+    return undefined;
+  }
+  const text = wire.valueText ?? wire.selectedValue ?? wire.key ?? '';
+  return maskCapturedValue(text, field);
 }
 
 function actionArgs(wire: ProbeWireEvent, value: CapturedValue | undefined): string[] | undefined {

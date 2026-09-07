@@ -2,7 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RawEvent } from '@spyglass/contracts';
 import {
-  isRedundantClickBeforeChange,
+  CLICK_CHANGE_WINDOW_MS,
+  isDenoisedClickForChange,
   NET_CORRELATION_MS,
   type ProbeElementDescriptor,
   SCREENSHOT_JPEG_QUALITY,
@@ -39,6 +40,12 @@ export type SessionOrchestratorHandlers = {
   onState: (state: { state: RecorderState; since: number; sessionId?: string }) => void;
 };
 
+type PendingClick = {
+  event: RawEvent;
+  target: ProbeElementDescriptor;
+  ts: number;
+};
+
 export class SessionOrchestrator {
   private state: RecorderState = 'idle';
   private since = Date.now();
@@ -53,6 +60,9 @@ export class SessionOrchestrator {
   private readonly seenEventIds = new Set<string>();
   private probe: ProbeHost | undefined;
   private readonly probeNonce = newProbeNonce();
+  private writeChain: Promise<void> = Promise.resolve();
+  private pendingClick: PendingClick | undefined;
+  private pendingClickTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly sessionsRoot: () => string,
@@ -75,7 +85,7 @@ export class SessionOrchestrator {
     const contents = this.pane().webContents;
     this.probe = new ProbeHost(contents, this.probeNonce, {
       onProbeEvent: (payload) => {
-        void this.handleProbePayload(payload);
+        void this.enqueueWrite(() => this.processProbePayload(payload));
       }
     });
     this.probe.attach();
@@ -118,19 +128,23 @@ export class SessionOrchestrator {
     this.stepIndex = 0;
     this.seenEventIds.clear();
     this.lastDom = undefined;
+    this.discardPendingClick();
     this.state = 'recording';
     this.since = Date.now();
+    await this.enqueueWrite(async () => {
+      const page = this.pageSnapshot();
+      const id = this.nextId();
+      await this.append(
+        buildControlEvent({
+          id,
+          sessionId,
+          kind: 'record.start',
+          ts: Date.now(),
+          page
+        })
+      );
+    });
     await this.probe?.injectTree();
-    const page = this.pageSnapshot();
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId,
-        kind: 'record.start',
-        ts: Date.now(),
-        page
-      })
-    );
     this.emitState();
     return { sessionId };
   }
@@ -141,92 +155,119 @@ export class SessionOrchestrator {
     }
     this.state = 'stopping';
     this.emitState();
-    const page = this.pageSnapshot();
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        kind: 'record.stop',
-        ts: Date.now(),
-        page
-      })
-    );
-    const raw = await readFile(this.journal.path, 'utf8');
-    const eventCount = parseJsonl(raw).length;
-    await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
     const sessionId = this.sessionId;
-    this.state = 'sealed';
-    this.since = Date.now();
-    this.emitState();
-    return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
+    const journal = this.journal;
+    return await this.enqueueWrite(async () => {
+      let raw = '';
+      try {
+        await this.flushPendingClick();
+        const page = this.pageSnapshot();
+        const id = this.nextId();
+        await this.append(
+          buildControlEvent({
+            id,
+            sessionId,
+            kind: 'record.stop',
+            ts: Date.now(),
+            page
+          })
+        );
+        raw = await readFile(journal.path, 'utf8');
+        const eventCount = parseJsonl(raw).length;
+        await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
+        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
+      } finally {
+        this.state = 'sealed';
+        this.since = Date.now();
+        this.emitState();
+      }
+    });
   }
 
   async retract(eventId: string): Promise<{ retractedEventId: string }> {
     if (this.state !== 'recording' || this.sessionId === undefined) {
       throw new Error('Retraction requires an active recording');
     }
-    if (!this.seenEventIds.has(eventId) && !(await this.eventExists(eventId))) {
-      throw new Error(`Unknown event ${eventId}`);
-    }
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        kind: 'step.retracted',
-        ts: Date.now(),
-        page: this.pageSnapshot(),
-        retracts: eventId
-      })
-    );
-    return { retractedEventId: eventId };
+    return await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        throw new Error('Retraction requires an active recording');
+      }
+      await this.flushPendingClick();
+      if (!this.seenEventIds.has(eventId) && !(await this.eventExists(eventId))) {
+        throw new Error(`Unknown event ${eventId}`);
+      }
+      const id = this.nextId();
+      await this.append(
+        buildControlEvent({
+          id,
+          sessionId: this.sessionId,
+          kind: 'step.retracted',
+          ts: Date.now(),
+          page: this.pageSnapshot(),
+          retracts: eventId
+        })
+      );
+      return { retractedEventId: eventId };
+    });
   }
 
   async recordNav(kind: RawEvent['kind'], page?: NavState): Promise<void> {
-    if (this.state !== 'recording' || this.sessionId === undefined) {
-      return;
-    }
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        kind,
-        ts: Date.now(),
-        page: page ?? this.pageSnapshot()
-      })
-    );
+    await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        return;
+      }
+      await this.flushPendingClick();
+      const id = this.nextId();
+      await this.append(
+        buildControlEvent({
+          id,
+          sessionId: this.sessionId,
+          kind,
+          ts: Date.now(),
+          page: page ?? this.pageSnapshot()
+        })
+      );
+    });
   }
 
   async recordPopup(url: string): Promise<void> {
-    if (this.state !== 'recording' || this.sessionId === undefined) {
-      return;
-    }
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        kind: 'nav.popup-redirected',
-        ts: Date.now(),
-        page: { url, title: this.pane().snapshot().title }
-      })
-    );
+    await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        return;
+      }
+      await this.flushPendingClick();
+      const id = this.nextId();
+      await this.append(
+        buildControlEvent({
+          id,
+          sessionId: this.sessionId,
+          kind: 'nav.popup-redirected',
+          ts: Date.now(),
+          page: { url, title: this.pane().snapshot().title }
+        })
+      );
+    });
   }
 
   async recordNetRequest(url: string): Promise<void> {
-    if (this.state !== 'recording' || this.sessionId === undefined) {
-      return;
-    }
-    if (Date.now() - this.lastUserActionTs > NET_CORRELATION_MS) {
-      return;
-    }
-    await this.append(
-      buildControlEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        kind: 'net.request',
-        ts: Date.now(),
-        page: { url, title: this.pane().snapshot().title }
-      })
-    );
+    await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        return;
+      }
+      if (Date.now() - this.lastUserActionTs > NET_CORRELATION_MS) {
+        return;
+      }
+      const id = this.nextId();
+      await this.append(
+        buildControlEvent({
+          id,
+          sessionId: this.sessionId,
+          kind: 'net.request',
+          ts: Date.now(),
+          page: { url, title: this.pane().snapshot().title }
+        })
+      );
+    });
   }
 
   currentSessionDir(): string | undefined {
@@ -245,7 +286,66 @@ export class SessionOrchestrator {
     return parseJsonl(raw) as RawEvent[];
   }
 
-  private async handleProbePayload(payload: unknown): Promise<void> {
+  private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.writeChain.then(task, task);
+    this.writeChain = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  private discardPendingClick(): void {
+    if (this.pendingClickTimer !== undefined) {
+      clearTimeout(this.pendingClickTimer);
+      this.pendingClickTimer = undefined;
+    }
+    this.pendingClick = undefined;
+  }
+
+  private schedulePendingClickFlush(): void {
+    if (this.pendingClickTimer !== undefined) {
+      clearTimeout(this.pendingClickTimer);
+    }
+    this.pendingClickTimer = setTimeout(() => {
+      this.pendingClickTimer = undefined;
+      void this.enqueueWrite(async () => {
+        await this.flushPendingClick();
+      });
+    }, CLICK_CHANGE_WINDOW_MS);
+  }
+
+  private async flushPendingClick(): Promise<void> {
+    const pending = this.pendingClick;
+    if (this.pendingClickTimer !== undefined) {
+      clearTimeout(this.pendingClickTimer);
+      this.pendingClickTimer = undefined;
+    }
+    this.pendingClick = undefined;
+    if (pending !== undefined) {
+      await this.append(pending.event);
+    }
+  }
+
+  private pendingMatchesChange(wire: {
+    kind: string;
+    ts: number;
+    target?: ProbeElementDescriptor;
+  }): boolean {
+    if (this.pendingClick === undefined || wire.target === undefined) {
+      return false;
+    }
+    return isDenoisedClickForChange(
+      'dom.click',
+      wire.kind,
+      this.pendingClick.target,
+      wire.target,
+      this.pendingClick.ts,
+      wire.ts
+    );
+  }
+
+  private async processProbePayload(payload: unknown): Promise<void> {
     if (this.state !== 'recording' || this.sessionId === undefined) {
       return;
     }
@@ -253,11 +353,20 @@ export class SessionOrchestrator {
     if (wire === undefined) {
       return;
     }
+
+    if (this.pendingMatchesChange(wire)) {
+      this.discardPendingClick();
+    } else if (wire.kind !== 'dom.click') {
+      await this.flushPendingClick();
+    } else if (this.pendingClick !== undefined) {
+      await this.flushPendingClick();
+    }
+
     if (
       this.lastDom !== undefined &&
       wire.target !== undefined &&
       wire.kind === 'dom.click' &&
-      isRedundantClickBeforeChange(
+      isDenoisedClickForChange(
         wire.kind,
         this.lastDom.kind,
         wire.target,
@@ -266,9 +375,10 @@ export class SessionOrchestrator {
         wire.ts
       )
     ) {
-      // Click arrived after check/select on the same control (F-16). Skip it.
       return;
     }
+
+    const id = this.nextId();
     let step: number | undefined;
     if (isCaptureStepKind(wire.kind)) {
       this.stepIndex += 1;
@@ -284,17 +394,21 @@ export class SessionOrchestrator {
       snapshotRef = await this.captureSnapshot(step);
       screenshotRef = await this.captureScreenshot(step);
     }
-    await this.append(
-      buildRawEvent({
-        id: this.nextId(),
-        sessionId: this.sessionId,
-        wire,
-        stepIndex: step,
-        snapshotRef,
-        screenshotRef,
-        pageFallback: this.pageSnapshot()
-      })
-    );
+    const event = buildRawEvent({
+      id,
+      sessionId: this.sessionId,
+      wire,
+      stepIndex: step,
+      snapshotRef,
+      screenshotRef,
+      pageFallback: this.pageSnapshot()
+    });
+    if (wire.kind === 'dom.click' && wire.target !== undefined) {
+      this.pendingClick = { event, target: wire.target, ts: wire.ts };
+      this.schedulePendingClickFlush();
+      return;
+    }
+    await this.append(event);
   }
 
   private async captureSnapshot(stepIndex: number): Promise<string | undefined> {

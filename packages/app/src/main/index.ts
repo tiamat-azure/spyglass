@@ -567,11 +567,7 @@ void (async () => {
     pane.webContents.on('did-navigate', () => {
       void activeSession?.recordNav('nav.load', pane.snapshot());
     });
-    pane.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
-      if (isMainFrame) {
-        void activeSession?.recordNav('nav.spa', pane.snapshot());
-      }
-    });
+    // SPA history is recorded by the guest probe (`nav.spa`), not did-navigate-in-page.
     pane.webContents.session.webRequest.onCompleted((details) => {
       const resourceType = String(details.resourceType);
       if (resourceType === 'xhr' || resourceType === 'fetch') {

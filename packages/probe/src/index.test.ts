@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { InputAggregator, isRedundantClickBeforeChange, shouldCaptureScroll } from './denoise.ts';
+import {
+  InputAggregator,
+  isLabelClickForControlChange,
+  isRedundantClickBeforeChange,
+  shouldCaptureScroll
+} from './denoise.ts';
 import { INPUT_AGGREGATION_MS, PROBE_PACKAGE, probePackageName } from './index.ts';
 import { maskCapturedValue, shouldMaskField } from './masking.ts';
 import type { ProbeElementDescriptor } from './replay.ts';
@@ -29,6 +34,13 @@ describe('@spyglass/probe', () => {
     expect(maskCapturedValue('demo', { type: 'text', name: 'user' })).toEqual({
       masked: false,
       text: 'demo'
+    });
+    expect(shouldMaskField({ autocomplete: 'current-password' })).toBe(true);
+    expect(shouldMaskField({ autocomplete: 'new-password' })).toBe(true);
+    expect(shouldMaskField({ autocomplete: 'one-time-code' })).toBe(true);
+    expect(maskCapturedValue('123456', { autocomplete: 'one-time-code' })).toEqual({
+      masked: true,
+      secretRef: 'SECRET_PASSWORD'
     });
   });
 
@@ -60,6 +72,16 @@ describe('@spyglass/probe', () => {
     expect(isRedundantClickBeforeChange('dom.click', 'dom.check', target, target, 10, 40)).toBe(
       true
     );
+    expect(
+      isLabelClickForControlChange(
+        'dom.click',
+        'dom.check',
+        { framePath: ['main'], shadowPath: [], tag: 'label' },
+        { framePath: ['main'], shadowPath: [], id: 'agree' },
+        10,
+        40
+      )
+    ).toBe(true);
     expect(shouldCaptureScroll(199, 200)).toBe(false);
     expect(shouldCaptureScroll(200, 200)).toBe(true);
   });
@@ -117,5 +139,9 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('SPYGLASS:');
     expect(source).not.toMatch(/\bPROBE_CONSOLE_PREFIX\b/);
     expect(source).not.toContain('__vite_ssr_import');
+    expect(source).toContain('SECRET_PASSWORD');
+    expect(source).toContain('htmlFor');
+    expect(source).toContain('CSS.escape');
+    expect(source).toContain('[id="');
   });
 });

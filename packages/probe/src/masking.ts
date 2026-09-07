@@ -9,6 +9,13 @@ const CARD_AUTOCOMPLETE = new Set([
   'cc-type'
 ]);
 
+const PASSWORD_AUTOCOMPLETE = new Set([
+  'current-password',
+  'new-password',
+  'one-time-code',
+  'password'
+]);
+
 export type MaskableField = {
   type?: string;
   autocomplete?: string;
@@ -21,13 +28,40 @@ function normalize(value: string | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
+function autocompleteTokens(field: MaskableField): string[] {
+  const autocomplete = normalize(field.autocomplete);
+  if (autocomplete.length === 0) {
+    return [];
+  }
+  return autocomplete.split(/\s+/);
+}
+
+function isPasswordAutocomplete(field: MaskableField): boolean {
+  for (const token of autocompleteTokens(field)) {
+    if (PASSWORD_AUTOCOMPLETE.has(token)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isCardAutocomplete(field: MaskableField): boolean {
+  for (const token of autocompleteTokens(field)) {
+    if (CARD_AUTOCOMPLETE.has(token) || token.startsWith('cc-')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isPasswordName(field: MaskableField): boolean {
+  const name = normalize(field.name);
+  return name.includes('password') || name.includes('passwd');
+}
+
 export function secretRefFor(field: MaskableField): string {
   const type = normalize(field.type);
-  if (type === 'password') {
-    return 'SECRET_PASSWORD';
-  }
-  const name = normalize(field.name);
-  if (name.includes('password') || name.includes('passwd')) {
+  if (type === 'password' || isPasswordAutocomplete(field) || isPasswordName(field)) {
     return 'SECRET_PASSWORD';
   }
   return 'SECRET_CARD';
@@ -38,14 +72,8 @@ export function shouldMaskField(field: MaskableField): boolean {
   if (type === 'password') {
     return true;
   }
-  const autocomplete = normalize(field.autocomplete);
-  if (autocomplete.length > 0) {
-    const tokens = autocomplete.split(/\s+/);
-    for (const token of tokens) {
-      if (CARD_AUTOCOMPLETE.has(token) || token.startsWith('cc-')) {
-        return true;
-      }
-    }
+  if (isPasswordAutocomplete(field) || isCardAutocomplete(field)) {
+    return true;
   }
   const name = normalize(field.name);
   if (
@@ -54,7 +82,7 @@ export function shouldMaskField(field: MaskableField): boolean {
   ) {
     return true;
   }
-  return false;
+  return isPasswordName(field);
 }
 
 export function maskCapturedValue(text: string, field: MaskableField): MaskDecision {

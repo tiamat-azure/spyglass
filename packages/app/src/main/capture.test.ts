@@ -39,6 +39,14 @@ describe('raw journal', () => {
     expect(events).toHaveLength(1);
     expect((events[0] as { id: string }).id).toBe('evt_000001');
   });
+
+  it('skips corrupt JSONL lines when counting', () => {
+    const events = parseJsonl(
+      '{"schemaVersion":1,"id":"evt_000001","sessionId":"ses_test","ts":1,"kind":"record.start"}\n{not-json\n{"schemaVersion":1,"id":"evt_000002","sessionId":"ses_test","ts":2,"kind":"record.stop"}\n'
+    );
+    expect(events).toHaveLength(2);
+    expect((events[1] as { id: string }).id).toBe('evt_000002');
+  });
 });
 
 describe('retention', () => {
@@ -153,6 +161,30 @@ describe('capture pipeline', () => {
     expect(event.action?.type).toBe('check');
     expect(event.action?.arguments).toBeUndefined();
     expect(event.value).toEqual({ masked: false, text: 'on' });
+    expect(validateRawEvent(event).valid).toBe(true);
+  });
+
+  it('honors probe-side redaction without cleartext valueText', () => {
+    const event = buildRawEvent({
+      id: 'evt_000013',
+      sessionId: 'ses_test',
+      wire: {
+        kind: 'dom.input',
+        ts: 13,
+        masked: true,
+        secretRef: 'SECRET_PASSWORD',
+        type: 'password',
+        target: {
+          tag: 'input',
+          framePath: ['main'],
+          shadowPath: [],
+          testId: 'step-3'
+        }
+      },
+      stepIndex: 13
+    });
+    expect(event.value).toEqual({ masked: true, secretRef: 'SECRET_PASSWORD' });
+    expect(JSON.stringify(event)).not.toContain('hunter2');
     expect(validateRawEvent(event).valid).toBe(true);
   });
 });

@@ -18,7 +18,10 @@ export {
   TEXT_MAX_LENGTH
 } from './constants.ts';
 export {
+  CLICK_CHANGE_WINDOW_MS,
   InputAggregator,
+  isDenoisedClickForChange,
+  isLabelClickForControlChange,
   isRedundantClickBeforeChange,
   isSignificantKey,
   shouldCaptureScroll,

@@ -28,13 +28,103 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   let scrollAccum = 0;
   const inputTimers = new Map<EventTarget, number>();
   const inputLatest = new Map<EventTarget, Record<string, unknown>>();
+  const PASSWORD_AC = new Set(['current-password', 'new-password', 'one-time-code', 'password']);
+  const CARD_AC = new Set([
+    'cc-number',
+    'cc-csc',
+    'cc-exp',
+    'cc-exp-month',
+    'cc-exp-year',
+    'cc-family-name',
+    'cc-name',
+    'cc-type'
+  ]);
+
+  const norm = (value: string | undefined): string => (value ?? '').trim().toLowerCase();
+
+  const fieldLooksSecret = (
+    type: string | undefined,
+    autocomplete: string | undefined,
+    name: string | undefined
+  ): boolean => {
+    if (norm(type) === 'password') {
+      return true;
+    }
+    for (const token of norm(autocomplete).split(/\s+/)) {
+      if (token.length === 0) {
+        continue;
+      }
+      if (PASSWORD_AC.has(token) || CARD_AC.has(token) || token.startsWith('cc-')) {
+        return true;
+      }
+    }
+    const lowered = norm(name);
+    if (lowered.includes('password') || lowered.includes('passwd')) {
+      return true;
+    }
+    return (
+      lowered.includes('card') &&
+      (lowered.includes('number') || lowered.includes('cvv') || lowered.includes('cvc'))
+    );
+  };
+
+  const secretRefForField = (
+    type: string | undefined,
+    autocomplete: string | undefined,
+    name: string | undefined
+  ): string => {
+    if (norm(type) === 'password') {
+      return 'SECRET_PASSWORD';
+    }
+    for (const token of norm(autocomplete).split(/\s+/)) {
+      if (PASSWORD_AC.has(token)) {
+        return 'SECRET_PASSWORD';
+      }
+    }
+    const lowered = norm(name);
+    if (lowered.includes('password') || lowered.includes('passwd')) {
+      return 'SECRET_PASSWORD';
+    }
+    return 'SECRET_CARD';
+  };
+
+  const redactForConsole = (payload: Record<string, unknown>): Record<string, unknown> => {
+    const target = payload.target as { name?: string } | undefined;
+    const type = typeof payload.type === 'string' ? payload.type : undefined;
+    const autocomplete =
+      typeof payload.autocomplete === 'string' ? payload.autocomplete : undefined;
+    const name = typeof payload.name === 'string' ? payload.name : target?.name;
+    if (!fieldLooksSecret(type, autocomplete, name)) {
+      return payload;
+    }
+    const redacted: Record<string, unknown> = { ...payload, masked: true };
+    delete redacted.valueText;
+    redacted.secretRef = secretRefForField(type, autocomplete, name);
+    return redacted;
+  };
 
   const emit = (payload: Record<string, unknown>): void => {
     try {
-      console.log(`SPYGLASS:${config.nonce}:${JSON.stringify(payload)}`);
+      console.log(`SPYGLASS:${config.nonce}:${JSON.stringify(redactForConsole(payload))}`);
     } catch {
       // never throw into the page
     }
+  };
+
+  const cssEscapeAttr = (value: string): string =>
+    value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+
+  const isCssIdent = (value: string): boolean => /^[A-Za-z_][\w-]*$/.test(value);
+
+  /** Mirror `replay.idSelector`; prefer `CSS.escape` for non-ident ids. */
+  const idSelector = (id: string): string => {
+    if (isCssIdent(id)) {
+      return `#${id}`;
+    }
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return `#${CSS.escape(id)}`;
+    }
+    return `[id="${cssEscapeAttr(id)}"]`;
   };
 
   const framePath = (): string[] => {
@@ -48,14 +138,17 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
       const fe = window.frameElement;
       if (fe instanceof HTMLIFrameElement) {
         if (fe.id) {
-          return ['main', `iframe#${fe.id}`];
+          return [
+            'main',
+            isCssIdent(fe.id) ? `iframe#${fe.id}` : `iframe[id="${cssEscapeAttr(fe.id)}"]`
+          ];
         }
         const testId = fe.getAttribute('data-testid');
         if (testId) {
-          return ['main', `iframe[data-testid="${testId}"]`];
+          return ['main', `iframe[data-testid="${cssEscapeAttr(testId)}"]`];
         }
         if (fe.name) {
-          return ['main', `iframe[name="${fe.name}"]`];
+          return ['main', `iframe[name="${cssEscapeAttr(fe.name)}"]`];
         }
       }
     } catch {
@@ -63,9 +156,6 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     }
     return ['main', 'iframe'];
   };
-
-  const cssEscapeIdent = (value: string): string =>
-    value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
   const composedElement = (event: Event): Element | undefined => {
     const path = event.composedPath();
@@ -86,11 +176,11 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
       if (root instanceof ShadowRoot) {
         const host: Element = root.host;
         if (host.id) {
-          parts.unshift(`#${host.id}`);
+          parts.unshift(idSelector(host.id));
         } else {
           const testId = host.getAttribute('data-testid');
           parts.unshift(
-            testId ? `[data-testid="${cssEscapeIdent(testId)}"]` : host.tagName.toLowerCase()
+            testId ? `[data-testid="${cssEscapeAttr(testId)}"]` : host.tagName.toLowerCase()
           );
         }
         node = host;
@@ -134,29 +224,46 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   };
 
   const uniqueCss = (el: Element): string | undefined => {
-    const root = el.getRootNode();
-    const scope: ParentNode =
-      root instanceof Document || root instanceof ShadowRoot ? root : document;
-    if (el.id && scope.querySelectorAll(`#${cssEscapeIdent(el.id)}`).length === 1) {
-      return `#${el.id}`;
+    try {
+      const root = el.getRootNode();
+      const scope: ParentNode =
+        root instanceof Document || root instanceof ShadowRoot ? root : document;
+      const count = (selector: string): number => {
+        try {
+          return scope.querySelectorAll(selector).length;
+        } catch {
+          return 0;
+        }
+      };
+      if (el.id) {
+        const selector = idSelector(el.id);
+        if (count(selector) === 1) {
+          return selector;
+        }
+      }
+      const testId = el.getAttribute('data-testid');
+      if (testId) {
+        return `[data-testid="${cssEscapeAttr(testId)}"]`;
+      }
+      const tag = el.tagName.toLowerCase();
+      const name = el.getAttribute('name');
+      if (name) {
+        const selector = `${tag}[name="${cssEscapeAttr(name)}"]`;
+        if (count(selector) === 1) {
+          return selector;
+        }
+      }
+      const parent = el.parentElement;
+      if (parent === null) {
+        return tag;
+      }
+      const siblings = Array.from(parent.children).filter((child) => child.tagName === el.tagName);
+      const index = siblings.indexOf(el) + 1;
+      const parentSel = uniqueCss(parent) ?? parent.tagName.toLowerCase();
+      return `${parentSel} > ${tag}:nth-of-type(${String(index)})`;
+    } catch {
+      return undefined;
     }
-    const testId = el.getAttribute('data-testid');
-    if (testId) {
-      return `[data-testid="${cssEscapeIdent(testId)}"]`;
-    }
-    const tag = el.tagName.toLowerCase();
-    const name = el.getAttribute('name');
-    if (name && scope.querySelectorAll(`${tag}[name="${cssEscapeIdent(name)}"]`).length === 1) {
-      return `${tag}[name="${cssEscapeIdent(name)}"]`;
-    }
-    const parent = el.parentElement;
-    if (parent === null) {
-      return tag;
-    }
-    const siblings = Array.from(parent.children).filter((child) => child.tagName === el.tagName);
-    const index = siblings.indexOf(el) + 1;
-    const parentSel = uniqueCss(parent) ?? parent.tagName.toLowerCase();
-    return `${parentSel} > ${tag}:nth-of-type(${String(index)})`;
   };
 
   const xpathFor = (el: Element): string => {
@@ -182,7 +289,7 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     return `/${parts.join('/')}`.replace(/^\/\//, '/');
   };
 
-  const describe = (el: Element): Record<string, unknown> => {
+  const describeUnsafe = (el: Element): Record<string, unknown> => {
     const tag = el.tagName.toLowerCase();
     const desc: Record<string, unknown> = {
       tag,
@@ -240,6 +347,18 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     return desc;
   };
 
+  const describe = (el: Element): Record<string, unknown> => {
+    try {
+      return describeUnsafe(el);
+    } catch {
+      return {
+        tag: el.tagName.toLowerCase(),
+        framePath: framePath(),
+        shadowPath: []
+      };
+    }
+  };
+
   const pageInfo = (): { url: string; title: string } => ({
     url: location.href,
     title: document.title
@@ -263,15 +382,19 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   };
 
   const emitDom = (kind: string, el: Element, extra?: Record<string, unknown>): void => {
-    const payload: Record<string, unknown> = {
-      v: 1,
-      kind,
-      ts: Date.now(),
-      page: pageInfo(),
-      target: describe(el)
-    };
-    Object.assign(payload, extra ?? {});
-    emit(payload);
+    try {
+      const payload: Record<string, unknown> = {
+        v: 1,
+        kind,
+        ts: Date.now(),
+        page: pageInfo(),
+        target: describe(el)
+      };
+      Object.assign(payload, extra ?? {});
+      emit(payload);
+    } catch {
+      // never throw into the page
+    }
   };
 
   const isCheckable = (el: Element): boolean =>
@@ -305,38 +428,73 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   };
 
   const noteInput = (el: Element): void => {
-    if (
-      !isTypedField(el) ||
-      !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
-    ) {
-      return;
+    try {
+      if (
+        !isTypedField(el) ||
+        !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+      ) {
+        return;
+      }
+      const extra: Record<string, unknown> = {
+        valueText: el.value,
+        ...fieldMeta(el)
+      };
+      const payload: Record<string, unknown> = {
+        v: 1,
+        kind: 'dom.input',
+        ts: Date.now(),
+        page: pageInfo(),
+        target: describe(el),
+        ...extra
+      };
+      inputLatest.set(el, redactForConsole(payload));
+      const prev = inputTimers.get(el);
+      if (prev !== undefined) {
+        window.clearTimeout(prev);
+      }
+      const timer = window.setTimeout(() => {
+        flushInput(el);
+      }, config.inputAggregationMs);
+      inputTimers.set(el, timer);
+    } catch {
+      // never throw into the page
     }
-    const extra: Record<string, unknown> = {
-      valueText: el.value,
-      ...fieldMeta(el)
-    };
-    const payload: Record<string, unknown> = {
-      v: 1,
-      kind: 'dom.input',
-      ts: Date.now(),
-      page: pageInfo(),
-      target: describe(el),
-      ...extra
-    };
-    inputLatest.set(el, payload);
-    const prev = inputTimers.get(el);
-    if (prev !== undefined) {
-      window.clearTimeout(prev);
+  };
+
+  const associatedControl = (el: Element): Element => {
+    if (el instanceof HTMLLabelElement) {
+      if (el.control instanceof Element) {
+        return el.control;
+      }
+      if (el.htmlFor.length > 0) {
+        const found = document.getElementById(el.htmlFor);
+        if (found !== null) {
+          return found;
+        }
+      }
     }
-    const timer = window.setTimeout(() => {
-      flushInput(el);
-    }, config.inputAggregationMs);
-    inputTimers.set(el, timer);
+    const wrapping = el.closest('label');
+    if (wrapping instanceof HTMLLabelElement) {
+      if (wrapping.control instanceof Element) {
+        return wrapping.control;
+      }
+      if (wrapping.htmlFor.length > 0) {
+        const found = document.getElementById(wrapping.htmlFor);
+        if (found !== null) {
+          return found;
+        }
+      }
+    }
+    return el;
   };
 
   const onClick = (event: Event): void => {
     const el = composedElement(event);
     if (el === undefined) {
+      return;
+    }
+    const control = associatedControl(el);
+    if (isCheckable(control) || isSelect(control)) {
       return;
     }
     if (isCheckable(el) || isSelect(el)) {

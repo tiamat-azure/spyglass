@@ -49,7 +49,11 @@ export function parseJsonl(raw: string): unknown[] {
     if (line.trim().length === 0) {
       continue;
     }
-    events.push(JSON.parse(line) as unknown);
+    try {
+      events.push(JSON.parse(line) as unknown);
+    } catch {
+      // skip corrupt lines when counting / reading
+    }
   }
   return events;
 }
