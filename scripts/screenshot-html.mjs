@@ -21,20 +21,26 @@ function main() {
   const htmlPath = resolve(htmlArg);
   const outPath = resolve(outArg);
 
-  void app.whenReady().then(async () => {
-    const win = new BrowserWindow({
-      width: 1100,
-      height: 720,
-      show: false,
-      backgroundColor: '#06090F',
-      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+  void app
+    .whenReady()
+    .then(async () => {
+      const win = new BrowserWindow({
+        width: 1100,
+        height: 720,
+        show: false,
+        backgroundColor: '#06090F',
+        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+      });
+      await win.loadURL(pathToFileURL(htmlPath).href);
+      await new Promise((resolveReady) => setTimeout(resolveReady, 250));
+      const image = await win.capturePage();
+      await writeFile(outPath, image.toPNG());
+      app.quit();
+    })
+    .catch((error) => {
+      console.error('screenshot-html failed:', error);
+      app.exit(1);
     });
-    await win.loadURL(pathToFileURL(htmlPath).href);
-    await new Promise((resolveReady) => setTimeout(resolveReady, 250));
-    const image = await win.capturePage();
-    await writeFile(outPath, image.toPNG());
-    app.quit();
-  });
 }
 
 main();

@@ -26,16 +26,36 @@ function rendererIndexPath(): string {
   return join(import.meta.dirname, '../renderer/index.html');
 }
 
+function screenshotExitRequested(): boolean {
+  return process.env.SPYGLASS_SCREENSHOT_EXIT === '1';
+}
+
+function quitAfterScreenshot(failed: boolean): void {
+  if (!screenshotExitRequested()) {
+    return;
+  }
+  if (failed) {
+    app.exit(1);
+    return;
+  }
+  app.quit();
+}
+
 async function captureIfRequested(win: BrowserWindow): Promise<void> {
   const out = process.env.SPYGLASS_SCREENSHOT_PATH;
   if (out === undefined || out.length === 0) {
     return;
   }
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  const image = await win.capturePage();
-  await writeFile(out, image.toPNG());
-  if (process.env.SPYGLASS_SCREENSHOT_EXIT === '1') {
-    app.quit();
+  let failed = false;
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const image = await win.capturePage();
+    await writeFile(out, image.toPNG());
+  } catch (error) {
+    failed = true;
+    console.error('Failed to capture empty-shell screenshot:', error);
+  } finally {
+    quitAfterScreenshot(failed);
   }
 }
 
@@ -59,7 +79,10 @@ function createWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => {
     win.show();
-    void captureIfRequested(win);
+    void captureIfRequested(win).catch((error: unknown) => {
+      console.error('Screenshot capture rejected:', error);
+      quitAfterScreenshot(true);
+    });
   });
 
   const devUrl = process.env.ELECTRON_RENDERER_URL;
