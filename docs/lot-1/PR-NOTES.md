@@ -91,6 +91,11 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 - Closed shadow DOM (ADR-0009 out of scope).
 - I-08 extra DOM snapshot on mutation-without-user-action: not implemented.
   Per-step lightweight snapshots still run on captured user actions.
+- **S1 (captain / Firstmate, 2026-09-08): accepted.** Per-step lightweight
+  snapshots stay **main-frame only** for Lot 1 (`captureSnapshot` uses
+  `webContents.mainFrame` + `snapshotScript(['main'])`). Probe events still
+  carry `framePath` / `shadowPath` on the element descriptor. Per-step
+  `framePath` snapshots are deferred to a later lot.
 - Replay of masked values uses the `SECRET_*` ref string, not the clear
   secret (F-15). Fixture proof fills `SECRET_PASSWORD` after reload.
 
