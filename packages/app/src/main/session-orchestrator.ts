@@ -164,22 +164,31 @@ export class SessionOrchestrator {
         await this.flushPendingClick();
         const page = this.pageSnapshot();
         const id = this.nextId();
-        await this.append(
-          buildControlEvent({
-            id,
-            sessionId,
-            kind: 'record.stop',
-            ts: Date.now(),
-            page
-          })
-        );
+        const stopEvent = buildControlEvent({
+          id,
+          sessionId,
+          kind: 'record.stop',
+          ts: Date.now(),
+          page
+        });
         const raw = await readFile(journal.path, 'utf8');
-        const eventCount = parseJsonl(raw).length;
+        const eventCount = parseJsonl(raw).length + 1;
+        const stopLine = `${JSON.stringify(stopEvent)}\n`;
         await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
+        try {
+          await this.append(stopEvent);
+        } catch (error) {
+          await this.patchMeta({ eventCount: eventCount - 1, sealedAt: undefined });
+          throw error;
+        }
         this.state = 'sealed';
         this.since = Date.now();
         this.emitState();
-        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
+        return {
+          sessionId,
+          eventCount,
+          sizeBytes: Buffer.byteLength(raw) + Buffer.byteLength(stopLine)
+        };
       } catch (error) {
         this.state = 'recording';
         this.since = Date.now();

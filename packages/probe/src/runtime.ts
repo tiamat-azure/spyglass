@@ -8,27 +8,49 @@ export type ProbeInjectConfig = {
 /**
  * Self-contained page-world probe. Stringified into the guest (and every iframe).
  * Passive: capture-phase listeners, never preventDefault / stopPropagation.
- * No guessable globals: install mark is nonce-free; the auth nonce stays in
- * the IIFE closure used only for `SPYGLASS:${nonce}:` console lines.
+ * No guessable globals: install mark is a non-enumerable `Symbol.for` sentinel
+ * (overwritten if a page spoofed the key). The auth nonce stays in the IIFE
+ * closure used only for `SPYGLASS:${nonce}:` console lines.
  * Must not close over module bindings — `Function.prototype.toString` is the
  * injectable source, so imported constants would be ReferenceErrors in the page.
  */
 export function spyglassProbeMain(config: ProbeInjectConfig): void {
-  const installMark = '__sgInstalled';
-  if (Object.hasOwn(window, installMark)) {
+  const authToken = config.nonce;
+  const installKey = Symbol.for('spyglass.probe.v1');
+  const installSentinel = 0x5c0be1;
+  const existingMark = Object.getOwnPropertyDescriptor(window, installKey);
+  const alreadyOurs =
+    existingMark !== undefined &&
+    existingMark.value === installSentinel &&
+    existingMark.enumerable === false &&
+    existingMark.writable === false;
+  if (alreadyOurs) {
     return;
   }
-  Object.defineProperty(window, installMark, {
-    value: 1,
-    enumerable: false,
-    configurable: false,
-    writable: false
-  });
-  const authToken = config.nonce;
+  try {
+    Object.defineProperty(window, installKey, {
+      value: installSentinel,
+      enumerable: false,
+      configurable: true,
+      writable: false
+    });
+  } catch {
+    try {
+      delete (window as unknown as Record<symbol, unknown>)[installKey];
+      Object.defineProperty(window, installKey, {
+        value: installSentinel,
+        enumerable: false,
+        configurable: true,
+        writable: false
+      });
+    } catch {
+      // page locked the key; still attach listeners
+    }
+  }
 
   const TEXT_MAX = 512;
-  let scrollAccum = 0;
   const lastScrollTop = new WeakMap<EventTarget, number>();
+  const scrollAccumByTarget = new WeakMap<EventTarget, number>();
   const inputTimers = new Map<EventTarget, number>();
   const inputLatest = new Map<EventTarget, Record<string, unknown>>();
   const PASSWORD_AC = new Set(['current-password', 'new-password', 'one-time-code', 'password']);
@@ -424,9 +446,19 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
       return false;
     }
     return (
-      el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'button' && el.type !== 'submit'
+      el.type !== 'checkbox' &&
+      el.type !== 'radio' &&
+      el.type !== 'button' &&
+      el.type !== 'submit' &&
+      el.type !== 'file' &&
+      el.type !== 'hidden' &&
+      el.type !== 'image' &&
+      el.type !== 'reset'
     );
   };
+
+  const isFileField = (el: Element): boolean =>
+    el instanceof HTMLInputElement && el.type === 'file';
 
   const flushInput = (el: EventTarget): void => {
     const timer = inputTimers.get(el);
@@ -522,6 +554,9 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     if (el === undefined) {
       return;
     }
+    if (isFileField(el)) {
+      return;
+    }
     if (isTypedField(el)) {
       flushInput(el);
       return;
@@ -582,10 +617,12 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     if (delta === 0) {
       return;
     }
-    scrollAccum += delta;
-    if (Math.abs(scrollAccum) >= config.scrollThresholdPx) {
-      emitDom('dom.scroll', target, { scrollDelta: scrollAccum });
-      scrollAccum = 0;
+    const accum = (scrollAccumByTarget.get(target) ?? 0) + delta;
+    if (Math.abs(accum) >= config.scrollThresholdPx) {
+      emitDom('dom.scroll', target, { scrollDelta: accum });
+      scrollAccumByTarget.set(target, 0);
+    } else {
+      scrollAccumByTarget.set(target, accum);
     }
   };
 

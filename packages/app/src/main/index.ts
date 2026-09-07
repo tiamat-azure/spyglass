@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
-import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
 import type {
   NavState,
   PopupRedirectedPayload,
@@ -54,6 +54,7 @@ let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
+const netCompletedBound = new WeakSet<Session>();
 
 function preloadPath(): string {
   return join(import.meta.dirname, '../preload/index.cjs');
@@ -456,6 +457,16 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       };
     }
     const session = requireSession();
+    const recorder = session.snapshot();
+    if (recorder.state === 'recording' || recorder.state === 'stopping') {
+      return {
+        ok: false,
+        llmCalls: 0,
+        results: [],
+        error: 'Stop recording before replaying with act().',
+        guestUrl: snapshot.url
+      };
+    }
     await session.flushPendingCapture();
     const events = await session.readRawEvents();
     const actions = events.flatMap((rawEvent) => {
@@ -570,12 +581,16 @@ void (async () => {
       void activeSession?.recordNav('nav.load', pane.snapshot());
     });
     // SPA history is recorded by the guest probe (`nav.spa`), not did-navigate-in-page.
-    pane.webContents.session.webRequest.onCompleted((details) => {
-      const resourceType = String(details.resourceType);
-      if (resourceType === 'xhr' || resourceType === 'fetch') {
-        void activeSession?.recordNetRequest(details.url);
-      }
-    });
+    const ses = pane.webContents.session;
+    if (!netCompletedBound.has(ses)) {
+      netCompletedBound.add(ses);
+      ses.webRequest.onCompleted((details) => {
+        const resourceType = String(details.resourceType);
+        if (resourceType === 'xhr' || resourceType === 'fetch') {
+          void activeSession?.recordNetRequest(details.url);
+        }
+      });
+    }
 
     const applyFallbackBounds = (): void => {
       const size = win.getContentSize();

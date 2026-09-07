@@ -164,9 +164,13 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('htmlFor');
     expect(source).toContain('CSS.escape');
     expect(source).toContain('[id="');
-    expect(source).toContain('__sgInstalled');
+    expect(source).toContain('Symbol.for');
+    expect(source).toContain('spyglass.probe.v1');
+    expect(source).not.toContain('__sgInstalled');
     expect(source).not.toContain('__sdeadbeef');
     expect(source).not.toContain("addEventListener('wheel'");
+    expect(source).toMatch(/el\.type !== ["']file["']/);
+    expect(source).toContain('scrollAccumByTarget');
   });
 
   it('escapes shadow host ids in the snapshot script', () => {
