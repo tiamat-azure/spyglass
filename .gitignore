@@ -5,5 +5,4 @@ sessions/
 .env
 .env.*
 !.env.example
-.lavish/
 *.log

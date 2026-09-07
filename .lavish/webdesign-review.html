@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revue critique - webdesign.md (Spyglass)</title>
+<style>
+:root{
+  --sg-font-sans:"Inter",ui-sans-serif,system-ui,sans-serif;
+  --sg-font-display:"Inter Tight","Inter",ui-sans-serif,system-ui,sans-serif;
+  --sg-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,monospace;
+  --sg-space-2:4px;--sg-space-3:6px;--sg-space-4:8px;--sg-space-5:12px;--sg-space-6:16px;--sg-space-7:24px;--sg-space-8:32px;
+  --sg-radius-sm:6px;--sg-radius-md:10px;--sg-radius-lg:14px;--sg-radius-pill:999px;
+  --sg-ease:cubic-bezier(.2,.8,.2,1);
+}
+:root,[data-theme="dark"]{
+  color-scheme:dark;
+  --sg-bg:#06090F;--sg-bg-elev:#0B111E;--sg-surface:#0E1524;--sg-surface-2:#131C30;
+  --sg-border:#1E2A44;--sg-border-strong:#2C3C5E;
+  --sg-text:#E8F0FF;--sg-text-muted:#8FA3C8;
+  --sg-accent:#35F2FF;--sg-accent-ink:#06090F;--sg-rec:#FF3D9A;
+  --sg-success:#3DFFA8;--sg-warning:#FFC44D;--sg-danger:#FF6B6B;
+  --sg-glow-accent:0 0 14px color-mix(in oklab,var(--sg-accent) 55%,transparent);
+  --sg-shadow-2:0 6px 20px rgb(0 0 0 / .45);
+}
+[data-theme="light"]{
+  color-scheme:light;
+  --sg-bg:#F7F9FC;--sg-bg-elev:#EEF2F8;--sg-surface:#FFFFFF;--sg-surface-2:#F0F4FA;
+  --sg-border:#E2E8F2;--sg-border-strong:#C9D4E5;
+  --sg-text:#0B1220;--sg-text-muted:#4E5D78;
+  --sg-accent:#0072A8;--sg-accent-ink:#FFFFFF;--sg-rec:#C2185B;
+  --sg-success:#0F7A5A;--sg-warning:#8A5A00;--sg-danger:#C2261F;
+  --sg-glow-accent:none;--sg-shadow-2:0 6px 20px rgb(11 18 32 / .10);
+}
+*,*::before,*::after{box-sizing:border-box}
+:where(.grid,.flex)>*{min-width:0}
+:where(p,h1,h2,h3,h4,li,td,th,.badge){overflow-wrap:anywhere}
+body{margin:0;background:var(--sg-bg);color:var(--sg-text);font-family:var(--sg-font-sans);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:var(--sg-space-8) var(--sg-space-6) 80px}
+code,.mono{font-family:var(--sg-font-mono);font-size:.86em}
+
+/* ---- entete ---- */
+.hero{display:flex;gap:var(--sg-space-7);align-items:center;flex-wrap:wrap;
+  border-bottom:1px solid var(--sg-border);padding-bottom:var(--sg-space-7);margin-bottom:var(--sg-space-8)}
+.mark{width:60px;height:60px;color:var(--sg-accent);flex:none;filter:drop-shadow(var(--sg-glow-accent))}
+h1{font-family:var(--sg-font-display);font-size:30px;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--sg-text-muted);margin:0;font-size:14px}
+.themebtn{margin-left:auto;background:var(--sg-surface);color:var(--sg-text);border:1px solid var(--sg-border-strong);
+  border-radius:var(--sg-radius-pill);padding:7px 14px;font:inherit;font-size:12px;cursor:pointer}
+.themebtn:hover{border-color:var(--sg-accent)}
+
+/* ---- verdict ---- */
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--sg-space-5);margin-bottom:var(--sg-space-8)}
+.kpi{background:var(--sg-surface);border:1px solid var(--sg-border);border-radius:var(--sg-radius-md);padding:var(--sg-space-6)}
+.kpi .n{font-family:var(--sg-font-display);font-size:28px;font-weight:600;line-height:1;display:block;margin-bottom:6px}
+.kpi .l{font-size:12px;color:var(--sg-text-muted);text-transform:uppercase;letter-spacing:.08em}
+.n.ok{color:var(--sg-success)}.n.warn{color:var(--sg-warning)}.n.stop{color:var(--sg-danger)}.n.acc{color:var(--sg-accent)}
+
+h2{font-family:var(--sg-font-display);font-size:20px;margin:var(--sg-space-8) 0 var(--sg-space-5);
+  letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+h2::before{content:"";width:3px;height:18px;background:var(--sg-accent);border-radius:2px;flex:none}
+h3{font-family:var(--sg-font-display);font-size:15px;margin:var(--sg-space-6) 0 var(--sg-space-3)}
+.lead{color:var(--sg-text-muted);font-size:14px;margin:0 0 var(--sg-space-5);max-width:76ch}
+
+/* ---- tables ---- */
+.tw{overflow-x:auto;border:1px solid var(--sg-border);border-radius:var(--sg-radius-md);background:var(--sg-surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--sg-text-muted);
+  font-weight:600;padding:10px 14px;border-bottom:1px solid var(--sg-border);background:var(--sg-bg-elev);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--sg-border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--sg-surface-2)}
+td.id{font-family:var(--sg-font-mono);font-size:12px;color:var(--sg-text-muted);white-space:nowrap}
+
+.badge{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:var(--sg-radius-pill);border:1px solid;white-space:nowrap}
+.b-ok{color:var(--sg-success);border-color:color-mix(in oklab,var(--sg-success) 45%,transparent);background:color-mix(in oklab,var(--sg-success) 10%,transparent)}
+.b-warn{color:var(--sg-warning);border-color:color-mix(in oklab,var(--sg-warning) 45%,transparent);background:color-mix(in oklab,var(--sg-warning) 10%,transparent)}
+.b-stop{color:var(--sg-danger);border-color:color-mix(in oklab,var(--sg-danger) 45%,transparent);background:color-mix(in oklab,var(--sg-danger) 10%,transparent)}
+.b-acc{color:var(--sg-accent);border-color:color-mix(in oklab,var(--sg-accent) 45%,transparent);background:color-mix(in oklab,var(--sg-accent) 10%,transparent)}
+
+/* ---- cartes verifiees ---- */
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--sg-space-5)}
+.check{background:var(--sg-surface);border:1px solid var(--sg-border);border-left:2px solid var(--sg-success);
+  border-radius:var(--sg-radius-sm);padding:var(--sg-space-5) var(--sg-space-6)}
+.check h4{margin:0 0 4px;font-size:13.5px;font-family:var(--sg-font-display)}
+.check p{margin:0;font-size:12.5px;color:var(--sg-text-muted)}
+
+/* ---- arbitrages ---- */
+.arb{background:var(--sg-surface);border:1px solid var(--sg-border);border-radius:var(--sg-radius-lg);
+  padding:var(--sg-space-6) var(--sg-space-7);margin-bottom:var(--sg-space-6);box-shadow:var(--sg-shadow-2)}
+.arb.block{border-left:3px solid var(--sg-danger)}
+.arb-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:var(--sg-space-4)}
+.arb-head .xid{font-family:var(--sg-font-mono);font-size:12px;color:var(--sg-danger);font-weight:600}
+.arb-head h3{margin:0;font-size:16px}
+.conflict{display:grid;grid-template-columns:1fr 1fr;gap:var(--sg-space-5);margin:var(--sg-space-5) 0}
+@media(max-width:640px){.conflict{grid-template-columns:1fr}}
+.side{background:var(--sg-bg-elev);border:1px solid var(--sg-border);border-radius:var(--sg-radius-sm);padding:var(--sg-space-5)}
+.side .src{font-family:var(--sg-font-mono);font-size:11px;color:var(--sg-accent);display:block;margin-bottom:6px}
+.side p{margin:0;font-size:13px}
+.vs{text-align:center;color:var(--sg-text-muted);font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+.stake{font-size:13px;color:var(--sg-text-muted);border-top:1px dashed var(--sg-border);padding-top:var(--sg-space-4);margin:0 0 var(--sg-space-5)}
+.stake b{color:var(--sg-text)}
+
+form.q{margin:0}
+fieldset{border:none;margin:0;padding:0}
+legend{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--sg-text-muted);padding:0 0 8px}
+label.opt{display:flex;gap:10px;align-items:flex-start;background:var(--sg-bg-elev);border:1px solid var(--sg-border);
+  border-radius:var(--sg-radius-sm);padding:10px 12px;margin-bottom:6px;cursor:pointer;font-size:13px;transition:border-color 120ms var(--sg-ease)}
+label.opt:hover{border-color:var(--sg-border-strong)}
+label.opt:has(input:checked){border-color:var(--sg-accent);background:color-mix(in oklab,var(--sg-accent) 7%,var(--sg-surface))}
+label.opt input{margin:2px 0 0;accent-color:var(--sg-accent);flex:none}
+label.opt .rec{font-size:10px;color:var(--sg-success);border:1px solid color-mix(in oklab,var(--sg-success) 45%,transparent);
+  border-radius:var(--sg-radius-pill);padding:1px 6px;margin-left:6px;text-transform:uppercase;letter-spacing:.06em}
+.qfoot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+button.send{background:var(--sg-accent);color:var(--sg-accent-ink);border:none;border-radius:var(--sg-radius-sm);
+  padding:9px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:box-shadow 120ms var(--sg-ease)}
+button.send:hover{box-shadow:var(--sg-glow-accent)}
+textarea.note{width:100%;background:var(--sg-bg-elev);color:var(--sg-text);border:1px solid var(--sg-border);
+  border-radius:var(--sg-radius-sm);padding:9px 11px;font:inherit;font-size:13px;margin-top:6px;resize:vertical;min-height:52px}
+.state{font-size:12px;color:var(--sg-success)}
+:where(a,button,input,textarea,select,[tabindex]):focus-visible{outline:2px solid var(--sg-accent);outline-offset:2px}
+footer{margin-top:var(--sg-space-8);padding-top:var(--sg-space-6);border-top:1px solid var(--sg-border);
+  color:var(--sg-text-muted);font-size:12.5px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:var(--sg-space-4)}
+.icell{background:var(--sg-surface);border:1px solid var(--sg-border);border-radius:var(--sg-radius-sm);padding:var(--sg-space-4);text-align:center}
+.istrip{display:flex;align-items:center;justify-content:center;gap:var(--sg-space-5);min-height:72px;color:var(--sg-accent)}
+.ibox{display:inline-flex;align-items:center;justify-content:center}
+.ibox.zoom{color:var(--sg-text-muted)}
+.icell code{color:var(--sg-text-muted);font-size:11px}
+.chatdemo{background:var(--sg-surface);border:1px solid var(--sg-border);border-radius:var(--sg-radius-md);
+  padding:var(--sg-space-5) var(--sg-space-6);max-width:340px;font-size:13px;line-height:1.45}
+.chatline{display:flex;gap:8px;align-items:center;padding:3px 0}
+.chatline svg{color:var(--sg-accent);flex:none}
+.chatline .ts{font-family:var(--sg-font-mono);font-size:10px;color:var(--sg-text-muted);flex:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <svg class="mark" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" role="img">
+    <title>Spyglass</title><circle cx="32" cy="32" r="21"/>
+    <path d="M32 11 47 28"/><path d="M32 11 47 28" transform="rotate(60 32 32)"/>
+    <path d="M32 11 47 28" transform="rotate(120 32 32)"/><path d="M32 11 47 28" transform="rotate(180 32 32)"/>
+    <path d="M32 11 47 28" transform="rotate(240 32 32)"/><path d="M32 11 47 28" transform="rotate(300 32 32)"/>
+  </svg>
+  <div>
+    <h1>Revue critique de <span class="mono" style="font-size:.8em">webdesign.md</span></h1>
+    <p class="sub">Prêt pour implémentation par un agent tiers ? Vérifications factuelles, corrections appliquées, arbitrages restants.</p>
+  </div>
+  <button class="themebtn" onclick="document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'">Basculer le thème jumeau</button>
+</header>
+
+<section class="verdict">
+  <div class="kpi"><span class="n ok">14/14</span><span class="l">Ratios de contraste recalculés, tous exacts</span></div>
+  <div class="kpi"><span class="n ok">20/20</span><span class="l">Références F-xx / D-xx valides dans le PRD</span></div>
+  <div class="kpi"><span class="n acc">18</span><span class="l">Corrections + 32 icônes livrées</span></div>
+  <div class="kpi"><span class="n ok">0</span><span class="l">Question en attente de votre part</span></div>
+</section>
+
+<p class="lead"><b>Verdict.</b> Le document est d'une qualité nettement au-dessus de la moyenne : décisions
+tracées, tokens réellement calculés, motifs techniques explicités. Il n'est pas encore
+directement implémentable, pour deux raisons distinctes : trois règles internes se
+contredisent (aucun agent tiers ne peut arbitrer cela seul), et quelques éléments
+d'exécution manquaient. Les seconds sont corrigés ; les premiers vous reviennent.</p>
+
+<h2>1. Ce qui a été vérifié et tient</h2>
+<div class="checks">
+  <div class="check"><h4>Ratios de contraste</h4><p>Les 14 ratios annoncés en commentaire ont été recalculés (WCAG 2.x relative luminance). Écart max&nbsp;: 0,04. Ils sont bien calculés, pas estimés.</p></div>
+  <div class="check"><h4>Références croisées</h4><p>Les 20 identifiants F-xx / D-xx cités existent tous dans <span class="mono">PRD.md</span> et leur sens correspond à l'usage qui en est fait.</p></div>
+  <div class="check"><h4>Les 16 icônes</h4><p><span class="mono">.lavish/spyglass-design.html</span> contient bien les 16 <span class="mono">&lt;symbol id="ic-…"&gt;</span> annoncés, aux noms exacts du tableau 5.2.</p></div>
+  <div class="check"><h4>Sémantique de couleur</h4><p>Cinq couleurs, cinq sens, aucun recouvrement. Le tableau 2.1 et les états 3.3 sont cohérents entre eux, sans exception.</p></div>
+  <div class="check"><h4>Thème clair jumeau</h4><p>Noms de tokens partagés, néon neutralisé plutôt qu'atténué. La justification W-07 est solide et vérifiable.</p></div>
+  <div class="check"><h4>Motif du sprite</h4><p>Le rejet de l'argument « cache HTTP » au profit du vrai motif (1 200 sous-arbres SVG dupliqués) est exactement le raisonnement attendu.</p></div>
+</div>
+
+<h2>2. Corrections appliquées</h2>
+<p class="lead">Écarts non ambigus, corrigés directement dans <span class="mono">webdesign.md</span> (version 1.0 → 1.1). Signalez-moi tout désaccord.</p>
+<div class="tw"><table>
+<thead><tr><th>#</th><th>Problème</th><th>Correction</th><th>Nature</th></tr></thead>
+<tbody>
+<tr><td class="id">1</td><td>Polices <b>totalement absentes</b> du document : ni embarquement, ni graisses, ni <span class="mono">@font-face</span>. Produit hors ligne, aucun CDN possible.</td><td>Nouvelle section <b>2.2 Polices embarquées</b> : familles, graisses, sous-jeu <span class="mono">unicode-range</span>, <span class="mono">font-display</span>, budget 400 Ko.</td><td><span class="badge b-stop">Blocage</span></td></tr>
+<tr><td class="id">2</td><td>Aucune échelle de <span class="mono">z-index</span>, alors que F-72, F-29 et la surbrillance de cible imposent des surfaces flottantes.</td><td>Tokens <span class="mono">--sg-z-*</span> ajoutés (base, sticky, overlay, dialog, toast, tooltip) comme seules valeurs autorisées.</td><td><span class="badge b-stop">Blocage</span></td></tr>
+<tr><td class="id">3</td><td>Valeurs typographiques hors échelle : étiquette « gabarit déterministe » en <b>9 px</b>, barre d'URL en <b>12 px</b>. Ni l'une ni l'autre n'existe dans les tokens.</td><td>Ramenées à <span class="mono">--sg-text-2xs</span> et <span class="mono">--sg-text-sm</span>. L'échelle reste fermée.</td><td><span class="badge b-warn">Incohérence</span></td></tr>
+<tr><td class="id">4</td><td>Espacements bruts en 3.1 et 3.2 (<span class="mono">6px 10px</span>, 4 px, 2 px, 6 px) alors que 2 pose les tokens en source de vérité.</td><td>Tous remplacés par <span class="mono">var(--sg-space-*)</span>, <span class="mono">--sg-rec-frame</span>, <span class="mono">--sg-split-default</span>.</td><td><span class="badge b-warn">Incohérence</span></td></tr>
+<tr><td class="id">5</td><td>Commentaire « Espacement, base 4 » <b>faux</b> : l'index n'est pas le multiplicateur (<span class="mono">--sg-space-1</span> vaut 2 px, <span class="mono">-5</span> vaut 12 px). Piège garanti pour un implémenteur.</td><td>Requalifié en échelle indicielle, avec la règle d'usage explicite.</td><td><span class="badge b-warn">Piège</span></td></tr>
+<tr><td class="id">6</td><td>La formule du néon était écrite <b>en dur</b> en 1.3 et <b>en token</b> en 2 : deux sources qui divergeront, et la version 1.3 est fausse en thème clair.</td><td>1.3 renvoie désormais aux tokens. Idem pour les media queries d'accessibilité, traitées une seule fois.</td><td><span class="badge b-warn">Doublon</span></td></tr>
+<tr><td class="id">7</td><td>Le test de contraste ne couvrait que texte/fond : ni <span class="mono">--sg-accent-ink</span> sur bouton plein, ni le fond composite <span class="mono">color-mix</span> du message utilisateur.</td><td>Le test couvre trois familles de paires, dont les <span class="mono">color-mix</span> résolus puis mesurés.</td><td><span class="badge b-warn">Angle mort</span></td></tr>
+<tr><td class="id">8</td><td>Mode d'injection du sprite non tranché. Un <span class="mono">fetch</span> sous <span class="mono">file://</span> + CSP stricte (PRD 9) échoue silencieusement.</td><td>Inlining <b>au build</b> dans <span class="mono">index.html</span>, avec le motif.</td><td><span class="badge b-warn">Angle mort</span></td></tr>
+<tr><td class="id">9</td><td><b>Section 7 Accessibilité entièrement redondante</b> avec C-6, 1.1, 3.3 et 3.4 : elle répétait sans rien rendre vérifiable.</td><td>Devient une <b>checklist de recette</b> A-1 à A-8 : une ligne = un test + sa norme d'origine + son mode de vérification.</td><td><span class="badge b-warn">Redite</span></td></tr>
+<tr><td class="id">10</td><td>Silence sur les écrans des lots 3 à 7 : un agent tiers ne peut pas savoir s'ils sont oubliés ou hors périmètre.</td><td>Portée déclarée dans l'en-tête + points ouverts <b>O-5</b> (écrans manquants), <b>O-6</b> (surfaces flottantes), <b>O-7</b> (barre de défilement).</td><td><span class="badge b-warn">Périmètre</span></td></tr>
+<tr><td class="id">11</td><td>En-tête redondant avec 0 et 8 ; « 5 axes tranchés » contredit par un tableau de 7 lignes.</td><td>En-tête réduit à des pointeurs. W-06 et W-07 restent des conséquences, pas des axes.</td><td><span class="badge b-warn">Redite</span></td></tr>
+<tr><td class="id">12</td><td>Les trois contradictions ci-dessous n'étaient pas signalées.</td><td>Nouvelle section <b>8.1</b>, marquée bloquante, pour qu'aucun agent ne les tranche à votre place.</td><td><span class="badge b-acc">Traçabilité</span></td></tr>
+</tbody></table></div>
+
+<h2>3. Vos réponses, exécutées</h2>
+<div class="tw"><table>
+<thead><tr><th>#</th><th>Votre choix</th><th>Ce que j'ai fait</th></tr></thead>
+<tbody>
+<tr><td class="id">Q-1</td><td><b>Laisser en 8.2</b></td><td><span class="badge b-ok">PRD intact</span> Aucune ligne de <span class="mono">PRD.md</span> ni d'ADR modifiée. Les quatre exigences P-1 à P-4 restent consignées en section 8.2 de <span class="mono">webdesign.md</span>, prêtes à être portées par vos soins.</td></tr>
+<tr><td class="id">Q-2</td><td><b>Dessiner maintenant</b></td><td>Les 16 tracés en grille 16 sont livrés dans <span class="mono">assets/icons/16/</span>, plus les 16 de grille 24 extraits du moodboard vers <span class="mono">assets/icons/24/</span>. <b>À valider ci-dessous.</b></td></tr>
+<tr><td class="id">Q-3</td><td><b>Narration seule</b></td><td>Le seuil AAA de 7:1 ne vise plus que <span class="mono">--sg-text</span> à <span class="mono">--sg-text-sm</span>. Horodatages, compteurs, étiquettes et bloc mono passent en AA, avec le motif écrit. Le test A-1 devient rédigeable sans ambiguïté, et le thème clair passe sans retoucher <span class="mono">--sg-text-muted</span>.</td></tr>
+<tr><td class="id">Q-4</td><td><b>F-29 maintenant</b></td><td>Nouvelle section <b>3.4 Réglages des profils LLM</b> : implantation, maquette et six règles propres à cet écran.</td></tr><tr><td class="id">Q-5</td><td><b>Grille 16 validée</b></td><td>O-8 fermé, les 32 tracés sont gelés.</td></tr><tr><td class="id">Q-6</td><td><b>Onglets, fenêtre unique</b></td><td>3.4 réécrite, nouvelle décision <b>W-08</b> en section 0. Détaillée plus bas.</td></tr>
+</tbody></table></div>
+
+<h2>4. Q-5 · Grille 16 gelée</h2>
+<p class="lead">Validée. <b>O-8 est fermé.</b> Les 32 tracés vivent dans <span class="mono">assets/icons/16/</span> et
+<span class="mono">assets/icons/24/</span>. Les vignettes rendues du passage précédent restent consultables dans l'historique de ce document.</p>
+
+<h2>5. Q-6 · Réglages en onglet, une seule fenêtre</h2>
+<p class="lead">Votre choix, avec votre suggestion d'onglets. La section 3.4 est réécrite, et cela devient
+la décision <b>W-08</b> en section 0. Votre variante est meilleure que ma proposition : elle
+supprime la seconde fenêtre <i>et</i> son objection technique.</p>
+
+<div class="conflict" style="margin-bottom:16px">
+  <div class="side"><span class="src">Ce que je proposais</span><p>Fenêtre Electron distincte, modale, 720 × 640. Objection assumée : Spyglass devenait une application <b>à deux fenêtres</b>, avec l'empreinte que cela laisse sur le packaging et les tests de bout en bout.</p></div>
+  <div class="side" style="border-color:var(--sg-success)"><span class="src" style="color:var(--sg-success)">Ce qui est retenu</span><p>Fenêtre unique, onglets <span class="mono">Navigateur</span> / <span class="mono">Réglages</span>. Une seule fenêtre, un seul cycle de vie, et <b>l'objection du <span class="mono">resize</span> tombe</b> - voir la première règle ci-dessous.</p></div>
+</div>
+
+<div class="tw"><table>
+<thead><tr><th>Point d'implémentation</th><th>Pourquoi il n'est pas négociable</th></tr></thead>
+<tbody>
+<tr><td><span class="mono">view.setVisible(false)</span>, <b>jamais</b> des <span class="mono">bounds</span> réduits à zéro</td><td>C'était ma seule objection à votre option, et elle est levée par le bon appel. Réduire les <span class="mono">bounds</span> déclencherait les media queries et les <span class="mono">ResizeObserver</span> du site cible en plein enregistrement (C-1). <span class="mono">setVisible</span> ne touche pas à la mise en page observée.</td></tr>
+<tr><td><b>La colonne de chat reste visible</b> : les réglages occupent la seule zone de la vue web</td><td>L'enregistrement n'est jamais interrompu (F-40), donc le journal continue de se remplir pendant qu'on règle - et c'est là que s'affiche le message de bascule de profil. À 75 % d'un écran 1440, la zone fait ~1080 px : deux profils y tiennent côte à côte sans effort.</td></tr>
+<tr><td><b>Pendant un enregistrement</b> : pastille REC sur l'onglet <span class="mono">Navigateur</span>, cadre <span class="mono">--sg-rec</span> maintenu</td><td>On ne doit jamais pouvoir oublier qu'on enregistre parce qu'on a changé d'onglet.</td></tr>
+<tr><td><b>Onglets en <span class="mono">role="tablist"</span></b>, navigables aux flèches, en tête de l'ordre de tabulation</td><td><span class="mono">Réglages</span> doit rester atteignable au clavier pendant un enregistrement (C-6, A-4).</td></tr>
+</tbody></table></div>
+
+<h2>6. Ce qui reste ouvert, et rien de bloquant</h2>
+<p class="lead">Plus aucune question en attente de votre part. Les points ci-dessous sont datés dans la section 8 du document.</p>
+<div class="tw"><table>
+<thead><tr><th>#</th><th>Point</th><th>Échéance</th></tr></thead>
+<tbody>
+<tr><td class="id">O-1</td><td>Illustrations d'états vides : trois scènes à définir</td><td>Lot 2</td></tr>
+<tr><td class="id">O-2</td><td>Wordmark définitif : Inter Tight est un choix par défaut</td><td>Avant communication publique</td></tr>
+<tr><td class="id">O-3</td><td>Thème « Phosphore » optionnel</td><td>Lot 7</td></tr>
+<tr><td class="id">O-4</td><td>Densité alternative du chat</td><td>Après essais utilisateurs</td></tr>
+<tr><td class="id">O-5</td><td>Écrans des lots 3 à 7 : segments vocaux, artefact raffiné, rapport d'exécution, liste des sessions</td><td>Au lot concerné</td></tr>
+<tr><td class="id">O-6</td><td>Surfaces flottantes : dialogue de confirmation (F-63), toast, infobulle. <i>Les réglages n'en dépendent plus depuis W-08</i></td><td>Lot 2</td></tr>
+<tr><td class="id">O-7</td><td>Barre de défilement du chat, rendu natif divergent sur trois plateformes</td><td>Lot 2</td></tr>
+<tr><td class="id">P-1..P-4</td><td>Exigences que X-3 impose au PRD, <b>laissées à votre main</b> (Q-1)</td><td>Section 8.2</td></tr>
+</tbody></table></div>
+
+<h2>7. Réponse directe à vos questions</h2>
+<div class="tw"><table>
+<thead><tr><th>Question</th><th>Réponse</th><th>Détail</th></tr></thead>
+<tbody>
+<tr><td><b>Clair et précis ?</b></td><td><span class="badge b-ok">Oui</span></td><td>Chaque règle porte son motif. La discipline « une couleur = un sens » et la justification du sprite sont exemplaires.</td></tr>
+<tr><td><b>Suffisant ?</b></td><td><span class="badge b-ok">Oui</span></td><td>Polices, élévation, périmètre : comblés. F-29 est désormais spécifié. Les écrans des lots 3 à 7 restent hors périmètre, mais <b>déclarés</b> comme tels (O-5).</td></tr>
+<tr><td><b>Prêt pour un agent tiers ?</b></td><td><span class="badge b-ok">Oui, pour son périmètre</span></td><td>X-1 à X-3 et Q-1 à Q-6 tranchés et reportés. Un agent peut implémenter la coquille, le chat et les réglages sans rien deviner. Les icônes des deux grilles sont livrées. Reste hors périmètre, et déclaré : les écrans des lots 3 à 7 (O-5).</td></tr>
+<tr><td><b>Redites, doublons ?</b></td><td><span class="badge b-warn">3 trouvés</span></td><td>Section 7 entière, formule du néon dupliquée, en-tête recopiant 0 et 8. Tous résorbés.</td></tr>
+</tbody></table></div>
+
+<footer>
+Sources vérifiées : <span class="mono">webdesign.md</span> (573 → 780 lignes, v1.4), <span class="mono">PRD.md</span> (770 lignes),
+<span class="mono">.lavish/spyglass-design.html</span>. Ratios recalculés par luminance relative WCAG 2.x.
+Quatrième passage : X-1 à X-3 et Q-1 à Q-6 intégrés. <b>PRD.md n'a pas été modifié.</b> Cet artefact est rendu avec les tokens D1 Nocturne Optique du document lui-même - le bouton d'en-tête bascule sur le thème clair jumeau.
+</footer>
+
+</div>
+<script>
+function qz(e,id){
+  e.preventDefault();
+  const f=e.currentTarget, d=new FormData(f);
+  const choice=[...d.entries()].find(([k])=>k!=='note')?.[1];
+  const note=(d.get('note')||'').toString().trim();
+  if(!choice){f.querySelector('[data-state]').textContent='Choisissez une option.';return;}
+  const msg='Arbitrage '+id+' : '+choice+(note?' - '+note:'');
+  if(window.lavish&&window.lavish.queuePrompt){
+    window.lavish.queuePrompt(msg,{tag:'arbitrage',text:id+' : '+choice,element:f,queueKey:id,data:{question:id,answer:choice,note:note}});
+    f.querySelector('[data-state]').textContent='Réponse en file. Envoyez quand les trois sont prêtes.';
+  } else {
+    f.querySelector('[data-state]').textContent='Enregistré : '+choice;
+  }
+}
+</script>
+</body>
+</html>

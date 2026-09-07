@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="fr" data-theme="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spyglass - Vitrines, identités visuelles et arbitrage design</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, h1, h2, h3, h4, h5, h6, li, dd, blockquote, figcaption, td, th, .badge, .label) { overflow-wrap: anywhere; }
+  :where(img, svg, video, canvas, iframe) { max-width: 100%; height: auto; }
+
+  /* ---------- Maquette miniature 75/25 (F-01) ---------- */
+  .mock{
+    --rad:10px; --font:ui-sans-serif,system-ui,sans-serif; --grid:none; --glow:none;
+    position:relative; display:flex; flex-direction:column; overflow:hidden;
+    border-radius:14px; border:1px solid rgba(255,255,255,.10);
+    background:var(--bg); font-family:var(--font); aspect-ratio:16/9.6;
+  }
+  .mock::after{content:"";position:absolute;inset:0;background-image:var(--grid);background-size:var(--gsize,auto);pointer-events:none;opacity:.55}
+  .mock-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border-bottom:1px solid var(--line);font-size:9px;color:var(--muted);flex:none}
+  .nav-i{width:9px;height:9px;border-radius:99px;border:1px solid var(--line);flex:none}
+  .mock-url{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:calc(var(--rad)*.6);padding:3px 7px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:8px}
+  .rec{flex:none;color:var(--b);border:1px solid var(--b);border-radius:99px;padding:1px 6px;font-size:7px;letter-spacing:.14em;box-shadow:var(--glow)}
+  .mock-body{flex:1;display:grid;grid-template-columns:3fr 1fr;min-height:0}
+  .mock-page{padding:9px;display:flex;flex-direction:column;gap:6px;border-right:1px solid var(--line);min-width:0}
+  .ln{height:5px;border-radius:3px;background:var(--line);flex:none}
+  .ln.w60{width:60%}.ln.w40{width:40%}.ln.w80{width:80%}
+  .blk{flex:1;border:1px solid var(--line);border-radius:var(--rad);background:color-mix(in oklab, var(--surface) 55%, transparent);display:flex;align-items:center;justify-content:center}
+  .tgt{font-size:8px;padding:4px 10px;border-radius:var(--rad);background:var(--a);color:var(--bg);font-weight:600;
+       outline:2px solid var(--a);outline-offset:3px;box-shadow:var(--glow)}
+  .mock-chat{padding:7px;display:flex;flex-direction:column;gap:4px;background:color-mix(in oklab, var(--surface) 88%, var(--bg));min-width:0}
+  .msg{font-size:6.5px;line-height:1.4;color:var(--txt);border-radius:calc(var(--rad)*.8);padding:4px 5px;border:1px solid var(--line);background:var(--bg)}
+  .msg .k{color:var(--a)}
+  .msg.u{border-color:color-mix(in oklab, var(--b) 60%, var(--line));color:var(--b);background:color-mix(in oklab, var(--b) 8%, var(--bg))}
+  .msg.tech{font-family:ui-monospace,monospace;color:var(--muted);font-size:6px}
+  .mock-cta{margin-top:auto;text-align:center;font-size:8px;font-weight:700;letter-spacing:.06em;padding:5px;border-radius:var(--rad);background:var(--b);color:var(--bg);box-shadow:var(--glow)}
+  .mic{display:flex;gap:2px;align-items:flex-end;height:10px;justify-content:center}
+  .mic i{width:2px;background:var(--a);border-radius:2px;display:block;box-shadow:var(--glow)}
+
+  /* ---------- Nuanciers ---------- */
+  .sw{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+  .sw span{flex:1;height:34px;display:block;position:relative}
+  .sw span::after{content:attr(data-h);position:absolute;inset:auto 0 2px 0;text-align:center;font:600 7px ui-monospace,monospace;color:rgba(255,255,255,.75);text-shadow:0 1px 2px #000}
+  .swatch-lg{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:.4rem}
+  .swatch-lg div{border-radius:10px;padding:.5rem .4rem;font:600 9px ui-monospace,monospace;min-height:64px;display:flex;align-items:flex-end;border:1px solid rgba(255,255,255,.08)}
+
+  /* ---------- Logos ---------- */
+  .logo-tile{display:flex;align-items:center;justify-content:center;height:120px;border-radius:14px;
+    background:radial-gradient(120% 120% at 30% 20%, #101a2e 0%, #070b14 70%);border:1px solid rgba(255,255,255,.08)}
+  .logo-tile svg{filter:drop-shadow(0 0 10px color-mix(in oklab, currentColor 55%, transparent))}
+  .tiny-row{display:flex;align-items:center;gap:.6rem;font-size:.72rem;color:#8b9ec2}
+  .lockup{display:flex;align-items:center;gap:.45rem;font:700 15px ui-sans-serif,system-ui;letter-spacing:-.02em}
+  .ico-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:.5rem}
+  .ico-cell{display:flex;flex-direction:column;align-items:center;gap:.35rem;padding:.6rem .3rem;border-radius:10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);font-size:.62rem;color:#93a6c8;text-align:center}
+  .anchor{scroll-margin-top:5rem}
+  .mermaid{background:transparent}
+</style>
+</head>
+<body class="bg-base-200 text-base-content">
+
+<div class="navbar sticky top-0 z-50 bg-base-300/85 backdrop-blur border-b border-base-content/10">
+  <div class="navbar-start gap-2 min-w-0">
+    <span class="text-primary">
+      <svg width="26" height="26" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round">
+        <circle cx="32" cy="32" r="21"/><circle cx="32" cy="32" r="8"/>
+        <path d="M32 4v8M32 52v8M4 32h8M52 32h8"/>
+      </svg>
+    </span>
+    <span class="font-bold tracking-tight truncate">Spyglass · Design board</span>
+  </div>
+  <div class="navbar-end hidden md:flex gap-1 text-sm">
+    <a class="btn btn-ghost btn-sm" href="#directions">10 directions</a>
+    <a class="btn btn-ghost btn-sm" href="#palettes">Palettes</a>
+    <a class="btn btn-ghost btn-sm" href="#identites">10 logos</a>
+    <a class="btn btn-ghost btn-sm" href="#svg">SVG / sprite</a>
+    <a class="btn btn-primary btn-sm" href="#arbitrage">Arbitrer</a>
+  </div>
+</div>
+
+<main class="mx-auto max-w-[1400px] p-4 lg:p-8 space-y-12">
+
+  <!-- HERO -->
+  <section class="hero rounded-box overflow-hidden border border-base-content/10"
+    style="background:radial-gradient(90% 120% at 15% 0%, #12213c 0%, #0a0f1c 60%, #06080f 100%)">
+    <div class="hero-content flex-col items-start gap-5 py-10 w-full">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge badge-primary badge-soft">Moodboard v1</span>
+        <span class="badge badge-ghost">PRD 1.0 · 17 décisions actées</span>
+        <span class="badge badge-ghost">Electron · WebContentsView 75 / chat 25</span>
+      </div>
+      <h1 class="text-4xl lg:text-5xl font-extrabold tracking-tight">
+        Quelle tête aura <span class="text-primary">Spyglass</span> ?
+      </h1>
+      <p class="max-w-3xl text-base-content/70 text-lg leading-relaxed">
+        10 vitrines possibles, 10 systèmes de couleur, 10 marques, une stratégie d'assets vectoriels.
+        L'objectif de cette page n'est pas d'admirer : c'est de <strong>trancher</strong>. Chaque direction est rendue
+        dans la vraie contrainte du produit - navigateur réel à gauche (75 %), chat de narration à droite (25 %),
+        bouton Record, dictée, blocs techniques repliables.
+      </p>
+      <div class="stats stats-vertical sm:stats-horizontal bg-base-100/60 border border-base-content/10">
+        <div class="stat"><div class="stat-title">Directions graphiques</div><div class="stat-value text-primary">10</div><div class="stat-desc">rendues en maquette réelle</div></div>
+        <div class="stat"><div class="stat-title">Identités visuelles</div><div class="stat-value text-secondary">10</div><div class="stat-desc">SVG dessinés, testés à 16 px</div></div>
+        <div class="stat"><div class="stat-title">Décisions à rendre</div><div class="stat-value text-accent">5</div><div class="stat-desc">en bas de page</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTRAINTES -->
+  <section class="anchor" id="contraintes">
+    <h2 class="text-2xl font-bold mb-1">Ce que le PRD impose au design</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Sept contraintes non négociables. Toute direction qui les ignore est disqualifiée, aussi belle soit-elle.</p>
+    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-error"></span>Zéro pixel dans la page cible</h3>
+        <p class="text-xs text-base-content/70">La sonde doit être <em>passive et invisible</em> (6.5). L'indicateur d'enregistrement (F-07) se dessine donc <strong>autour</strong> de la WebContentsView, dans la coquille - jamais en overlay injecté.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-warning"></span>25 % de largeur pour le chat</h3>
+        <p class="text-xs text-base-content/70">Sur un 1440, la colonne fait ~340 px. Toute typo &lt; 13 px ou tout padding &gt; 12 px y devient invivable. Le chat est une <em>colonne dense</em>, pas un salon de discussion.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-info"></span>Deux registres de texte</h3>
+        <p class="text-xs text-base-content/70">Narration en langage naturel + bloc technique repliable (F-21). Il faut une paire <strong>sans-serif / mono</strong> assumée, pas un seul corps de texte.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-success"></span>Le mode dégradé doit se voir</h3>
+        <p class="text-xs text-base-content/70">F-23 : bascule en gabarits déterministes. Le design doit porter un <strong>état visuel « narration dégradée »</strong> lisible sans lire, et un état « plafond à 50 % ».</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-primary"></span>Le site cible impose ses couleurs</h3>
+        <p class="text-xs text-base-content/70">75 % de l'écran est du contenu tiers, souvent blanc. Un thème sombre crée un contraste violent : il faut une <strong>zone tampon</strong> (cadre, ombre interne, gouttière) pour que l'œil supporte la jonction.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-secondary"></span>Accessibilité contractuelle</h3>
+        <p class="text-xs text-base-content/70">Section 8 : contrastes conformes, chat navigable au clavier. Un néon pur sur fond sombre passe rarement AA en corps de texte : il reste un <strong>accent</strong>, jamais un texte long.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-accent"></span>Latence perçue &lt; 50 ms</h3>
+        <p class="text-xs text-base-content/70">Aucune transition ne doit toucher le flux d'interaction. Le motion se cantonne au chat et aux changements d'état : <strong>120-200 ms, ease-out</strong>, et rien qui bloque.</p></div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <h3 class="card-title text-sm"><span class="badge badge-xs badge-neutral"></span>Trois personas, un seul écran</h3>
+        <p class="text-xs text-base-content/70">L'expert métier (compétence faible) et l'automaticien partagent l'UI. La densité technique doit être <strong>repliable</strong>, pas absente.</p></div></div>
+    </div>
+  </section>
+
+  <!-- DIRECTIONS -->
+  <section class="anchor" id="directions">
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-1">
+      <h2 class="text-2xl font-bold">10 directions graphiques</h2>
+      <span class="text-xs text-base-content/50">Chaque vignette est du vrai HTML/CSS, à l'échelle 75 / 25 du produit</span>
+    </div>
+    <p class="text-base-content/60 mb-5 max-w-3xl">Dix territoires réellement distincts, pas dix nuances d'un seul. Néon dominant par préférence, mais trois directions sobres ou éditoriales sont là pour que l'arbitrage soit un vrai choix.</p>
+
+    <div class="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+
+      <!-- D1 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="text-[10px] font-mono text-base-content/40">D1</div>
+              <h3 class="card-title text-lg leading-tight">Nocturne Optique</h3></div>
+            <span class="badge badge-primary badge-sm">Recommandée</span>
+          </div>
+          <p class="text-sm text-base-content/70">L'instrument d'observation nocturne : fond quasi noir, un seul faisceau cyan qui désigne, un magenta réservé à l'enregistrement.</p>
+          <div class="mock" style="--bg:#06090F;--surface:#0E1524;--line:#1E2A44;--txt:#E8F0FF;--muted:#8FA3C8;--a:#35F2FF;--b:#FF3D9A;--rad:10px;--glow:0 0 14px rgba(53,242,255,.55)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">https://app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Tu as cliqué sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">button#login-submit</div>
+                <div class="msg u">« je me connecte en démo »</div>
+                <div class="mic"><i style="height:4px"></i><i style="height:9px"></i><i style="height:6px"></i><i style="height:10px"></i><i style="height:3px"></i></div>
+                <div class="mock-cta">STOP</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#06090F" data-h="06090F"></span><span style="background:#0E1524" data-h="0E1524"></span><span style="background:#1E2A44" data-h="1E2A44"></span><span style="background:#8FA3C8" data-h="8FA3C8"></span><span style="background:#35F2FF" data-h="35F2FF"></span><span style="background:#FF3D9A" data-h="FF3D9A"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Linear · Raycast · Vercel Observability</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Inter Tight 600/400 · JetBrains Mono 400 (blocs techniques)</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Message entrant : translateY 6px + fade, 160 ms <code>cubic-bezier(.2,.8,.2,1)</code>. Halo REC : pulse 2 s.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Quality engineer, sessions longues, écran sombre</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">Jonction dure avec les sites clairs : impose une gouttière et une ombre interne sur la vue.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 17,4</span> <span class="badge badge-xs badge-success">accent 14,5</span> <span class="badge badge-xs badge-success">muted 7,8</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D2 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D2</div><h3 class="card-title text-lg leading-tight">Phosphore</h3></div>
+          <p class="text-sm text-base-content/70">Terminal assumé, monospace intégral, vert phosphore. Le chat est un journal, pas une conversation.</p>
+          <div class="mock" style="--bg:#0A0C0A;--surface:#101510;--line:#1E2A1E;--txt:#D8F5D8;--muted:#7FA37F;--a:#4DFF7A;--b:#C8FF4D;--rad:2px;--font:ui-monospace,'JetBrains Mono',monospace;--glow:0 0 10px rgba(77,255,122,.5);--grid:repeating-linear-gradient(0deg,rgba(77,255,122,.05) 0 1px,transparent 1px 4px)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">●REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">[ Se connecter ]</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg tech">12:04:31 dom.click</div>
+                <div class="msg">&gt; clic sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">#login-submit · role=button</div>
+                <div class="msg u">&gt; voice.final</div>
+                <div class="mock-cta">STOP ■</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#0A0C0A" data-h="0A0C0A"></span><span style="background:#101510" data-h="101510"></span><span style="background:#1E2A1E" data-h="1E2A1E"></span><span style="background:#7FA37F" data-h="7FA37F"></span><span style="background:#4DFF7A" data-h="4DFF7A"></span><span style="background:#C8FF4D" data-h="C8FF4D"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Warp · Charm/Gum · htop</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>JetBrains Mono 400/700 seule, échelle 11/13/16</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Aucun fade : apparition immédiate, curseur clignotant 1 s. Scanline statique.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Automaticien / RPA, lecture de <code>raw.jsonl</code></dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-error">Disqualifie l'expert métier (persona 2). Vitrine marketing difficile à vendre.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 16,8</span> <span class="badge badge-xs badge-success">accent 14,9</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D3 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="text-[10px] font-mono text-base-content/40">D3</div><h3 class="card-title text-lg leading-tight">Encre &amp; Papier</h3></div>
+            <span class="badge badge-ghost badge-sm">clair · zen</span>
+          </div>
+          <p class="text-sm text-base-content/70">Zen éditorial : blanc cassé, typographie de lecture, un seul indigo. Le chat devient un carnet de bord relisible.</p>
+          <div class="mock" style="--bg:#FAF9F6;--surface:#FFFFFF;--line:#E3E0D8;--txt:#14161A;--muted:#5F6672;--a:#2D4CFF;--b:#B45309;--rad:8px;--font:Georgia,'Iowan Old Style',serif;--glow:none">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">enregistre</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Vous avez cliqué sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">détail technique ›</div>
+                <div class="msg u">« je me connecte en démo »</div>
+                <div class="mock-cta">Arrêter</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#FAF9F6" data-h="FAF9F6"></span><span style="background:#FFFFFF" data-h="FFFFFF"></span><span style="background:#E3E0D8" data-h="E3E0D8"></span><span style="background:#5F6672" data-h="5F6672"></span><span style="background:#2D4CFF" data-h="2D4CFF"></span><span style="background:#B45309" data-h="B45309"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Notion · Readwise · Stripe Docs</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Source Serif 4 (narration) + Inter (UI) + IBM Plex Mono (technique)</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Fade seul, 200 ms <code>ease-out</code>. Repli/dépli du bloc technique en <code>grid-template-rows</code> 180 ms.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Expert métier, relecture d'artefact raffiné</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">Aucune signature mémorable ; le produit ressemble à un outil de documentation.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 17,2</span> <span class="badge badge-xs badge-success">accent 5,6</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D4 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D4</div><h3 class="card-title text-lg leading-tight">Laiton &amp; Ambre</h3></div>
+          <p class="text-sm text-base-content/70">Néo-skeuomorphe discret : l'instrument optique en laiton, ambre chaud, matière. Le seul territoire chaleureux du lot.</p>
+          <div class="mock" style="--bg:#120E09;--surface:#1C1610;--line:#34291B;--txt:#F5EBDC;--muted:#B39A78;--a:#FFB020;--b:#FF6B35;--rad:14px;--glow:0 0 16px rgba(255,176,32,.4);--grid:radial-gradient(60% 80% at 50% 0%,rgba(255,176,32,.06),transparent)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Clic sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">button#login-submit</div>
+                <div class="msg u">« compte de démonstration »</div>
+                <div class="mock-cta">Stop</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#120E09" data-h="120E09"></span><span style="background:#1C1610" data-h="1C1610"></span><span style="background:#34291B" data-h="34291B"></span><span style="background:#B39A78" data-h="B39A78"></span><span style="background:#FFB020" data-h="FFB020"></span><span style="background:#FF6B35" data-h="FF6B35"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Teenage Engineering · Kagi · Things 3</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Space Grotesk 600 + Inter 400 + Berkeley Mono</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Boutons à enfoncement 90 ms, ombre interne. Molette de raffinage à inertie 240 ms.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Vitrine marketing, différenciation forte</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">Matière = ombres empilées ; surveiller le budget de peinture sur une UI qui se met à jour 2×/s.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 16,3</span> <span class="badge badge-xs badge-success">accent 10,5</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D5 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D5</div><h3 class="card-title text-lg leading-tight">Prisme</h3></div>
+          <p class="text-sm text-base-content/70">Verre et décomposition de la lumière : surfaces translucides, dégradés iridescents, profondeur. Le chat flotte au-dessus de la page.</p>
+          <div class="mock" style="--bg:#0B0A18;--surface:#161334;--line:#2A2560;--txt:#EDEAFF;--muted:#A29CD4;--a:#9D74FF;--b:#23E5D6;--rad:16px;--glow:0 0 22px rgba(157,116,255,.5);--grid:radial-gradient(70% 60% at 80% 10%,rgba(35,229,214,.14),transparent),radial-gradient(60% 60% at 10% 90%,rgba(157,116,255,.16),transparent)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Tu as cliqué sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">▸ descripteur DOM</div>
+                <div class="msg u">« je me connecte en démo »</div>
+                <div class="mock-cta">Stop</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#0B0A18" data-h="0B0A18"></span><span style="background:#161334" data-h="161334"></span><span style="background:#2A2560" data-h="2A2560"></span><span style="background:#A29CD4" data-h="A29CD4"></span><span style="background:#9D74FF" data-h="9D74FF"></span><span style="background:#23E5D6" data-h="23E5D6"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Arc Browser · visionOS · Framer</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>General Sans 600/400 + Geist Mono</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Parallaxe légère du panneau, 240 ms <code>spring(0.6)</code> ; dégradé animé à 20 s, jamais pendant l'enregistrement.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Landing page, captures produit, démo commerciale</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-error"><code>backdrop-filter</code> sur grande surface = coût GPU réel à côté d'un Chromium qui rend un site tiers. Risque direct sur le budget des 50 ms.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 16,6</span> <span class="badge badge-xs badge-success">accent 6,0</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D6 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D6</div><h3 class="card-title text-lg leading-tight">Blueprint</h3></div>
+          <p class="text-sm text-base-content/70">Le parcours comme plan technique : trame millimétrée, traits fins, cotations. Chaque étape est une pièce cotée du scénario.</p>
+          <div class="mock" style="--bg:#06182B;--surface:#0B2740;--line:#14456B;--txt:#DCEEFF;--muted:#8FB4D6;--a:#5AC8FF;--b:#FFFFFF;--rad:4px;--glow:0 0 12px rgba(90,200,255,.45);--grid:linear-gradient(rgba(90,200,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(90,200,255,.07) 1px,transparent 1px);--gsize:14px 14px">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg tech">étape 03 / 10</div>
+                <div class="msg">Clic <span class="k">Se connecter</span></div>
+                <div class="msg tech">vérif · urlMatches</div>
+                <div class="msg u">intention dictée</div>
+                <div class="mock-cta">STOP</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#06182B" data-h="06182B"></span><span style="background:#0B2740" data-h="0B2740"></span><span style="background:#14456B" data-h="14456B"></span><span style="background:#8FB4D6" data-h="8FB4D6"></span><span style="background:#5AC8FF" data-h="5AC8FF"></span><span style="background:#FFFFFF" data-h="FFFFFF"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Figma dev mode · Excalidraw · plans d'architecte</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>IBM Plex Sans + IBM Plex Mono, condensé pour les cotations</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Traits qui se dessinent (<code>stroke-dashoffset</code>) 220 ms à la création d'étape. Rien d'autre ne bouge.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Raffinement et relecture de scénario, lot 4</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">La trame fatigue sur session longue ; à réserver aux panneaux, pas au fond global.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 15,1</span> <span class="badge badge-xs badge-success">accent 9,5</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D7 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D7</div><h3 class="card-title text-lg leading-tight">Synthwave Recorder</h3></div>
+          <p class="text-sm text-base-content/70">Néon plein régime : magenta / violet, horizon en grille, esthétique magnétoscope. C'est la direction la plus « affiche ».</p>
+          <div class="mock" style="--bg:#14061F;--surface:#1F0B2E;--line:#3A1657;--txt:#FFE9FF;--muted:#C09AD4;--a:#FF2E88;--b:#9C7BFF;--rad:6px;--glow:0 0 18px rgba(255,46,136,.6);--grid:linear-gradient(transparent 60%,rgba(255,46,136,.12) 100%)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">● REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Clic sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">#login-submit</div>
+                <div class="msg u">« compte de démo »</div>
+                <div class="mock-cta">STOP</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#14061F" data-h="14061F"></span><span style="background:#1F0B2E" data-h="1F0B2E"></span><span style="background:#3A1657" data-h="3A1657"></span><span style="background:#C09AD4" data-h="C09AD4"></span><span style="background:#FF2E88" data-h="FF2E88"></span><span style="background:#9C7BFF" data-h="9C7BFF"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Cyberpunk UI · Vaporwave · OBS Studio</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Chakra Petch / Michroma en titrage + Inter en corps</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Glitch 80 ms à l'entrée en enregistrement, halo pulsé 1,6 s. Désactivé sous <code>prefers-reduced-motion</code>.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Site vitrine, communauté, adoption virale</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-error">Ingérable en entreprise : personne ne lance ça devant un comité qualité. Vitrine oui, produit non.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 17,1</span> <span class="badge badge-xs badge-success">accent 5,6</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D8 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="text-[10px] font-mono text-base-content/40">D8</div><h3 class="card-title text-lg leading-tight">Swiss Ops</h3></div>
+            <span class="badge badge-ghost badge-sm">clair · dense</span>
+          </div>
+          <p class="text-sm text-base-content/70">Grille suisse, neutralité totale, un rouge signal unique réservé à l'enregistrement et à l'échec. Zéro décoration.</p>
+          <div class="mock" style="--bg:#F5F5F5;--surface:#FFFFFF;--line:#D6D6D6;--txt:#0A0A0A;--muted:#5C5C5C;--a:#0A0A0A;--b:#C8001F;--rad:0px;--font:'Helvetica Neue',Inter,sans-serif;--glow:none">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">03 · Clic <span class="k">Se connecter</span></div>
+                <div class="msg tech">button#login-submit</div>
+                <div class="msg u">Intention dictée</div>
+                <div class="mock-cta">STOP</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#F5F5F5" data-h="F5F5F5"></span><span style="background:#FFFFFF" data-h="FFFFFF"></span><span style="background:#D6D6D6" data-h="D6D6D6"></span><span style="background:#5C5C5C" data-h="5C5C5C"></span><span style="background:#0A0A0A" data-h="0A0A0A"></span><span style="background:#C8001F" data-h="C8001F"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Braun / Rams · Bloomberg Terminal clair · Playwright Trace Viewer</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Inter 500/400, échelle 12/14/16, interlignage 1,45</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Presque rien : 120 ms linéaire sur les seuls changements d'état. Le vide fait la hiérarchie.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Grand compte, contexte bureautique clair, projection en réunion</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">Aucune mémorabilité de marque ; le produit devient invisible dans une capture d'écran.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 18,2</span> <span class="badge badge-xs badge-success">rouge 5,5</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D9 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="text-[10px] font-mono text-base-content/40">D9</div><h3 class="card-title text-lg leading-tight">Aurora</h3></div>
+            <span class="badge badge-secondary badge-soft badge-sm">outsider</span>
+          </div>
+          <p class="text-sm text-base-content/70">Néon <em>doux</em> : fond bleu nuit profond, voile vert-violet diffus, angles généreux. Un produit calme qui observe pendant des heures.</p>
+          <div class="mock" style="--bg:#070D14;--surface:#0F1A24;--line:#1B2C3C;--txt:#E6F2F1;--muted:#93AEB8;--a:#46E5B0;--b:#A78BFA;--rad:14px;--glow:0 0 20px rgba(70,229,176,.35);--grid:radial-gradient(80% 50% at 20% 0%,rgba(70,229,176,.10),transparent),radial-gradient(60% 50% at 100% 100%,rgba(167,139,250,.10),transparent)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg">Tu as cliqué sur <span class="k">Se connecter</span></div>
+                <div class="msg tech">détails ▸</div>
+                <div class="msg u">« je me connecte en démo »</div>
+                <div class="mic"><i style="height:5px"></i><i style="height:9px"></i><i style="height:4px"></i><i style="height:8px"></i></div>
+                <div class="mock-cta">Arrêter</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#070D14" data-h="070D14"></span><span style="background:#0F1A24" data-h="0F1A24"></span><span style="background:#1B2C3C" data-h="1B2C3C"></span><span style="background:#93AEB8" data-h="93AEB8"></span><span style="background:#46E5B0" data-h="46E5B0"></span><span style="background:#A78BFA" data-h="A78BFA"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Supabase · Cron/Notion Calendar · Rive</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Satoshi / Inter 600-400 + Commit Mono</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Message entrant : scale 0.98→1 + fade, 180 ms <code>ease-out</code> ; voile d'ambiance figé pendant l'enregistrement.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Compromis expert métier / QE, sessions de 30 min et plus</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-warning">Le vert-menthe est très identifié « base de données open source » : risque de ressemblance.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 17,0</span> <span class="badge badge-xs badge-success">accent 12,2</span></dd>
+          </dl>
+        </div>
+      </article>
+
+      <!-- D10 -->
+      <article class="card card-border bg-base-100 overflow-hidden">
+        <div class="card-body p-4 gap-3">
+          <div><div class="text-[10px] font-mono text-base-content/40">D10</div><h3 class="card-title text-lg leading-tight">HUD Cinéma</h3></div>
+          <p class="text-sm text-base-content/70">Viseur : réticules, coins d'angle, cyan instrument et ambre d'alerte. L'élément ciblé par l'agent est littéralement « verrouillé ».</p>
+          <div class="mock" style="--bg:#04070A;--surface:#0A1116;--line:#16303B;--txt:#DFF3F7;--muted:#88A6B1;--a:#00E5FF;--b:#FFA733;--rad:2px;--glow:0 0 14px rgba(0,229,255,.55);--grid:repeating-linear-gradient(90deg,rgba(0,229,255,.05) 0 1px,transparent 1px 22px)">
+            <div class="mock-bar"><i class="nav-i"></i><i class="nav-i"></i><span class="mock-url">app.exemple.fr/connexion</span><span class="rec">◉ REC</span></div>
+            <div class="mock-body">
+              <div class="mock-page"><div class="ln w40"></div><div class="ln w80"></div><div class="blk"><span class="tgt">⌖ Se connecter</span></div><div class="ln w60"></div></div>
+              <div class="mock-chat">
+                <div class="msg tech">TGT LOCK · 98 %</div>
+                <div class="msg">Clic <span class="k">Se connecter</span></div>
+                <div class="msg tech">xpath //button[1]</div>
+                <div class="msg u">« compte de démo »</div>
+                <div class="mock-cta">STOP</div>
+              </div>
+            </div>
+          </div>
+          <div class="sw"><span style="background:#04070A" data-h="04070A"></span><span style="background:#0A1116" data-h="0A1116"></span><span style="background:#16303B" data-h="16303B"></span><span style="background:#88A6B1" data-h="88A6B1"></span><span style="background:#00E5FF" data-h="00E5FF"></span><span style="background:#FFA733" data-h="FFA733"></span></div>
+          <dl class="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-base-content/70">
+            <dt class="font-semibold text-base-content/50">Réfs</dt><dd>Interfaces de Territory Studio · Elite Dangerous · DaVinci Resolve</dd>
+            <dt class="font-semibold text-base-content/50">Typo</dt><dd>Rajdhani / Oxanium en titrage + Inter + Roboto Mono</dd>
+            <dt class="font-semibold text-base-content/50">Motion</dt><dd>Réticule qui se resserre 140 ms sur la cible narrée ; ticks 60 ms sur le compteur de tokens.</dd>
+            <dt class="font-semibold text-base-content/50">Pour qui</dt><dd>Démonstration du rattrapage IA, mode rejeu pas à pas (F-59)</dd>
+            <dt class="font-semibold text-base-content/50">Coût</dt><dd class="text-error">Le réticule ne peut pas être dessiné dans la page cible (sonde invisible) : il faut le rendre en overlay de fenêtre, techniquement coûteux.</dd>
+            <dt class="font-semibold text-base-content/50">Contraste</dt><dd><span class="badge badge-xs badge-success">texte 17,6</span> <span class="badge badge-xs badge-success">accent 13,1</span></dd>
+          </dl>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- TABLEAU COMPARATIF -->
+  <section class="anchor" id="comparatif">
+    <h2 class="text-2xl font-bold mb-1">Comparatif transversal</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Cinq critères qui décident réellement, notés de ● (faible) à ●●●●● (fort). La colonne « coût » n'est jamais vide : une direction sans contrepartie est une direction mal analysée.</p>
+    <div class="overflow-x-auto rounded-box border border-base-content/10 bg-base-100">
+      <table class="table table-sm table-zebra">
+        <thead><tr>
+          <th>Direction</th><th>Lisibilité en 3 s</th><th>Densité 25 %</th><th>Mémorabilité</th><th>Coût GPU</th><th>Compatibilité site clair</th><th>Verdict</th>
+        </tr></thead>
+        <tbody>
+          <tr><th>D1 Nocturne Optique</th><td>●●●●●</td><td>●●●●●</td><td>●●●●○</td><td class="text-success">faible</td><td>●●●○○</td><td><span class="badge badge-success badge-sm">Cible</span></td></tr>
+          <tr><th>D2 Phosphore</th><td>●●●○○</td><td>●●●●●</td><td>●●●●○</td><td class="text-success">nul</td><td>●●○○○</td><td><span class="badge badge-ghost badge-sm">Thème alternatif</span></td></tr>
+          <tr><th>D3 Encre &amp; Papier</th><td>●●●●●</td><td>●●●○○</td><td>●●○○○</td><td class="text-success">nul</td><td>●●●●●</td><td><span class="badge badge-info badge-sm">Base du thème clair</span></td></tr>
+          <tr><th>D4 Laiton &amp; Ambre</th><td>●●●●○</td><td>●●●○○</td><td>●●●●●</td><td class="text-warning">moyen</td><td>●●●○○</td><td><span class="badge badge-ghost badge-sm">Piste marque</span></td></tr>
+          <tr><th>D5 Prisme</th><td>●●●○○</td><td>●●○○○</td><td>●●●●●</td><td class="text-error">élevé</td><td>●●●○○</td><td><span class="badge badge-warning badge-sm">Vitrine web seule</span></td></tr>
+          <tr><th>D6 Blueprint</th><td>●●●●○</td><td>●●●●○</td><td>●●●●○</td><td class="text-success">faible</td><td>●●●○○</td><td><span class="badge badge-info badge-sm">Vue raffinement</span></td></tr>
+          <tr><th>D7 Synthwave</th><td>●●○○○</td><td>●●○○○</td><td>●●●●●</td><td class="text-warning">moyen</td><td>●●○○○</td><td><span class="badge badge-error badge-sm">Marketing uniquement</span></td></tr>
+          <tr><th>D8 Swiss Ops</th><td>●●●●●</td><td>●●●●●</td><td>●○○○○</td><td class="text-success">nul</td><td>●●●●●</td><td><span class="badge badge-ghost badge-sm">Repli entreprise</span></td></tr>
+          <tr><th>D9 Aurora</th><td>●●●●●</td><td>●●●●○</td><td>●●●○○</td><td class="text-success">faible</td><td>●●●●○</td><td><span class="badge badge-secondary badge-sm">Finaliste</span></td></tr>
+          <tr><th>D10 HUD Cinéma</th><td>●●●○○</td><td>●●●●○</td><td>●●●●●</td><td class="text-warning">moyen</td><td>●●○○○</td><td><span class="badge badge-warning badge-sm">Mode rejeu</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-success alert-soft mt-4 items-start">
+      <div>
+        <h3 class="font-bold">Ma recommandation : D1 Nocturne Optique comme socle, D3 Encre &amp; Papier comme thème clair jumeau, D6 Blueprint pour la vue de raffinement.</h3>
+        <ul class="text-sm mt-1 list-disc pl-5 space-y-1 text-base-content/80">
+          <li>D1 tient les trois contraintes dures - contraste AA large, densité à 340 px, aucun effet coûteux - tout en restant une image de marque forte (le faisceau cyan qui désigne, c'est littéralement le produit).</li>
+          <li>Un seul néon actif + un magenta strictement réservé à l'état d'enregistrement donne une sémantique de couleur non ambiguë : cyan = l'agent observe, magenta = ça enregistre, ambre = mode dégradé, rouge = échec.</li>
+          <li>D3 n'est pas un lot de consolation : le thème clair est obligatoire pour la projection en réunion et pour les 75 % d'écran occupés par des sites blancs. Les deux thèmes partagent les mêmes tokens, seules les valeurs changent.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- MOTION -->
+  <section class="anchor" id="motion">
+    <h2 class="text-2xl font-bold mb-1">Signature de mouvement (démos réelles)</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Rien ne bouge qui n'explique pas un changement d'état. Survolez ou cochez pour voir les transitions telles qu'elles seront implémentées.</p>
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <h3 class="font-semibold text-sm">1 · Étape narrée qui arrive</h3>
+        <input type="checkbox" id="mo1" class="sr-only"><label for="mo1" class="btn btn-xs btn-outline w-fit">Jouer / rejouer</label>
+        <div class="demo-steps mt-1 space-y-1.5">
+          <div class="dstep">Tu as saisi <b>demo@exemple.fr</b></div>
+          <div class="dstep">Tu as cliqué sur <b>Se connecter</b></div>
+        </div>
+        <p class="text-[11px] text-base-content/60"><code>translateY(6px) + opacity</code> · 160 ms · <code>cubic-bezier(.2,.8,.2,1)</code>. Pas de layout thrash : la liste ne se réordonne jamais.</p>
+      </div></div>
+
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <h3 class="font-semibold text-sm">2 · État d'enregistrement</h3>
+        <div class="rec-frame"><span class="rec-pill">● REC</span><span class="text-[11px] text-base-content/60">bordure de fenêtre, jamais dans la page</span></div>
+        <p class="text-[11px] text-base-content/60">Halo pulsé 2 s <code>ease-in-out</code>, amplitude faible. Coupé par <code>prefers-reduced-motion</code>, remplacé par un point fixe.</p>
+      </div></div>
+
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <h3 class="font-semibold text-sm">3 · Bascule en mode dégradé (F-23)</h3>
+        <input type="checkbox" id="deg" class="sr-only"><label for="deg" class="btn btn-xs btn-outline btn-warning w-fit">Simuler la perte réseau</label>
+        <div class="deg-panel"><div class="deg-msg">Tu as cliqué sur <b>Se connecter</b></div><div class="deg-tag">gabarit déterministe</div></div>
+        <p class="text-[11px] text-base-content/60">Désaturation 240 ms + liseré ambre + étiquette. L'utilisateur voit le changement de régime sans lire une alerte modale.</p>
+      </div></div>
+
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <h3 class="font-semibold text-sm">4 · Compteur de tokens (F-28, F-72)</h3>
+        <input type="checkbox" id="tok" class="sr-only"><label for="tok" class="btn btn-xs btn-outline w-fit">Simuler une rafale d'événements</label>
+        <div class="tok"><div class="tok-fill"></div></div>
+        <div class="flex justify-between text-[10px] text-base-content/50"><span>0</span><span>seuil 50 %</span><span>500 000</span></div>
+        <p class="text-[11px] text-base-content/60">Remplissage animé 400 ms <code>ease-out</code> uniquement au franchissement d'un palier ; sinon mise à jour muette. Jamais d'animation par appel.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <style>
+    .dstep{font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+      opacity:0;transform:translateY(6px);transition:opacity 160ms cubic-bezier(.2,.8,.2,1),transform 160ms cubic-bezier(.2,.8,.2,1)}
+    .card-body:has(#mo1:checked) .dstep{opacity:1;transform:none}
+    .card-body:has(#mo1:checked) .dstep:nth-child(2){transition-delay:120ms}
+    .rec-frame{position:relative;display:flex;align-items:center;gap:.5rem;padding:.75rem;border-radius:10px;border:2px solid #FF3D9A;animation:recpulse 2s ease-in-out infinite}
+    .rec-pill{font:700 10px ui-monospace,monospace;color:#FF3D9A;letter-spacing:.12em}
+    @keyframes recpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,61,154,.35)}50%{box-shadow:0 0 0 6px rgba(255,61,154,0)}}
+    @media (prefers-reduced-motion: reduce){.rec-frame{animation:none}}
+    .deg-panel{border-radius:10px;padding:.6rem;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);transition:filter 240ms ease,border-color 240ms ease}
+    .deg-msg{font-size:12px}
+    .deg-tag{margin-top:.35rem;font:600 9px ui-monospace,monospace;letter-spacing:.08em;color:#FFC44D;opacity:0;transition:opacity 240ms ease}
+    .card-body:has(#deg:checked) .deg-panel{filter:grayscale(.85);border-color:#FFC44D}
+    .card-body:has(#deg:checked) .deg-tag{opacity:1}
+    .tok{height:10px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
+    .card-body:has(#tok:checked) .tok-fill{width:100%;background:linear-gradient(90deg,#FFC44D,#FF5A5F)}
+    .tok-fill{height:100%;width:38%;border-radius:99px;background:linear-gradient(90deg,#35F2FF,#FFC44D);transition:width 400ms ease-out}
+  </style>
+
+  <!-- PALETTES -->
+  <section class="anchor" id="palettes">
+    <h2 class="text-2xl font-bold mb-1">Palettes : des rôles, pas des couleurs</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Une couleur n'entre dans le système que si elle porte un rôle. Chaque valeur est déclinée en variante sombre et claire, avec son ratio WCAG sur le fond correspondant. Le néon est traité comme un <strong>effet lumineux séparé</strong> du texte : jamais de contraste sacrifié pour un halo.</p>
+
+    <div class="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-3">
+        <h3 class="card-title text-base">Palette maître · D1 Nocturne Optique</h3>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead><tr><th>Rôle</th><th>Sombre</th><th>Ratio</th><th>Clair</th><th>Ratio</th><th>Emploi</th></tr></thead>
+            <tbody>
+              <tr><th><code>bg</code></th><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#06090F"></span>#06090F</td><td>-</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1 border border-base-content/20" style="background:#F7F9FC"></span>#F7F9FC</td><td>-</td><td>fond d'application</td></tr>
+              <tr><th><code>surface</code></th><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#0E1524"></span>#0E1524</td><td>-</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1 border border-base-content/20" style="background:#FFFFFF"></span>#FFFFFF</td><td>-</td><td>chat, barre d'URL, cartes</td></tr>
+              <tr><th><code>border</code></th><td>#1E2A44</td><td>-</td><td>#E2E8F2</td><td>-</td><td>séparateurs, gouttière 75/25</td></tr>
+              <tr><th><code>text</code></th><td>#E8F0FF</td><td><span class="badge badge-xs badge-success">17,4 AAA</span></td><td>#0B1220</td><td><span class="badge badge-xs badge-success">17,8 AAA</span></td><td>narration</td></tr>
+              <tr><th><code>muted</code></th><td>#8FA3C8</td><td><span class="badge badge-xs badge-success">7,8 AAA</span></td><td>#4E5D78</td><td><span class="badge badge-xs badge-success">6,3 AA+</span></td><td>horodatage, bloc technique</td></tr>
+              <tr><th><code>accent</code></th><td>#35F2FF</td><td><span class="badge badge-xs badge-success">14,5 AAA</span></td><td>#0072A8</td><td><span class="badge badge-xs badge-success">5,0 AA</span></td><td>l'agent désigne un élément</td></tr>
+              <tr><th><code>accent-2</code></th><td>#FF3D9A</td><td><span class="badge badge-xs badge-success">6,1 AA+</span></td><td>#C2185B</td><td><span class="badge badge-xs badge-success">5,6 AA</span></td><td><strong>enregistrement, exclusivement</strong></td></tr>
+              <tr><th><code>success</code></th><td>#3DFFA8</td><td><span class="badge badge-xs badge-success">15,3</span></td><td>#0F7A5A</td><td><span class="badge badge-xs badge-success">5,0</span></td><td>vérification <code>strong</code>, étape verte</td></tr>
+              <tr><th><code>warning</code></th><td>#FFC44D</td><td><span class="badge badge-xs badge-success">12,6</span></td><td>#8A5A00</td><td><span class="badge badge-xs badge-success">5,6</span></td><td>mode dégradé, vérif <code>weak</code>, seuil 50 %</td></tr>
+              <tr><th><code>danger</code></th><td>#FF6B6B</td><td><span class="badge badge-xs badge-success">7,2</span></td><td>#C2261F</td><td><span class="badge badge-xs badge-success">5,5</span></td><td>échec d'étape, scénario obsolète</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="swatch-lg">
+          <div style="background:#06090F;color:#8FA3C8">bg</div>
+          <div style="background:#0E1524;color:#8FA3C8">surface</div>
+          <div style="background:#35F2FF;color:#06090F">accent</div>
+          <div style="background:#FF3D9A;color:#0F0509">rec</div>
+          <div style="background:#3DFFA8;color:#04140D">ok</div>
+          <div style="background:#FFC44D;color:#170F00">degr.</div>
+          <div style="background:#FF6B6B;color:#1A0505">fail</div>
+        </div>
+      </div></div>
+
+      <div class="space-y-4">
+        <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+          <h3 class="card-title text-base">Règles du néon</h3>
+          <ul class="text-sm space-y-1.5 text-base-content/75 list-disc pl-4">
+            <li><strong>Le halo n'est jamais porteur d'information seul.</strong> Il double une couleur, une forme ou un libellé (section 8 : pas de couleur comme signal unique).</li>
+            <li><strong>Formule unique :</strong> <code>0 0 14px color-mix(in oklab, var(--accent) 55%, transparent)</code>. Une seule ombre, jamais empilée, jamais sur une surface &gt; 200×80 px.</li>
+            <li><strong>Interdit</strong> sur : le texte de narration, les blocs techniques, toute surface qui se repeint plus d'une fois par seconde, la zone jouxtant la <code>WebContentsView</code>.</li>
+            <li><strong>Autorisé</strong> sur : la pastille REC, le contour de l'élément désigné, le bouton primaire au survol/focus, l'indicateur de niveau micro.</li>
+            <li><strong>Focus visible</strong> = <code>outline: 2px solid var(--accent); outline-offset: 2px</code> + halo. Le focus n'est jamais uniquement un halo (invisible en contraste élevé).</li>
+            <li><code>prefers-contrast: more</code> → halos supprimés, bordures portées à 2 px opaques.</li>
+          </ul>
+        </div></div>
+        <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+          <h3 class="card-title text-base">Sémantique de couleur non ambiguë</h3>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="badge" style="background:#35F2FF;color:#06090F;border:0">cyan · l'agent observe / désigne</span>
+            <span class="badge" style="background:#FF3D9A;color:#0F0509;border:0">magenta · ça enregistre</span>
+            <span class="badge" style="background:#3DFFA8;color:#04140D;border:0">vert · vérification tenue</span>
+            <span class="badge" style="background:#FFC44D;color:#170F00;border:0">ambre · régime dégradé / weak</span>
+            <span class="badge" style="background:#FF6B6B;color:#1A0505;border:0">rouge · échec, obsolète</span>
+          </div>
+          <p class="text-xs text-base-content/60 mt-1">Cinq couleurs, cinq sens, aucun recouvrement. C'est cette discipline - plus que la teinte choisie - qui rendra l'interface lisible en 3 secondes.</p>
+        </div></div>
+      </div>
+    </div>
+
+    <h3 class="text-lg font-semibold mt-6 mb-2">Les 9 autres palettes, en accents</h3>
+    <div class="overflow-x-auto rounded-box border border-base-content/10 bg-base-100">
+      <table class="table table-xs table-zebra">
+        <thead><tr><th>Palette</th><th>Registre</th><th>bg sombre</th><th>accent sombre</th><th>ratio</th><th>accent clair</th><th>ratio</th></tr></thead>
+        <tbody>
+          <tr><th>P2 Phosphore</th><td>néon vert</td><td>#0A0C0A</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#4DFF7A"></span>#4DFF7A</td><td><span class="badge badge-xs badge-success">14,9</span></td><td>#1B7A34</td><td><span class="badge badge-xs badge-success">5,2</span></td></tr>
+          <tr><th>P3 Encre</th><td>sobre / éditorial</td><td>#14161A</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#7B8CFF"></span>#7B8CFF</td><td><span class="badge badge-xs badge-success">7,1</span></td><td>#2D4CFF</td><td><span class="badge badge-xs badge-success">5,6</span></td></tr>
+          <tr><th>P4 Ambre laiton</th><td>néon chaud</td><td>#120E09</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#FFB020"></span>#FFB020</td><td><span class="badge badge-xs badge-success">10,5</span></td><td>#9A5B00</td><td><span class="badge badge-xs badge-success">5,1</span></td></tr>
+          <tr><th>P5 Prisme</th><td>néon iridescent</td><td>#0B0A18</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#9D74FF"></span>#9D74FF</td><td><span class="badge badge-xs badge-success">6,0</span></td><td>#5B31D6</td><td><span class="badge badge-xs badge-success">6,9</span></td></tr>
+          <tr><th>P6 Blueprint</th><td>néon froid</td><td>#06182B</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#5AC8FF"></span>#5AC8FF</td><td><span class="badge badge-xs badge-success">9,5</span></td><td>#0A5C99</td><td><span class="badge badge-xs badge-success">6,6</span></td></tr>
+          <tr><th>P7 Synthwave</th><td>néon saturé</td><td>#14061F</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#FF2E88"></span>#FF2E88</td><td><span class="badge badge-xs badge-success">5,6</span></td><td>#C4006B</td><td><span class="badge badge-xs badge-success">5,6</span></td></tr>
+          <tr><th>P8 Swiss</th><td>neutre / signal</td><td>#0A0A0A</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#FF3B30"></span>#FF3B30</td><td><span class="badge badge-xs badge-success">5,4</span></td><td>#C8001F</td><td><span class="badge badge-xs badge-success">5,5</span></td></tr>
+          <tr><th>P9 Aurora</th><td>néon doux</td><td>#070D14</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#46E5B0"></span>#46E5B0</td><td><span class="badge badge-xs badge-success">12,2</span></td><td>#0F7A5A</td><td><span class="badge badge-xs badge-success">5,1</span></td></tr>
+          <tr><th>P10 HUD</th><td>néon instrument</td><td>#04070A</td><td><span class="inline-block w-3 h-3 rounded-sm align-middle mr-1" style="background:#00E5FF"></span>#00E5FF</td><td><span class="badge badge-xs badge-success">13,1</span></td><td>#006C86</td><td><span class="badge badge-xs badge-success">5,6</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SPRITE DES MARQUES : cette page utilise elle-même la technique recommandée -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="mk-1" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+      <circle cx="32" cy="32" r="21"/><circle cx="32" cy="32" r="7.5" fill="currentColor" stroke="none"/>
+      <path d="M32 3v7M32 54v7M3 32h7M54 32h7"/></symbol>
+    <symbol id="mk-2" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round">
+      <g transform="rotate(-25 32 32)"><rect x="8" y="27" width="18" height="10" rx="3"/><rect x="26" y="24" width="16" height="16" rx="3"/><rect x="42" y="20" width="14" height="24" rx="4"/><circle cx="49" cy="32" r="4" fill="currentColor" stroke="none"/></g></symbol>
+    <symbol id="mk-3" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round">
+      <path d="M46 16H28a8 8 0 0 0 0 16h8a8 8 0 0 1 0 16H18"/><circle cx="49" cy="16" r="3.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="mk-4" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round">
+      <path d="M4 32s10-15 28-15 28 15 28 15-10 15-28 15S4 32 4 32Z"/><circle cx="32" cy="32" r="8" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="mk-5" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M32 12 55 50H9Z"/><path d="M2 33h14"/>
+      <path d="M40 30 62 21" stroke="#35F2FF"/><path d="M42 36h20" stroke="#A78BFA"/><path d="M40 42 62 51" stroke="#FF3D9A"/></symbol>
+    <symbol id="mk-6" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+      <circle cx="32" cy="32" r="21"/>
+      <path d="M32 11 47 28"/><path d="M32 11 47 28" transform="rotate(60 32 32)"/><path d="M32 11 47 28" transform="rotate(120 32 32)"/>
+      <path d="M32 11 47 28" transform="rotate(180 32 32)"/><path d="M32 11 47 28" transform="rotate(240 32 32)"/><path d="M32 11 47 28" transform="rotate(300 32 32)"/></symbol>
+    <symbol id="mk-7" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="32" cy="32" r="21"/><path d="M15 41 24 30l8 6 15-13"/>
+      <circle cx="15" cy="41" r="3" fill="currentColor" stroke="none"/><circle cx="24" cy="30" r="3" fill="currentColor" stroke="none"/>
+      <circle cx="32" cy="36" r="3" fill="currentColor" stroke="none"/><circle cx="47" cy="23" r="3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="mk-8" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="28" cy="28" r="19"/><path d="M28 3v7M28 46v7M3 28h7M46 28h7"/>
+      <path d="M34 34 60 44l-11 4-4 11z" fill="currentColor"/></symbol>
+    <symbol id="mk-9" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round">
+      <circle cx="32" cy="32" r="22"/>
+      <path d="M41 23a9.5 9.5 0 0 0-13.5 1.2c-3 3.7-.4 8 4.8 9.3s7.8 5.3 4.9 9a9.5 9.5 0 0 1-13.4 1.2"/>
+      <path d="M15 24a20 20 0 0 1 9-8" opacity=".55"/></symbol>
+    <symbol id="mk-10" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+      <circle cx="32" cy="32" r="21"/><path d="M20 27v10M26 21v22M32 25v14M38 17v30M44 26v12M50 29v6"/></symbol>
+  </defs></svg>
+
+  <section class="anchor" id="identites">
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-1">
+      <h2 class="text-2xl font-bold">10 identités visuelles</h2>
+      <span class="text-xs text-base-content/50">Marques réellement dessinées · test 16 px systématique · sprite <code>&lt;symbol&gt;</code> + <code>&lt;use&gt;</code></span>
+    </div>
+    <p class="text-base-content/60 mb-5 max-w-3xl">Le nom <em>Spyglass</em> impose une famille sémantique : optique, observation, viseur. Le piège serait de s'y enfermer - le produit n'observe pas seulement, il <strong>enregistre une intention et la rejoue</strong>. Trois marques ci-dessous (L4, L7, L10) portent cette seconde idée.</p>
+
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#35F2FF"><svg width="76" height="76"><use href="#mk-1"/></svg></div>
+        <h3 class="font-bold text-sm">L1 · L'Iris</h3>
+        <p class="text-xs text-base-content/70">Lentille + réticule. Métaphore directe : l'œil de l'agent posé sur la page. Le plus lisible du lot.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#35F2FF"><use href="#mk-1"/></svg><svg width="24" height="24"><use href="#mk-1"/></svg><span class="lockup" style="color:#E8F0FF"><svg width="20" height="20" style="color:#35F2FF"><use href="#mk-1"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : grille 64, cercle r=21, iris r=7,5 (ratio 1:2,8), ticks à 3 px du bord</li>
+          <li><b>16 px</b> : ✔ les ticks fusionnent mais la silhouette reste unique</li>
+          <li><b>Animation</b> : iris qui se contracte 1→0,85 à l'appui sur Record</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#FFB020"><svg width="76" height="76"><use href="#mk-2"/></svg></div>
+        <h3 class="font-bold text-sm">L2 · La Longue-vue</h3>
+        <p class="text-xs text-base-content/70">L'objet littéral, en trois fûts télescopiques. Chaleureux, artisanal, très « outil ».</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#FFB020"><use href="#mk-2"/></svg><svg width="24" height="24"><use href="#mk-2"/></svg><span class="lockup" style="color:#F5EBDC"><svg width="20" height="20" style="color:#FFB020"><use href="#mk-2"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : 3 fûts en progression 10/16/24, rotation -25°, rayon 3-4</li>
+          <li><b>16 px</b> : ⚠ les fûts se confondent, prévoir une variante 2 fûts</li>
+          <li><b>Animation</b> : le fût avant coulisse de 2 px au lancement</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#46E5B0"><svg width="76" height="76"><use href="#mk-3"/></svg></div>
+        <h3 class="font-bold text-sm">L3 · Le S-faisceau</h3>
+        <p class="text-xs text-base-content/70">Monogramme pur : le S comme trajet de la lumière, ponctué d'un point d'entrée. Marque la plus scalable.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#46E5B0"><use href="#mk-3"/></svg><svg width="24" height="24"><use href="#mk-3"/></svg><span class="lockup" style="color:#E6F2F1"><svg width="20" height="20" style="color:#46E5B0"><use href="#mk-3"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : trait 5, deux arcs r=8 tangents, terminaisons rondes</li>
+          <li><b>16 px</b> : ✔✔ excellent, c'est le meilleur favicon du lot</li>
+          <li><b>Animation</b> : tracé <code>stroke-dashoffset</code> 600 ms au splash</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#FF3D9A"><svg width="76" height="76"><use href="#mk-4"/></svg></div>
+        <h3 class="font-bold text-sm">L4 · L'Œil-Record</h3>
+        <p class="text-xs text-base-content/70">Un œil dont la pupille est le point d'enregistrement. Deux idées du produit en une forme : observer + capturer.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#FF3D9A"><use href="#mk-4"/></svg><svg width="24" height="24"><use href="#mk-4"/></svg><span class="lockup" style="color:#E8F0FF"><svg width="20" height="20" style="color:#FF3D9A"><use href="#mk-4"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : deux arcs symétriques, pupille r=8 = 25 % de la largeur</li>
+          <li><b>16 px</b> : ✔ mais la forme « œil » est très occupée dans les logiciels de surveillance</li>
+          <li><b>Animation</b> : la pupille passe en magenta et pulse pendant l'enregistrement</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#EDEAFF"><svg width="76" height="76"><use href="#mk-5"/></svg></div>
+        <h3 class="font-bold text-sm">L5 · Le Prisme</h3>
+        <p class="text-xs text-base-content/70">Une action brute entre, trois artefacts sortent : brut, raffiné, script. La seule marque qui raconte le pipeline.</p>
+        <div class="tiny-row"><svg width="16" height="16"><use href="#mk-5"/></svg><svg width="24" height="24"><use href="#mk-5"/></svg><span class="lockup" style="color:#EDEAFF"><svg width="20" height="20"><use href="#mk-5"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : triangle équilatéral, rayons sortants à -20°/0°/+20°</li>
+          <li><b>16 px</b> : ✘ les trois rayons se collent - variante monochrome obligatoire</li>
+          <li><b>Animation</b> : les rayons se déploient en cascade 90 ms d'écart</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#00E5FF"><svg width="76" height="76"><use href="#mk-6"/></svg></div>
+        <h3 class="font-bold text-sm">L6 · Le Diaphragme</h3>
+        <p class="text-xs text-base-content/70">Six lames d'ouverture : la capture photographique, la précision mécanique. Très élégant en grand.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#00E5FF"><use href="#mk-6"/></svg><svg width="24" height="24"><use href="#mk-6"/></svg><span class="lockup" style="color:#DFF3F7"><svg width="20" height="20" style="color:#00E5FF"><use href="#mk-6"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : 1 lame répétée par rotation de 60°, aucun tracé unique à maintenir</li>
+          <li><b>16 px</b> : ✘ bouillie de traits - exige une variante 3 lames</li>
+          <li><b>Animation</b> : ouverture/fermeture des lames au démarrage (rotation 30°, 400 ms)</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#5AC8FF"><svg width="76" height="76"><use href="#mk-7"/></svg></div>
+        <h3 class="font-bold text-sm">L7 · Le Parcours</h3>
+        <p class="text-xs text-base-content/70">Quatre nœuds reliés dans une lentille : le scénario enregistré, vu à travers l'instrument. Ma préférée sur le fond.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#5AC8FF"><use href="#mk-7"/></svg><svg width="24" height="24"><use href="#mk-7"/></svg><span class="lockup" style="color:#DCEEFF"><svg width="20" height="20" style="color:#5AC8FF"><use href="#mk-7"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : polyligne à 4 points dans un cercle r=21, nœuds r=3</li>
+          <li><b>16 px</b> : ⚠ passer à 3 nœuds sous 20 px</li>
+          <li><b>Animation</b> : les nœuds s'allument séquentiellement pendant le rejeu - <strong>l'animation devient un indicateur d'état réel</strong></li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#FF2E88"><svg width="76" height="76"><use href="#mk-8"/></svg></div>
+        <h3 class="font-bold text-sm">L8 · Le Viseur-Curseur</h3>
+        <p class="text-xs text-base-content/70">Réticule + pointeur : l'IA vise, l'humain clique. La dualité du produit en un signe.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#FF2E88"><use href="#mk-8"/></svg><svg width="24" height="24"><use href="#mk-8"/></svg><span class="lockup" style="color:#FFE9FF"><svg width="20" height="20" style="color:#FF2E88"><use href="#mk-8"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : cercle décentré en haut-gauche, curseur plein en contrepoids optique</li>
+          <li><b>16 px</b> : ⚠ le curseur devient une tache ; version sans curseur en favicon</li>
+          <li><b>Animation</b> : le curseur glisse vers le centre du réticule au survol</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#9D74FF"><svg width="76" height="76"><use href="#mk-9"/></svg></div>
+        <h3 class="font-bold text-sm">L9 · Le Verre gravé</h3>
+        <p class="text-xs text-base-content/70">Un S gravé dans un disque de verre, avec son reflet. Le plus « produit fini », le plus premium.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#9D74FF"><use href="#mk-9"/></svg><svg width="24" height="24"><use href="#mk-9"/></svg><span class="lockup" style="color:#EDEAFF"><svg width="20" height="20" style="color:#9D74FF"><use href="#mk-9"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : disque r=22, S inscrit à 60 % de hauteur, reflet à 55 % d'opacité</li>
+          <li><b>16 px</b> : ⚠ supprimer le reflet sous 24 px</li>
+          <li><b>Animation</b> : le reflet balaie le disque au lancement (800 ms, une fois)</li>
+        </ul>
+      </div></article>
+
+      <article class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <div class="logo-tile" style="color:#3DFFA8"><svg width="76" height="76"><use href="#mk-10"/></svg></div>
+        <h3 class="font-bold text-sm">L10 · L'Oculaire vocal</h3>
+        <p class="text-xs text-base-content/70">L'onde de la dictée vue dans l'oculaire. Met en avant le différenciateur voix, unique sur le marché.</p>
+        <div class="tiny-row"><svg width="16" height="16" style="color:#3DFFA8"><use href="#mk-10"/></svg><svg width="24" height="24"><use href="#mk-10"/></svg><span class="lockup" style="color:#E6F2F1"><svg width="20" height="20" style="color:#3DFFA8"><use href="#mk-10"/></svg>Spyglass</span></div>
+        <ul class="text-[11px] text-base-content/60 space-y-0.5">
+          <li><b>Construction</b> : 6 barres, hauteurs 10/22/14/30/12/6, pas de 6 px</li>
+          <li><b>16 px</b> : ⚠ réduire à 4 barres</li>
+          <li><b>Animation</b> : les barres suivent le niveau du micro (F-35) - <strong>logo vivant, pas décoratif</strong></li>
+        </ul>
+      </div></article>
+    </div>
+
+    <div class="alert alert-info alert-soft mt-4 items-start">
+      <div><h3 class="font-bold">Recommandation identité : L1 · L'Iris, avec la pupille de L4 comme état d'enregistrement.</h3>
+      <p class="text-sm mt-1 text-base-content/80">L1 passe les trois tests éliminatoires - 16 px, monochrome, inversé - et sa pupille devient naturellement le point rouge/magenta de Record : <strong>le logo porte l'état de l'application</strong> dans la barre de titre et dans le dock. L7 est le second choix si l'on veut affirmer « scénario » plutôt qu'« observation » ; L3 reste le favicon de repli quel que soit le choix.</p></div>
+    </div>
+  </section>
+
+  <!-- SPRITE ICONES -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <g id="ic-defaults"></g>
+    <symbol id="ic-record" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+    <symbol id="ic-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3 10.5v3M7 7v10M11 9.5v5M15 4.5v15M19 10v4"/></symbol>
+    <symbol id="ic-observe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M15.8 15.8 21 21"/></symbol>
+    <symbol id="ic-refine" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M11 3 12.7 8.3 18 10l-5.3 1.7L11 17l-1.7-5.3L4 10l5.3-1.7Z"/><path d="M18 15.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7Z"/></symbol>
+    <symbol id="ic-script" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8 2.5 12 6 16M18 8l3.5 4L18 16M14.5 4l-5 16"/></symbol>
+    <symbol id="ic-replay" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.6-6.1"/><path d="M20.5 3.5V9H15"/></symbol>
+    <symbol id="ic-patch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><g transform="rotate(45 12 12)"><rect x="3" y="8.5" width="18" height="7" rx="3.5"/><path d="M12 8.5v7"/></g></symbol>
+    <symbol id="ic-tokens" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3.5 17.5a8.5 8.5 0 1 1 17 0"/><path d="M12 17.5 16.5 10"/><circle cx="12" cy="17.5" r="1.4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-frame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><rect x="8" y="9.5" width="9.5" height="7" rx="1.5" stroke-dasharray="3 2.5"/></symbol>
+    <symbol id="ic-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2.5" y="2.5" width="12" height="12" rx="3"/><rect x="9.5" y="9.5" width="12" height="12" rx="3" opacity=".55"/></symbol>
+    <symbol id="ic-secret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3.5" y="9.5" width="17" height="11" rx="2.5"/><path d="M7.5 9.5V7a4.5 4.5 0 0 1 9 0v2.5"/><path d="M12 13.5v3"/></symbol>
+    <symbol id="ic-offline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M17.5 18.5H7a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 16.8 8.2"/><path d="M3 3l18 18"/></symbol>
+    <symbol id="ic-verify" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5 20 6v6c0 4.5-3.2 7.9-8 9.5C7.2 19.9 4 16.5 4 12V6Z"/><path d="M8.6 12.2l2.4 2.4 4.4-5"/></symbol>
+    <symbol id="ic-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="6.5" cy="5" r="2.5"/><circle cx="6.5" cy="19" r="2.5"/><circle cx="17.5" cy="5" r="2.5"/><path d="M6.5 7.5v9M17.5 7.5v2.5a4.5 4.5 0 0 1-4.5 4.5H9"/></symbol>
+  </defs></svg>
+
+  <section class="anchor" id="icones">
+    <h2 class="text-2xl font-bold mb-1">Iconographie</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Une famille unique, dessinée pour les concepts propres à Spyglass - iframe, shadow DOM, valeur masquée, mode dégradé, patch, branche de PR. Ces six-là n'existent dans aucune librairie du marché : c'est précisément ce qui justifie un jeu maison plutôt qu'un import de Lucide.</p>
+    <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+      <div class="card card-border bg-base-100"><div class="card-body p-4">
+        <div class="ico-grid">
+          <div class="ico-cell"><svg width="24" height="24" style="color:#FF3D9A"><use href="#ic-record"/></svg>record</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-stop"/></svg>stop</div>
+          <div class="ico-cell"><svg width="24" height="24" style="color:#35F2FF"><use href="#ic-mic"/></svg>dictée</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-wave"/></svg>segment vocal</div>
+          <div class="ico-cell"><svg width="24" height="24" style="color:#35F2FF"><use href="#ic-observe"/></svg>observe</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-refine"/></svg>raffiner</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-script"/></svg>script généré</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-replay"/></svg>rejeu</div>
+          <div class="ico-cell"><svg width="24" height="24" style="color:#FFC44D"><use href="#ic-patch"/></svg>patch suggéré</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-tokens"/></svg>tokens</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-frame"/></svg>iframe</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-shadow"/></svg>shadow DOM</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-secret"/></svg>valeur masquée</div>
+          <div class="ico-cell"><svg width="24" height="24" style="color:#FFC44D"><use href="#ic-offline"/></svg>mode dégradé</div>
+          <div class="ico-cell"><svg width="24" height="24" style="color:#3DFFA8"><use href="#ic-verify"/></svg>vérification</div>
+          <div class="ico-cell"><svg width="24" height="24"><use href="#ic-branch"/></svg>branche / PR</div>
+        </div>
+      </div></div>
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-2">
+        <h3 class="card-title text-base">Règles de la famille</h3>
+        <ul class="text-sm space-y-1.5 text-base-content/75 list-disc pl-4">
+          <li><b>Grille</b> 24 × 24, zone de sécurité 1,5 px, aire visuelle cible 20 × 20.</li>
+          <li><b>Trait</b> 1,75 px à 24 px ; 1,5 px à 20 px ; jamais mis à l'échelle sans compensation (<code>vector-effect</code> proscrit, on redessine).</li>
+          <li><b>Rayons</b> extérieurs 3, intérieurs 1,5. Terminaisons et jointures rondes.</li>
+          <li><b>Outline par défaut</b>. Le plein est réservé aux <em>états</em> : pastille record, carré stop, nœud actif. Un plein = « ça se produit maintenant ».</li>
+          <li><b>Métaphores stables</b> : un concept = une forme, jamais réutilisée ailleurs (le disque plein n'appartient qu'à l'enregistrement).</li>
+          <li><b>Couleur</b> par <code>currentColor</code> exclusivement ; aucune couleur en dur dans le fichier, sauf les 3 rayons de L5.</li>
+          <li><b>Accessibilité</b> : icône décorative → <code>aria-hidden="true"</code> ; icône seule porteuse de sens → <code>role="img"</code> + <code>&lt;title&gt;</code>.</li>
+        </ul>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- STRATEGIE SVG -->
+  <section class="anchor" id="svg">
+    <h2 class="text-2xl font-bold mb-1">SVG, sprite : ce qui est pertinent ici (et ce qui ne l'est pas)</h2>
+    <p class="text-base-content/60 mb-4 max-w-3xl">Attention au raisonnement par habitude : le sprite <code>&lt;symbol&gt;</code> a été popularisé pour <strong>économiser des requêtes HTTP et profiter du cache</strong>. Spyglass est une application Electron chargée depuis le disque : <strong>cet argument-là ne vaut rien ici</strong>. Le vrai critère devient le poids du DOM et le coût de maintenance.</p>
+
+    <div class="overflow-x-auto rounded-box border border-base-content/10 bg-base-100 mb-4">
+      <table class="table table-sm">
+        <thead><tr><th>Cas d'usage</th><th>Options</th><th>Décision</th><th>Pourquoi <em>dans ce produit</em></th></tr></thead>
+        <tbody>
+          <tr>
+            <th class="whitespace-nowrap">Logo</th>
+            <td>inline · fichier · sprite</td>
+            <td><span class="badge badge-success badge-sm">SVG inline, un composant</span></td>
+            <td>Il n'y en a qu'un, il doit être animable (pupille qui pulse en enregistrement) et thémable par <code>currentColor</code>. Le mettre dans un sprite empêcherait l'animation par CSS de ses parties internes.</td>
+          </tr>
+          <tr>
+            <th class="whitespace-nowrap">Jeu d'icônes UI</th>
+            <td>composants inline · sprite <code>&lt;use&gt;</code> · icon font · PNG</td>
+            <td><span class="badge badge-success badge-sm">Sprite <code>&lt;symbol&gt;</code> injecté une fois</span></td>
+            <td><strong>C'est le chat qui décide.</strong> Une session de 50 étapes affiche 150 à 400 messages, chacun portant 1 à 3 icônes : en inline, c'est jusqu'à 1 200 nœuds SVG dupliqués dans le DOM du renderer. Avec <code>&lt;use&gt;</code>, un nœud par instance et une seule définition. Icon font : exclue (accessibilité, rendu flou, pas de bi-chromie).</td>
+          </tr>
+          <tr>
+            <th class="whitespace-nowrap">Illustrations, états vides</th>
+            <td>SVG · raster</td>
+            <td><span class="badge badge-info badge-sm">SVG optimisé, &lt; 8 Ko chacun</span></td>
+            <td>3 à 5 visuels au total (aucune session, réseau coupé, scénario obsolète). Ils doivent suivre les deux thèmes : le raster imposerait deux fichiers par illustration.</td>
+          </tr>
+          <tr>
+            <th class="whitespace-nowrap">Icône d'application</th>
+            <td>SVG · ICO/ICNS/PNG</td>
+            <td><span class="badge badge-warning badge-sm">Raster généré depuis le SVG maître</span></td>
+            <td>Windows et macOS exigent du raster multi-tailles. Le SVG reste la source unique, les 12 déclinaisons sont générées au build, jamais dessinées à la main.</td>
+          </tr>
+          <tr>
+            <th class="whitespace-nowrap">Overlay d'enregistrement</th>
+            <td>SVG injecté dans la page · rendu par la coquille</td>
+            <td><span class="badge badge-error badge-sm">Jamais dans la page cible</span></td>
+            <td>La sonde doit rester invisible (6.5). Le cadre et la pastille REC sont dessinés par le renderer Electron autour de la <code>WebContentsView</code>, pas dans le DOM observé.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-3">
+        <h3 class="card-title text-base">Chaîne d'assets proposée</h3>
+        <pre class="mermaid text-xs">
+flowchart LR
+  A["SVG maître<br/>icons/*.svg"] --> B["SVGO<br/>nettoyage, currentColor forcé"]
+  B --> C["svg-sprite<br/>sprite.svg (symbol)"]
+  B --> D["png/ico/icns<br/>icône applicative"]
+  C --> E["injection unique<br/>dans index.html"]
+  E --> F["&lt;Icon name='record'/&gt;<br/>= &lt;svg&gt;&lt;use href='#ic-record'/&gt;"]
+  G["logo.svg"] --> H["composant Logo inline<br/>animable, thémable"]
+  B --> I["docs / README / site vitrine"]
+        </pre>
+        <p class="text-xs text-base-content/60">Une seule source, trois sorties. Aucun SVG n'est jamais édité à deux endroits - c'est la seule règle qui tienne à 18 mois.</p>
+      </div></div>
+
+      <div class="card card-border bg-base-100"><div class="card-body p-4 gap-3">
+        <h3 class="card-title text-base">Contrat d'implémentation</h3>
+        <div class="mockup-code text-[11px]">
+<pre data-prefix="1"><code>// sprite.svg, injecté une fois au boot du renderer</code></pre>
+<pre data-prefix="2"><code>&lt;symbol id="ic-record" viewBox="0 0 24 24" fill="none"</code></pre>
+<pre data-prefix="3"><code>        stroke="currentColor" stroke-width="1.75"&gt;…&lt;/symbol&gt;</code></pre>
+<pre data-prefix="4"><code></code></pre>
+<pre data-prefix="5"><code>// composant unique, 12 lignes, zéro dépendance</code></pre>
+<pre data-prefix="6"><code>&lt;svg class="ico" aria-hidden="true"&gt;</code></pre>
+<pre data-prefix="7"><code>  &lt;use href="#ic-record" /&gt;</code></pre>
+<pre data-prefix="8"><code>&lt;/svg&gt;</code></pre>
+<pre data-prefix="9"><code></code></pre>
+<pre data-prefix="10"><code>// porteuse de sens : titre obligatoire</code></pre>
+<pre data-prefix="11"><code>&lt;svg role="img" class="ico"&gt;&lt;title&gt;Enregistrement en cours&lt;/title&gt;</code></pre>
+<pre data-prefix="12"><code>  &lt;use href="#ic-record" /&gt;&lt;/svg&gt;</code></pre>
+        </div>
+        <ul class="text-xs text-base-content/70 list-disc pl-4 space-y-1">
+          <li><code>.ico{width:1em;height:1em;color:inherit}</code> - l'icône suit la taille et la couleur du texte, aucune classe de taille à maintenir.</li>
+          <li><strong>Piège connu</strong> : <code>&lt;use&gt;</code> ne traverse pas le Shadow DOM et ignore les styles descendants non hérités. On ne stylise donc <em>que</em> par propriétés héritables : <code>color</code>, <code>stroke</code>, <code>fill</code> via <code>currentColor</code>.</li>
+          <li>Variables CSS à l'intérieur du symbole pour la bi-chromie : <code>fill="var(--ico-accent, currentColor)"</code>.</li>
+          <li>Budget : sprite complet &lt; 12 Ko non compressé pour 16 icônes. Au-delà de 40 icônes, découper en deux sprites (cœur / rare) chargés à la demande.</li>
+          <li><strong>Cette page en est la démonstration</strong> : ses 10 marques et 16 icônes sont déclarées une fois et instanciées ~60 fois via <code>&lt;use&gt;</code>.</li>
+        </ul>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ARBITRAGE -->
+  <section class="anchor" id="arbitrage">
+    <div class="rounded-box border border-primary/30 bg-base-100 p-5 lg:p-7">
+      <h2 class="text-2xl font-bold mb-1">Arbitrage</h2>
+      <p class="text-base-content/60 mb-5 max-w-3xl">Cinq questions. Cochez, puis <strong>Valider cette réponse</strong> sur chaque bloc (ou « Tout envoyer » en bas). Vos réponses sont mises en file dans le panneau de conversation ; rien ne part tant que vous n'avez pas cliqué sur <em>Send to Agent</em>.</p>
+
+      <div class="grid gap-4 lg:grid-cols-2">
+
+        <form id="q-direction" data-lavish-question="direction" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=new FormData(event.currentTarget).get('direction'); if(!v)return; window.lavish.queuePrompt('Direction graphique retenue : '+v+'. Décline la maquette cible sur cette direction.', {tag:'choix', text:'Direction : '+v, element:event.currentTarget, queueKey:'direction', data:{question:'direction', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">1 · Direction graphique du produit</h3>
+            <div class="grid sm:grid-cols-2 gap-1 text-sm">
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm radio-primary" name="direction" value="D1 Nocturne Optique" checked><span>D1 Nocturne Optique <span class="badge badge-xs badge-primary">reco</span></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D2 Phosphore"><span>D2 Phosphore</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D3 Encre & Papier"><span>D3 Encre &amp; Papier</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D4 Laiton & Ambre"><span>D4 Laiton &amp; Ambre</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D5 Prisme"><span>D5 Prisme</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D6 Blueprint"><span>D6 Blueprint</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D7 Synthwave"><span>D7 Synthwave</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D8 Swiss Ops"><span>D8 Swiss Ops</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D9 Aurora"><span>D9 Aurora</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="direction" value="D10 HUD Cinéma"><span>D10 HUD Cinéma</span></label>
+            </div>
+            <div class="card-actions justify-end items-center gap-2 mt-1"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Valider cette réponse</button></div>
+          </div>
+        </form>
+
+        <form id="q-palette" data-lavish-question="palette" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=new FormData(event.currentTarget).get('palette'); if(!v)return; window.lavish.queuePrompt('Palette retenue : '+v+'. Produis le fichier de tokens CSS correspondant, thèmes sombre et clair.', {tag:'choix', text:'Palette : '+v, element:event.currentTarget, queueKey:'palette', data:{question:'palette', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">2 · Palette et régime lumineux</h3>
+            <div class="grid gap-1 text-sm">
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm radio-primary" name="palette" value="P1 cyan/magenta, sombre + thème clair jumeau" checked><span>P1 cyan + magenta, sombre <em>et</em> clair jumeau <span class="badge badge-xs badge-primary">reco</span></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="palette" value="P9 Aurora, néon doux"><span>P9 Aurora - néon doux, vert/violet</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="palette" value="P10 HUD, cyan instrument + ambre"><span>P10 HUD - cyan instrument + ambre</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="palette" value="P4 ambre chaud"><span>P4 Ambre chaud - le seul territoire chaleureux</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="palette" value="P8 neutre + rouge signal, sans néon"><span>P8 Neutre + rouge signal - <em>zéro néon</em></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="palette" value="P3 encre, sobre editorial"><span>P3 Encre - sobre, éditorial</span></label>
+            </div>
+            <div class="card-actions justify-end items-center gap-2 mt-1"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Valider cette réponse</button></div>
+          </div>
+        </form>
+
+        <form id="q-logo" data-lavish-question="logo" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=new FormData(event.currentTarget).get('logo'); if(!v)return; window.lavish.queuePrompt('Identité retenue : '+v+'. Produis les fichiers SVG finaux (marque seule, lockup horizontal, lockup empilé, favicon 16 px) et les déclinaisons raster de l\'icône applicative.', {tag:'choix', text:'Logo : '+v, element:event.currentTarget, queueKey:'logo', data:{question:'logo', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">3 · Identité visuelle</h3>
+            <div class="grid sm:grid-cols-2 gap-1 text-sm">
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm radio-primary" name="logo" value="L1 L'Iris" checked><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-1"/></svg> L1 L'Iris <span class="badge badge-xs badge-primary">reco</span></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L2 La Longue-vue"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-2"/></svg> L2 La Longue-vue</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L3 Le S-faisceau"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-3"/></svg> L3 Le S-faisceau</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L4 L'Œil-Record"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-4"/></svg> L4 L'Œil-Record</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L5 Le Prisme"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-5"/></svg> L5 Le Prisme</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L6 Le Diaphragme"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-6"/></svg> L6 Le Diaphragme</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L7 Le Parcours"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-7"/></svg> L7 Le Parcours</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L8 Le Viseur-Curseur"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-8"/></svg> L8 Le Viseur-Curseur</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L9 Le Verre gravé"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-9"/></svg> L9 Le Verre gravé</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="logo" value="L10 L'Oculaire vocal"><span><svg width="16" height="16" class="inline align-middle"><use href="#mk-10"/></svg> L10 L'Oculaire vocal</span></label>
+            </div>
+            <div class="card-actions justify-end items-center gap-2 mt-1"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Valider cette réponse</button></div>
+          </div>
+        </form>
+
+        <form id="q-icones" data-lavish-question="icones" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=new FormData(event.currentTarget).get('icones'); if(!v)return; window.lavish.queuePrompt('Style d\'iconographie retenu : '+v, {tag:'choix', text:'Icônes : '+v, element:event.currentTarget, queueKey:'icones', data:{question:'icones', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">4 · Style d'iconographie</h3>
+            <div class="grid gap-1 text-sm">
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm radio-primary" name="icones" value="Jeu maison outline 1.75, plein réservé aux états" checked><span>Jeu maison, outline 1,75 px, plein réservé aux états <span class="badge badge-xs badge-primary">reco</span></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="icones" value="Base Lucide + 6 icônes maison pour les concepts propres"><span>Base Lucide + 6 icônes maison (iframe, shadow DOM, masque, dégradé, patch, PR)</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="icones" value="Duotone, accent sur la partie active"><span>Duotone - deux teintes, accent sur la partie active</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="icones" value="Icônes pleines uniquement, plus lisibles à petite taille"><span>Pleines uniquement - plus lisibles à 16 px, moins fines</span></label>
+            </div>
+            <div class="card-actions justify-end items-center gap-2 mt-1"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Valider cette réponse</button></div>
+          </div>
+        </form>
+
+        <form id="q-svg" data-lavish-question="svg" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=new FormData(event.currentTarget).get('svg'); if(!v)return; window.lavish.queuePrompt('Stratégie d\'assets vectoriels retenue : '+v, {tag:'choix', text:'Assets SVG : '+v, element:event.currentTarget, queueKey:'svg', data:{question:'svg', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">5 · Stratégie d'assets vectoriels</h3>
+            <div class="grid gap-1 text-sm">
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm radio-primary" name="svg" value="Sprite <symbol>/<use> pour les icônes + logo inline animable" checked><span>Sprite <code>&lt;symbol&gt;</code>/<code>&lt;use&gt;</code> pour les icônes + logo inline animable <span class="badge badge-xs badge-primary">reco</span></span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="svg" value="Tout inline via composants générés au build (SVGR / unplugin-icons)"><span>Tout inline, composants générés au build (SVGR / unplugin-icons)</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="svg" value="Librairie d'icônes tierce importée telle quelle"><span>Librairie tierce importée telle quelle, zéro asset maison</span></label>
+              <label class="flex gap-2 items-center cursor-pointer"><input type="radio" class="radio radio-sm" name="svg" value="Décider plus tard, au lot 2"><span>Décider plus tard, au lot 2</span></label>
+            </div>
+            <div class="card-actions justify-end items-center gap-2 mt-1"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Valider cette réponse</button></div>
+          </div>
+        </form>
+
+        <form id="q-libre" data-lavish-question="libre" class="card card-border bg-base-200"
+          onsubmit="event.preventDefault(); const v=(new FormData(event.currentTarget).get('libre')||'').toString().trim(); if(!v)return; window.lavish.queuePrompt('Remarques de design : '+v, {tag:'note', text:v, element:event.currentTarget, queueKey:'libre', data:{question:'libre', answer:v}}); event.currentTarget.querySelector('.ok').classList.remove('hidden');">
+          <div class="card-body p-4 gap-2">
+            <h3 class="card-title text-base">6 · Ce que je veux changer, mélanger ou approfondir</h3>
+            <textarea name="libre" class="textarea textarea-bordered w-full min-h-24 text-sm" placeholder="Ex. : garder D1 mais avec l'ambre de D4 en accent secondaire ; explorer une variante de L7 sans cercle ; me montrer la landing page en D5..."></textarea>
+            <div class="card-actions justify-end items-center gap-2"><span class="ok hidden badge badge-success badge-sm">en file</span><button class="btn btn-sm btn-primary" type="submit">Ajouter à la file</button></div>
+          </div>
+        </form>
+      </div>
+
+      <div class="divider"></div>
+      <div class="flex flex-wrap gap-3 items-center justify-between">
+        <p class="text-sm text-base-content/60 max-w-xl">Un seul clic pour tout valider d'un coup, puis <em>Send to Agent</em> dans le panneau de conversation.</p>
+        <div class="flex gap-2">
+          <button class="btn btn-outline btn-sm" data-lavish-action onclick="document.querySelectorAll('form[data-lavish-question]').forEach(f=&gt;f.requestSubmit())">Tout mettre en file</button>
+          <button class="btn btn-primary" data-lavish-action onclick="submitAll()">Valider l'arbitrage complet et envoyer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer footer-center p-6 text-base-content/40 text-xs">
+    <p>Spyglass · moodboard de cadrage · généré à partir de PRD.md v1.0 · les valeurs de contraste sont calculées, pas estimées</p>
+  </footer>
+</main>
+
+<script>
+  function submitAll(){
+    const get = (id, name) => { const f=document.getElementById(id); const v=new FormData(f).get(name); return v? v.toString().trim(): ''; };
+    const dir=get('q-direction','direction'), pal=get('q-palette','palette'), logo=get('q-logo','logo'),
+          ico=get('q-icones','icones'), svg=get('q-svg','svg'), libre=get('q-libre','libre');
+    const msg = ['Arbitrage design Spyglass :',
+      '- Direction graphique : ' + dir,
+      '- Palette : ' + pal,
+      '- Identité : ' + logo,
+      '- Iconographie : ' + ico,
+      '- Assets vectoriels : ' + svg,
+      libre ? '- Remarques : ' + libre : '- Remarques : aucune',
+      '',
+      'Produis maintenant la maquette cible : écrans signature (enregistrement, raffinement, rejeu) dans cette direction, le fichier de tokens CSS sombre + clair, et les SVG finaux.'].join('\n');
+    window.lavish.queuePrompt(msg, { tag:'arbitrage', text:'Arbitrage complet', queueKey:'arbitrage-complet',
+      data:{ direction:dir, palette:pal, logo:logo, icones:ico, svg:svg, libre:libre } });
+    if (window.lavish.sendQueuedPrompts) window.lavish.sendQueuedPrompts();
+  }
+</script>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs";
+  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const paint = document.createElement("canvas").getContext("2d");
+  function toRgba(color){ paint.clearRect(0,0,1,1); paint.fillStyle="#000"; paint.fillStyle=color; paint.fillRect(0,0,1,1); return paint.getImageData(0,0,1,1).data; }
+  function compositeRgba(f,b){ const fa=f[3]/255, ba=b[3]/255, a=fa+ba*(1-fa); if(a===0) return [0,0,0,0];
+    return [(f[0]*fa+b[0]*ba*(1-fa))/a,(f[1]*fa+b[1]*ba*(1-fa))/a,(f[2]*fa+b[2]*ba*(1-fa))/a,a*255]; }
+  function pageIsDark(){ const root=document.documentElement; const rb=toRgba(getComputedStyle(root).backgroundColor);
+    const bb=document.body?toRgba(getComputedStyle(document.body).backgroundColor):[0,0,0,0];
+    const [r,g,b,a]=compositeRgba(bb,rb); if(a>0){ return (0.2126*r+0.7152*g+0.0722*b)/255 < 0.5; }
+    const cs=getComputedStyle(root).colorScheme; if(cs.includes("dark")&&!cs.includes("light")) return true;
+    if(cs.includes("light")&&!cs.includes("dark")) return false; return darkQuery.matches; }
+  const diagrams=[...document.querySelectorAll(".mermaid")].map(el=>({el, src: el.innerHTML}));
+  let applied, rendering=false, queued=false;
+  function queueRender(){ queued=true; if(rendering) return; void render(); }
+  async function render(){ rendering=true; try{ while(queued){ queued=false; const theme=pageIsDark()?"dark":"default";
+    if(theme===applied) continue; mermaid.initialize({startOnLoad:false, theme, securityLevel:"strict"});
+    for(const {el,src} of diagrams){ el.removeAttribute("data-processed"); el.innerHTML=src; }
+    try{ await mermaid.run({nodes: diagrams.map(d=>d.el)}); }catch(e){ console.error("Mermaid diagram render failed:", e); return; }
+    applied=theme; } } finally { rendering=false; if(queued) queueRender(); } }
+  if(document.readyState==="complete") queueRender(); else window.addEventListener("load", queueRender, {once:true});
+  const themeObserver=new MutationObserver(queueRender);
+  for(const el of [document.documentElement, document.body]){ if(!el) continue;
+    themeObserver.observe(el,{attributes:true, attributeFilter:["data-theme","class","style"]}); }
+  document.addEventListener("change", queueRender, true);
+  document.addEventListener("transitionend", ({propertyName})=>{ if(propertyName==="background-color") queueRender(); }, true);
+  darkQuery.addEventListener("change", queueRender);
+</script>
+</body>
+</html>

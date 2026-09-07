@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="luxury">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spyglass - Arbitrages PRD, tour 2</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/daisyui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daisyui@5.5.19/themes.css">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.2.4/dist/index.global.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :where(.grid, .flex) > * { min-width: 0; }
+  :where(p, h1, h2, h3, h4, li, dd, td, th, .badge, .label) { overflow-wrap: anywhere; }
+  .quote { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; line-height: 1.45; }
+  .opt { display:block; border:1px solid var(--color-base-300); border-radius:.6rem; padding:.75rem .9rem; margin-bottom:.5rem; cursor:pointer; transition:.15s; }
+  .opt:hover { border-color: var(--color-primary); }
+  .opt:has(input:checked) { border-color: var(--color-primary); background: color-mix(in oklab, var(--color-primary) 12%, transparent); }
+  .done { border-left: 3px solid var(--color-success); }
+  .anchor { scroll-margin-top: 1rem; }
+</style>
+</head>
+<body class="bg-base-100 text-base-content">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+
+  <header class="mb-10">
+    <div class="badge badge-primary badge-sm mb-3">PRD Spyglass · v1.2</div>
+    <h1 class="text-4xl sm:text-5xl font-bold tracking-tight mb-3">Arbitrages appliqués, et ce qui reste</h1>
+    <p class="text-base-content/70 max-w-3xl text-lg">
+      Vos 7 arbitrages et vos 10 résolutions sont dans le PRD. Les <strong>contrats techniques</strong> et le
+      <strong>lot −1</strong> sont écrits. Restent <strong>5 choix de stack</strong> et
+      <strong>2 questions produit</strong> que l'application de vos décisions a fait apparaître.
+    </p>
+  </header>
+
+  <!-- APPLIQUE -->
+  <section class="mb-12">
+    <h2 class="text-2xl font-semibold mb-4">1. Ce qui a été appliqué</h2>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div class="stat bg-base-200 rounded-box p-4"><div class="stat-title text-xs">PRD.md</div><div class="stat-value text-2xl">867</div><div class="stat-desc">+164 (contrats, §15-16)</div></div>
+      <div class="stat bg-base-200 rounded-box p-4"><div class="stat-title text-xs">Exigences</div><div class="stat-value text-2xl">69</div><div class="stat-desc">+1 (F-49 rétention audio)</div></div>
+      <div class="stat bg-base-200 rounded-box p-4"><div class="stat-title text-xs">Critères d'accept.</div><div class="stat-value text-2xl">17</div><div class="stat-desc">CA-01…CA-17, +2</div></div>
+      <div class="stat bg-base-200 rounded-box p-4"><div class="stat-title text-xs">Fichiers de contrat</div><div class="stat-value text-2xl">6</div><div class="stat-desc"><code>docs/contracts/</code></div></div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-300 mb-4">
+      <table class="table table-sm">
+        <thead><tr><th class="w-14">Arb.</th><th>Effet dans le PRD</th></tr></thead>
+        <tbody>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-2</span></td><td>F-22 réécrite : descripteur <strong>construit localement par la sonde</strong>, format compatible <code>ObserveResult</code>, aucun appel LLM. Pipeline §6.6 redessiné avec une <strong>ligne de séparation explicite</strong> marquant la fin du chemin critique local. <code>observe()</code> réservé au rattrapage. Nouveau point ouvert <strong>I-07</strong> et critère de sortie du lot 1 renforcé.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-1</span></td><td>F-19 devient une <strong>rétractation</strong> : <code>step.retracted</code> ajouté au journal et à l'énumération <code>kind</code>, champ <code>retracts</code> dans le schéma. Nouveau critère <strong>CA-16</strong>.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-3</span></td><td>§7 précédée d'une <strong>règle de précédence</strong> <code>interface &gt; env &gt; défaut</code>. <code>settings.json</code> + <code>safeStorage</code> dans F-29 et §9. Nouveau critère <strong>CA-17</strong>.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-4</span></td><td>F-21 et F-23 inversées : <strong>le gabarit devient l'état de base</strong>, la narration LLM l'enrichissement. §2.2 scindée en deux indicateurs (&lt; 200 ms / &lt; 2 s p95). Critère de sortie du lot 2 réécrit.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-5</span></td><td>Nouvelle exigence <strong>F-49</strong> (P0) + variable <code>AUDIO_RETENTION=none</code>. <code>audio/</code> devient conditionnel, <code>transcripts/</code> apparaît. Budget disque chiffré poste par poste en §6.11.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-7</span></td><td>En-tête et §12 : « <strong>16 décisions fermes, 1 conditionnelle (D-10)</strong> ». Lot 0 bis devient un <strong>jalon go / no-go bloquant</strong> avec plan B chiffré avant le lot 1.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">C-8</span></td><td>F-17 : <strong>un instantané par étape</strong>, plus un instantané de mutation si le DOM change sans action. Nouveau point ouvert <strong>I-08</strong>.</td></tr>
+          <tr class="done"><td><span class="badge badge-success badge-sm">I-a…j</span></td><td>Définition de l'« étape de capture » avec <code>stepIndex</code> · énumération <code>kind</code> exhaustive (29 valeurs) + <code>schemaVersion</code> · trois seuils chiffrés en §7 · hypothèse dépôt git et <code>--repo</code> dans F-64 · <code>patchCandidates[]</code> dans F-63 · cardinalité session/scénario en §6.14 · <code>PATCH_ASSISTED_APPLY</code> · v1 = lots −1 à 6 · indicateurs scindés contractuels / non contractuels · F-26 et F-28 passées en P0.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="card card-border bg-base-200"><div class="card-body">
+        <h3 class="card-title text-base">§15 · <code>docs/contracts/</code></h3>
+        <ul class="text-sm space-y-1 text-base-content/80 list-disc pl-5">
+          <li><code>raw-event.schema.json</code> — énumération <code>kind</code> figée, descripteur d'élément, descripteur rejouable, <code>capturedValue</code> en <code>oneOf</code> : une valeur est <strong>soit</strong> en clair <strong>soit</strong> masquée, jamais les deux</li>
+          <li><code>refined-step.schema.json</code> — <code>scope</code> en <code>const: "action.descriptor"</code> : F-62 devient inviolable au niveau du schéma</li>
+          <li><code>health.schema.json</code> · <code>ipc.md</code> (28 canaux) · <code>state-machine.md</code> (2 machines Mermaid, 5 invariants) · <code>prompts.md</code></li>
+        </ul>
+      </div></div>
+      <div class="card card-border bg-base-200"><div class="card-body">
+        <h3 class="card-title text-base">§16 · Socle technique (lot −1)</h3>
+        <p class="text-sm text-base-content/80">Stack, qualité, distribution, et surtout <strong>§16.4 reprise sur incident</strong>, exigée en §8 depuis le début mais jamais spécifiée :
+        écriture ligne à ligne avec vidage explicite, troncature de la ligne partielle à l'ouverture, détection au démarrage d'une session sans <code>record.stop</code>.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- QUESTIONS PRODUIT -->
+  <section class="mb-6">
+    <h2 class="text-2xl font-semibold mb-2">2. Deux questions produit apparues en écrivant les contrats</h2>
+    <p class="text-base-content/70 mb-6 max-w-3xl">Elles ne figuraient pas dans mon audit initial. Elles se sont révélées en rédigeant <code>prompts.md</code> et en instrumentant votre choix C-2.</p>
+  </section>
+
+  <article id="n1" class="anchor card card-border bg-base-200 mb-6">
+    <div class="card-body">
+      <div class="flex items-center gap-2 flex-wrap mb-1">
+        <span class="badge badge-warning">N-1</span><span class="badge badge-ghost badge-sm">conséquence de C-2</span>
+      </div>
+      <h3 class="card-title text-xl">Que faire si le descripteur local ne suffit pas à rejouer ?</h3>
+      <p class="text-sm text-base-content/70 my-2">Votre choix C-2 repose sur un pari mesurable : un descripteur construit par la sonde suffit à <code>act()</code>.
+      J'ai inscrit ce pari en <strong>I-07</strong> et l'ai transformé en critère de sortie du lot 1. Reste à décider ce qui se passe s'il est perdu.</p>
+      <form data-lavish-question="N-1" onsubmit="queueChoice(event,'N-1','Repli si le descripteur local est insuffisant')">
+        <label class="opt"><input type="radio" name="n1" value="A" class="radio radio-sm radio-primary mr-2" checked>
+          <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+          <strong>Repli pré-arbitré : enrichissement <code>observe()</code> groupé au raffinement.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Un seul appel par scénario, sur le profil <code>smart</code>, au lot 4. Le lot 1 n'est pas bloqué, l'enregistrement reste hors ligne,
+          et seul le raffinement gagne une dépendance réseau qu'il a déjà. Le repli est écrit dès maintenant dans I-07, donc personne ne le redécouvre en urgence.</span>
+        </label>
+        <label class="opt"><input type="radio" name="n1" value="B" class="radio radio-sm radio-primary mr-2">
+          <strong>Nouvel arbitrage au moment du constat.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Plus prudent, mais un blocage de lot 1 sans issue écrite est exactement le genre de pause qui coûte une semaine.</span>
+        </label>
+        <label class="opt"><input type="radio" name="n1" value="C" class="radio radio-sm radio-primary mr-2">
+          <strong>Repli sur <code>observe()</code> par événement, asynchrone (option B du tour 1).</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Conserve le descripteur au niveau de l'événement, au prix du hors-ligne et d'un troisième compteur de consommation.</span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm mt-2">Valider N-1</button>
+      </form>
+    </div>
+  </article>
+
+  <article id="n2" class="anchor card card-border bg-base-200 mb-6">
+    <div class="card-body">
+      <div class="flex items-center gap-2 flex-wrap mb-1">
+        <span class="badge badge-error">N-2</span><span class="badge badge-error badge-outline badge-sm">friction produit sérieuse</span>
+      </div>
+      <h3 class="card-title text-xl">F-44 va bloquer la finalisation sur presque toutes les étapes</h3>
+      <div class="bg-base-300/40 rounded p-3 my-3">
+        <p class="quote mb-2"><strong>F-44 :</strong> « La finalisation du scénario est <strong>bloquée</strong> tant qu'il subsiste une vérification <code>weak</code> non confirmée par l'utilisateur. »</p>
+        <p class="quote"><strong>ADR-0007 :</strong> une vérification est <code>strong</code> si elle est « déduite d'une intention explicite ou d'une assertion utilisateur », <code>weak</code> si elle vient d'une heuristique.</p>
+      </div>
+      <div role="alert" class="alert alert-warning alert-soft text-sm mb-3">
+        <span>En écrivant <code>prompts.md</code>, la conséquence devient nette : <strong>toute étape sans dictée corrélée produit une vérification <code>weak</code></strong>.
+        Le parcours cible §4 ne prévoit de la voix que sur quelques étapes. Sur une session de 50 étapes avec 5 dictées, l'utilisateur doit donc confirmer <strong>45 vérifications une par une</strong> avant de pouvoir générer son script.
+        Le mécanisme censé garantir la qualité devient le principal frein à l'adoption.</span>
+      </div>
+      <form data-lavish-question="N-2" onsubmit="queueChoice(event,'N-2','Ergonomie du blocage sur vérifications weak')">
+        <label class="opt"><input type="radio" name="n2" value="A" class="radio radio-sm radio-primary mr-2" checked>
+          <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+          <strong>Confirmation groupée, avec revue obligatoire du seul sous-ensemble douteux.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">L'agent classe les <code>weak</code> en deux paquets : <em>routinières</em> (l'URL a changé, un élément attendu est apparu) confirmables
+          <strong>en un geste après affichage de la liste</strong>, et <em>douteuses</em> (aucun changement observable, assertion ambiguë) confirmables uniquement une par une.
+          Le blocage F-44 est conservé intégralement : il porte désormais sur le geste, pas sur le nombre d'étapes.</span>
+        </label>
+        <label class="opt"><input type="radio" name="n2" value="B" class="radio radio-sm radio-primary mr-2">
+          <strong>Rendre <code>strong</code> une vérification déduite d'un changement d'état observable.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Une navigation vers une nouvelle URL ou l'apparition d'un élément après un clic sont des faits, pas des heuristiques.
+          Réduit mécaniquement le nombre de <code>weak</code>. <em>Coût :</em> assouplit ADR-0007, à documenter comme révision de décision.</span>
+        </label>
+        <label class="opt"><input type="radio" name="n2" value="C" class="radio radio-sm radio-primary mr-2">
+          <strong>Statu quo : confirmation une par une, sans exception.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Position la plus stricte sur la qualité. Assume que la friction est le prix de scénarios non complaisants.</span>
+        </label>
+        <label class="opt"><input type="radio" name="n2" value="D" class="radio radio-sm radio-primary mr-2">
+          <strong>A et B combinées.</strong>
+          <span class="block text-sm text-base-content/70 mt-1">Moins de <code>weak</code> produites <em>et</em> confirmation groupée pour celles qui restent.</span>
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm mt-2">Valider N-2</button>
+      </form>
+    </div>
+  </article>
+
+  <div class="divider"></div>
+
+  <!-- STACK -->
+  <section class="mb-6">
+    <h2 class="text-2xl font-semibold mb-2">3. Choix de stack (lot −1)</h2>
+    <p class="text-base-content/70 mb-6 max-w-3xl">§16 les porte en « <strong>à arbitrer</strong> » avec ma proposition. Ce sont les seules décisions qui manquent encore pour qu'un agent tiers puisse créer le premier fichier.</p>
+  </section>
+
+  <article id="s1" class="anchor card card-border bg-base-200 mb-6"><div class="card-body">
+    <div class="flex items-center gap-2 mb-1"><span class="badge badge-info">S-1</span></div>
+    <h3 class="card-title text-lg">Structure du dépôt</h3>
+    <form data-lavish-question="S-1" onsubmit="queueChoice(event,'S-1','Structure du dépôt')">
+      <label class="opt"><input type="radio" name="s1" value="A" class="radio radio-sm radio-primary mr-2" checked>
+        <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+        <strong>Monorepo <code>pnpm</code>, 5 paquets.</strong>
+        <span class="block text-sm text-base-content/70 mt-1"><code>app</code> (Electron) · <code>runner</code> (<code>@spyglass/runner</code>, publié) · <code>probe</code> (sonde injectée, contraintes de build propres) ·
+        <code>contracts</code> (types + schémas, dépendance de tous) · <code>stt</code> (sidecar).
+        ADR-0006 impose déjà une librairie publiable séparément du produit ; §8 exige que chaque couche soit testable isolément. La séparation est donc dictée par le cadrage, pas par le goût.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s1" value="B" class="radio radio-sm radio-primary mr-2">
+        <strong>Dépôt simple, un seul <code>package.json</code>, <code>runner</code> extrait plus tard.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Démarrage plus rapide. L'extraction au lot 6 se paiera en refactoring d'imports et en configuration de build.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s1" value="C" class="radio radio-sm radio-primary mr-2">
+        <strong>Monorepo, mais avec <code>npm workspaces</code> plutôt que <code>pnpm</code>.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Aucun outil supplémentaire à installer. <code>pnpm</code> gère nettement mieux les dépendances natives d'Electron et le hissage.</span>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm mt-2">Valider S-1</button>
+    </form>
+  </div></article>
+
+  <article id="s2" class="anchor card card-border bg-base-200 mb-6"><div class="card-body">
+    <div class="flex items-center gap-2 mb-1"><span class="badge badge-info">S-2</span></div>
+    <h3 class="card-title text-lg">Politique de version Node et Electron</h3>
+    <form data-lavish-question="S-2" onsubmit="queueChoice(event,'S-2','Politique de version Node et Electron')">
+      <label class="opt"><input type="radio" name="s2" value="A" class="radio radio-sm radio-primary mr-2" checked>
+        <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+        <strong>Version figée au lot −1 pour toute la v1, relevée uniquement pour un correctif de sécurité.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">La sonde DOM et la liaison CDP (I-01) sont sensibles à la version de Chromium. Une montée de version en cours de lot 1 rendrait un bug de capture indiscernable d'une régression amont.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s2" value="B" class="radio radio-sm radio-primary mr-2">
+        <strong>Suivi de la dernière version stable en continu.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Évite une dette de mise à jour à la fin de la v1, au prix d'une surface d'instabilité permanente sur le composant le plus fragile.</span>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm mt-2">Valider S-2</button>
+    </form>
+  </div></article>
+
+  <article id="s3" class="anchor card card-border bg-base-200 mb-6"><div class="card-body">
+    <div class="flex items-center gap-2 mb-1"><span class="badge badge-info">S-3</span></div>
+    <h3 class="card-title text-lg">Outillage de test et de qualité</h3>
+    <form data-lavish-question="S-3" onsubmit="queueChoice(event,'S-3','Outillage de test et de qualité')">
+      <label class="opt"><input type="radio" name="s3" value="A" class="radio radio-sm radio-primary mr-2" checked>
+        <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+        <strong><code>vitest</code> + <code>@playwright/test</code> sur l'application empaquetée + <code>ajv</code> + <strong>Biome</strong>.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Playwright est déjà présent sous Stagehand, donc aucune dépendance nouvelle pour l'e2e.
+        Biome remplace ESLint et Prettier par un seul outil et une seule configuration, ce qui compte sur un monorepo à 5 paquets.
+        Couverture bloquante uniquement sur <code>contracts</code> et sur le filtre d'expurgation, jamais de seuil global.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s3" value="B" class="radio radio-sm radio-primary mr-2">
+        <strong>Même chose, mais ESLint + Prettier.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Écosystème de règles bien plus riche, notamment pour les règles de sécurité Electron. Deux outils à configurer et à maintenir.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s3" value="C" class="radio radio-sm radio-primary mr-2">
+        <strong>Tests e2e sur l'application de développement plutôt qu'empaquetée.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Boucle bien plus rapide, mais ne teste ni le paquetage, ni le sidecar embarqué, ni la signature — soit exactement ce qui casse en distribution.</span>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm mt-2">Valider S-3</button>
+    </form>
+  </div></article>
+
+  <article id="s4" class="anchor card card-border bg-base-200 mb-6"><div class="card-body">
+    <div class="flex items-center gap-2 flex-wrap mb-1"><span class="badge badge-info">S-4</span><span class="badge badge-warning badge-sm">coût réel, délai d'obtention</span></div>
+    <h3 class="card-title text-lg">Signature et notarisation</h3>
+    <p class="text-sm text-base-content/70 my-2">Spyglass pilote un navigateur, injecte du script dans des pages tierces et écoute le micro.
+    Non signée, l'application sera bloquée par SmartScreen, Gatekeeper et la plupart des politiques de poste d'entreprise — c'est-à-dire par la cible même du produit (persona <em>Quality engineer</em>, <em>Automaticien</em>).</p>
+    <form data-lavish-question="S-4" onsubmit="queueChoice(event,'S-4','Signature et notarisation')">
+      <label class="opt"><input type="radio" name="s4" value="A" class="radio radio-sm radio-primary mr-2" checked>
+        <span class="badge badge-success badge-xs align-middle mr-1">reco</span>
+        <strong>Chaîne de signature câblée dès le lot −1, certificats à acquérir en parallèle.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">La CI produit des installeurs signés dès le premier jour. Les certificats (Apple Developer, certificat de signature de code Windows, OV ou EV) ont des délais d'obtention qui se comptent en semaines : les lancer maintenant évite de découvrir le blocage au lot 6.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s4" value="B" class="radio radio-sm radio-primary mr-2">
+        <strong>Installeurs non signés jusqu'au lot 6, signature en fin de parcours.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Aucun coût immédiat. Risque : la validation en conditions réelles d'entreprise n'a lieu qu'à la toute fin.</span>
+      </label>
+      <label class="opt"><input type="radio" name="s4" value="C" class="radio radio-sm radio-primary mr-2">
+        <strong>Usage interne uniquement en v1, signature hors périmètre.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Cohérent si la v1 ne sort pas de votre poste. À inscrire alors explicitement en non-objectif §2.3.</span>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm mt-2">Valider S-4</button>
+    </form>
+  </div></article>
+
+  <article id="s5" class="anchor card card-border bg-base-200 mb-6"><div class="card-body">
+    <div class="flex items-center gap-2 mb-1"><span class="badge badge-info">S-5</span></div>
+    <h3 class="card-title text-lg">Réglages fins à confirmer</h3>
+    <form data-lavish-question="S-5" onsubmit="queueTunings(event)">
+      <label class="opt"><input type="checkbox" name="tun" value="T-1" class="checkbox checkbox-sm checkbox-primary mr-2" checked>
+        <strong>Abaisser <code>LLM_FAST_TIMEOUT_MS</code> de 1500 à 1200.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Avec la fenêtre de lot de 500 ms, 1500 place le pire cas exactement <em>sur</em> la cible de 2 s p95 que vous venez de retenir en C-4. 1200 laisse une marge.</span>
+      </label>
+      <label class="opt"><input type="checkbox" name="tun" value="T-2" class="checkbox checkbox-sm checkbox-primary mr-2" checked>
+        <strong>Définir le protocole de mesure des objectifs non contractuels au lot 6.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Corpus de 10 sites publics, rejeu à J+1, taux mesurés. Sans corpus, les cibles de 95 % et 80 % resteront décoratives.</span>
+      </label>
+      <label class="opt"><input type="checkbox" name="tun" value="T-3" class="checkbox checkbox-sm checkbox-primary mr-2" checked>
+        <strong>Vérifier et documenter les licences de <code>whisper.cpp</code> et des poids de modèle au lot −1.</strong>
+        <span class="block text-sm text-base-content/70 mt-1">Ils sont redistribués dans l'installeur (ADR-0013). C'est une vérification, pas un arbitrage, mais elle doit être faite avant de construire le paquet.</span>
+      </label>
+      <label class="opt"><input type="checkbox" name="tun" value="T-4" class="checkbox checkbox-sm checkbox-primary mr-2" checked>
+        <strong>Réserver le périmètre npm <code>@spyglass</code>.</strong>
+        <span class="block text-sm text-base-content/70 mt-1"><code>@spyglass/runner</code> est une dépendance déclarée du script généré (ADR-0006). Le nom doit être disponible avant d'être écrit dans des scénarios livrés.</span>
+      </label>
+      <label class="opt"><input type="checkbox" name="tun" value="T-5" class="checkbox checkbox-sm checkbox-primary mr-2" checked>
+        <strong>Commiter l'état actuel (PRD v1.2, 17 ADR, 6 contrats) avant d'ouvrir le lot −1.</strong>
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm mt-2">Valider les cases cochées</button>
+    </form>
+  </div></article>
+
+  <div role="alert" class="alert alert-success alert-soft">
+    <span>Validez vos choix puis cliquez <strong>Send to Agent</strong>. Vous pouvez aussi annoter n'importe quel bloc, notamment le tableau du §1 si un effet appliqué ne correspond pas à votre intention.</span>
+  </div>
+
+</div>
+<script>
+function queueChoice(event, id, label) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const key = form.querySelector('input[type=radio]').name;
+  const answer = new FormData(form).get(key);
+  if (!answer) return;
+  const line = form.querySelector('input[value="' + answer + '"]').closest('label').innerText.trim().split('\n')[0];
+  window.lavish.queuePrompt(
+    'Arbitrage ' + id + ' (' + label + ') : option ' + answer + ' retenue. ' + line,
+    { tag: 'arbitrage', text: id + ' → option ' + answer, element: form, queueKey: id,
+      data: { question: id, answer: answer, label: label } });
+  const b = form.querySelector('button[type=submit]');
+  b.classList.remove('btn-primary'); b.classList.add('btn-success');
+  b.textContent = '✓ ' + id + ' : option ' + answer;
+}
+function queueTunings(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const all = [...form.querySelectorAll('input[name=tun]')];
+  const yes = all.filter(i => i.checked).map(i => i.value);
+  const no  = all.filter(i => !i.checked).map(i => i.value);
+  window.lavish.queuePrompt(
+    'Réglages fins - appliquer : ' + (yes.join(', ') || 'aucun') + '. Ne pas appliquer : ' + (no.join(', ') || 'aucun') + '.',
+    { tag: 'reglages', text: yes.length + ' à appliquer, ' + no.length + ' écartés',
+      element: form, queueKey: 'S-5', data: { accepted: yes, rejected: no } });
+  const b = form.querySelector('button[type=submit]');
+  b.classList.remove('btn-primary'); b.classList.add('btn-success');
+  b.textContent = '✓ ' + yes.length + ' à appliquer / ' + no.length + ' écartés';
+}
+</script>
+</body>
+</html>
