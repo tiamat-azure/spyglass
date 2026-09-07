@@ -7,6 +7,6 @@
     "noEmit": true,
     "exactOptionalPropertyTypes": false
   },
-  "include": ["src/renderer/**/*.ts", "src/preload/index.d.ts"],
+  "include": ["src/renderer/**/*.ts", "src/preload/index.d.ts", "src/shared/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

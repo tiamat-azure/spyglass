@@ -1,9 +1,24 @@
+import { cpSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 
+function copyGuestResources() {
+  return {
+    name: 'copy-guest-resources',
+    buildStart(): void {
+      mkdirSync(resolve('out/resources'), { recursive: true });
+      cpSync(resolve('resources'), resolve('out/resources'), { recursive: true });
+    },
+    closeBundle(): void {
+      mkdirSync(resolve('out/resources'), { recursive: true });
+      cpSync(resolve('resources'), resolve('out/resources'), { recursive: true });
+    }
+  };
+}
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin(), copyGuestResources()]
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

@@ -35,9 +35,14 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 
 | Canal | Direction | Charge utile |
 |---|---|---|
-| `spyglass:nav:goto` | invoke | `{ url: string }` |
+| `spyglass:nav:goto` | invoke | `{ url: string }` → `{ ok: true, url } \| { ok: false, error }` |
 | `spyglass:nav:back` / `:forward` / `:reload` | invoke | `{}` |
 | `spyglass:nav:state` | emit | `{ url, title, loading, canGoBack, canGoForward }` (F-02, F-05) |
+| `spyglass:nav:popup-redirected` | emit | `{ url, source: 'window.open' \| 'target=_blank' }` (F-04, Lot 0 log) |
+| `spyglass:layout:browserBounds` | send | `{ x, y, width, height }` DIP bounds of the left zone |
+| `spyglass:stagehand:observe` | invoke | `{ instruction?: string }` → `{ ok, instruction, observations[], error?, cdpUrl?, guestUrl? }` (Lot 0 proof) |
+| `spyglass:stagehand:cdp` | invoke | `{}` → `{ cdpUrl, port, guestUrl, targetId? }` |
+| `spyglass:stagehand:result` | emit | same payload as `spyglass:stagehand:observe` |
 
 ## Voix
 

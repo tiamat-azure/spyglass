@@ -22,7 +22,7 @@ linux:
   category: Development
   icon: build/icon.png
   synopsis: Spyglass — AI-assisted web scenario recorder (internal v1, unsigned)
-  description: Empty Electron shell for the Spyglass tooling socle (Lot -1).
+  description: Spyglass Lot 0 shell — two-zone WebContentsView with Stagehand CDP.
   maintainer: Spyglass contributors <tiamat.azure@gmail.com>
 mac:
   # identity: null disables signing. Replace with a Developer ID later.

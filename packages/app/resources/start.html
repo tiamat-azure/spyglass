@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Spyglass start</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #f7f9fc;
+        color: #0b1220;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      p,
+      a,
+      button {
+        font-size: 1rem;
+        line-height: 1.45;
+      }
+      a {
+        color: #0072a8;
+      }
+      button {
+        margin-right: 0.5rem;
+        padding: 0.4rem 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Spyglass start page</h1>
+      <p>
+        Type a URL in the address bar to browse. This page lives in the embedded
+        <code>WebContentsView</code>.
+      </p>
+      <p>
+        <a id="popup-link" href="./second.html" target="_blank">Open second page in a new tab</a>
+        (Lot 0 redirects it here).
+      </p>
+      <p>
+        <button type="button" id="push-state">Client-side navigate</button>
+        <button type="button" id="open-window">window.open second page</button>
+      </p>
+    </main>
+    <script>
+      document.getElementById("push-state").addEventListener("click", () => {
+        history.pushState({ lot: 0 }, "", "?view=history");
+        document.querySelector("h1").textContent = "Spyglass start page (history)";
+      });
+      document.getElementById("open-window").addEventListener("click", () => {
+        window.open("./second.html", "_blank");
+      });
+    </script>
+  </body>
+</html>
