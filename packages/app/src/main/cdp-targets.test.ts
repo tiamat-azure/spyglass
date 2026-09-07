@@ -38,6 +38,28 @@ describe('pickGuestTarget', () => {
     expect(pickGuestTarget(targets)?.id).toBe('start');
   });
 
+  it('does not skip a remote guest whose path contains /out/renderer/', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'file:///app/out/renderer/index.html',
+        title: 'Spyglass'
+      },
+      {
+        id: 'guest',
+        type: 'page',
+        url: 'https://docs.example.com/guide/out/renderer/index.html?q=1',
+        title: 'Docs'
+      }
+    ]);
+    expect(isChromeUiUrl('https://docs.example.com/guide/out/renderer/index.html?q=1')).toBe(false);
+    expect(pickGuestTarget(targets)?.id).toBe('guest');
+    expect(
+      pickGuestTarget(targets, 'https://docs.example.com/guide/out/renderer/index.html?q=1')?.id
+    ).toBe('guest');
+  });
+
   it('falls back to the first eligible chrome page with a loud warning when every page is chrome UI', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -196,16 +218,23 @@ describe('pickGuestTarget', () => {
 });
 
 describe('isChromeUiUrl', () => {
-  it('treats chrome-devtools and Vite client URLs as chrome UI', () => {
+  it('treats chrome-devtools and local Vite client URLs as chrome UI', () => {
     expect(isChromeUiUrl('chrome-devtools://devtools/bundled/inspector.html')).toBe(true);
     expect(isChromeUiUrl('devtools://devtools/bundled/inspector.html')).toBe(true);
-    expect(isChromeUiUrl('http://example.com/@vite/client')).toBe(true);
-    expect(isChromeUiUrl('http://example.com/__vite_ping')).toBe(true);
+    expect(isChromeUiUrl('http://localhost:3000/@vite/client')).toBe(true);
+    expect(isChromeUiUrl('http://127.0.0.1:3000/__vite_ping')).toBe(true);
   });
 
   it('does not treat the guest start page as chrome UI', () => {
     expect(isChromeUiUrl('file:///app/out/resources/start.html')).toBe(false);
     expect(isChromeUiUrl('https://example.com/')).toBe(false);
+  });
+
+  it('does not treat a remote guest path that looks like renderer or Vite as chrome UI', () => {
+    expect(isChromeUiUrl('https://docs.example.com/guide/out/renderer/index.html?q=1')).toBe(false);
+    expect(isChromeUiUrl('https://docs.example.com/src/renderer/index.html')).toBe(false);
+    expect(isChromeUiUrl('https://example.com/@vite/client')).toBe(false);
+    expect(isChromeUiUrl('https://example.com/__vite_ping')).toBe(false);
   });
 
   it('treats Vite preview and localhost renderer paths as chrome UI', () => {

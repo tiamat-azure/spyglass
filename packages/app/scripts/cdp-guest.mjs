@@ -25,15 +25,18 @@ export function isChromeUiUrl(url) {
   if (url.startsWith('chrome-extension:')) {
     return true;
   }
-  if (url.includes('__vite') || url.includes('@vite/client')) {
-    return true;
-  }
-  if (CHROME_UI_HINTS.some((hint) => url.includes(hint))) {
-    return true;
-  }
   try {
     const parsed = new URL(url);
     const loopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    const localChrome = parsed.protocol === 'file:' || loopback;
+    // Path hints and Vite-client substrings only on file: / loopback — a real guest
+    // may contain `/out/renderer/` or `@vite/client` on an arbitrary https origin.
+    if (localChrome && (url.includes('__vite') || url.includes('@vite/client'))) {
+      return true;
+    }
+    if (localChrome && CHROME_UI_HINTS.some((hint) => url.includes(hint))) {
+      return true;
+    }
     if (loopback && VITE_UI_PORTS.has(parsed.port)) {
       return true;
     }
