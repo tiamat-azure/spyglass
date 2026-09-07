@@ -26,7 +26,7 @@ mid-v1.
 | Schemas | **ajv** 2020-12 over `docs/contracts/examples` | `@spyglass/contracts` |
 | Dev build | **electron-vite 5** | `@spyglass/app` |
 | Distribution | **electron-builder 26** | `packages/app/electron-builder.yml` |
-| Stagehand | **@browserbasehq/stagehand 3.7.3** (LOCAL + CDP, no Browserbase) | `@spyglass/app` (devDependency, Lot 0 proof from source) |
+| Stagehand | **@browserbasehq/stagehand 3.7.3** (LOCAL + CDP, no Browserbase) | `@spyglass/app` **dependency** (packaged Observe) |
 
 ## npm scope
 
@@ -98,8 +98,13 @@ when any of these is true:
 above is set. `remote-allow-origins=*` is applied only together with the debug
 port.
 
-Lot 0 Observe is proven from a **source checkout** (`pnpm start` / `pnpm dev`),
-not from electron-builder artifacts.
+In-app Observe is bundled in the installer (`scripts/stagehand-observe.mjs` plus
+`@browserbasehq/stagehand`, `playwright-core`, and `zod`). A packaged build
+still needs CDP on:
+
+```bash
+SPYGLASS_CDP=1 /path/to/Spyglass
+```
 
 From a source checkout:
 

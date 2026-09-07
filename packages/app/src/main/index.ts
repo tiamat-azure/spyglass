@@ -271,7 +271,8 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const result = await runStagehandObserve({
       cdpUrl: cdpHttpUrl(cdpPort),
       guestUrl: snapshot.url,
-      instruction: payload.instruction
+      instruction: payload.instruction,
+      appPath: app.getAppPath()
     });
     const win = winRef.current;
     if (win !== undefined) {
@@ -366,7 +367,8 @@ void (async () => {
           const result = await runStagehandObserve({
             cdpUrl: cdpHttpUrl(cdpPort),
             guestUrl: snapshot.url,
-            instruction: process.env.SPYGLASS_OBSERVE_INSTRUCTION
+            instruction: process.env.SPYGLASS_OBSERVE_INSTRUCTION,
+            appPath: app.getAppPath()
           });
           emitToChrome(win, IPC.stagehandResult, result);
           await new Promise((resolve) => setTimeout(resolve, 600));

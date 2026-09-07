@@ -10,8 +10,10 @@ Remote debugging is **off** in electron-builder artifacts unless
 `pnpm dev`, e2e) enable it by default so this lot's Observe proof still works
 without extra flags. `SPYGLASS_CDP=0` forces it off.
 
-Lot 0 Observe is proven from a source checkout. Shipping Stagehand inside
-packaged installers is **not** in this lot (pending a later decision).
+In-app Observe is part of the packaged app: `scripts/stagehand-observe.mjs` is
+listed in `electron-builder.yml` (`files` + `extraResources` + `asarUnpack`)
+and `@browserbasehq/stagehand` / `playwright-core` / `zod` are production
+dependencies. Launch a packaged binary with `SPYGLASS_CDP=1` to use Observe.
 
 Guest navigation is deny-by-default (`will-navigate` / `will-frame-navigate`).
 `file:` popups/`loadURL` are refused when the current guest is http(s); start
@@ -36,8 +38,8 @@ Absolute paths in a checkout:
 - `docs/lot-0/screenshots/stagehand-observe.png`
 - `docs/lot-0/screenshots/stagehand-observe.json`
 
-Lot 0 screenshots above are **unchanged** by the CDP gate and
-navigation/bounds auto-fixes (no chrome layout change).
+Lot 0 screenshots above are **unchanged** by the CDP gate, packaged Observe
+bundle, and navigation/bounds auto-fixes (no chrome layout change).
 
 ## Suggested PR title
 
@@ -50,9 +52,8 @@ feat(lot-0): two-zone Electron shell, WebContentsView, Stagehand CDP observe
 Lot 0 (Socle) only. Electron shell with a 75/25 resizable split, a real
 `WebContentsView` for browsing, URL bar + nav controls, single-page popup
 redirect, and Stagehand attached over CDP to the **displayed** view.
-`observe` can be run from the side pane or `pnpm observe` in a source checkout.
-CDP is not left always-on in packaged installers (`SPYGLASS_CDP=1` / observe
-mode).
+`observe` can be run from the side pane or `pnpm observe`. Packaged Observe
+requires `SPYGLASS_CDP=1` (CDP is not left always-on in installers).
 
 **No Lot 0 bis / Lot 1+** (no EntraID confirmation, capture probe, Record/Stop,
 agent chat, voice, or refinement).
@@ -69,7 +70,7 @@ agent chat, voice, or refinement).
 
 ### How to verify observe
 
-1. `pnpm start` (unpackaged: CDP on by default)
+1. `pnpm start` (unpackaged: CDP on by default) **or** `SPYGLASS_CDP=1` on a packaged binary
 2. Navigate in the URL bar
 3. Click **Observe page**, or `pnpm observe`
 4. Results appear in the side pane / stdout JSON
