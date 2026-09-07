@@ -121,6 +121,14 @@ describe('isChromeUiUrl', () => {
     expect(isChromeUiUrl('file:///app/out/resources/start.html')).toBe(false);
     expect(isChromeUiUrl('https://example.com/')).toBe(false);
   });
+
+  it('treats Vite preview and localhost renderer paths as chrome UI', () => {
+    expect(isChromeUiUrl('http://localhost:4173/')).toBe(true);
+    expect(isChromeUiUrl('http://127.0.0.1:4173/index.html')).toBe(true);
+    expect(isChromeUiUrl('http://localhost:8080/out/renderer/index.html')).toBe(true);
+    expect(isChromeUiUrl('http://127.0.0.1:3000/src/renderer/main.ts')).toBe(true);
+    expect(isChromeUiUrl('http://localhost:3000/')).toBe(false);
+  });
 });
 
 describe('pageMatchesPickedGuest', () => {

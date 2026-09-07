@@ -57,9 +57,17 @@ export function isAppResourceFileUrl(input: string, resourcesDir: string): boole
   return isInsideDir(resourcesDir, path);
 }
 
+function isAboutBlankUrl(input: string): boolean {
+  return input === 'about:blank' || input.startsWith('about:blank');
+}
+
 function currentAllowsAppFileNavigation(currentUrl: string): boolean {
-  if (currentUrl.length === 0 || currentUrl === 'about:blank') {
+  if (currentUrl.length === 0) {
     return true;
+  }
+  // about:blank after http(s) must not reopen file:// guest resources.
+  if (isAboutBlankUrl(currentUrl)) {
+    return false;
   }
   return isFileUrl(currentUrl);
 }
@@ -67,13 +75,20 @@ function currentAllowsAppFileNavigation(currentUrl: string): boolean {
 /**
  * Deny-by-default guest navigation: http(s) always; file: only for app start-page
  * resources, and only when the current guest is not an http(s) page.
+ *
+ * Main-frame `about:blank` is denied when the current page is http(s) so it
+ * cannot trampoline into file:. Subframe blanks (iframes) stay allowed.
  */
 export function isAllowedInViewNavigation(
   currentUrl: string,
   nextUrl: string,
-  resourcesDir: string
+  resourcesDir: string,
+  isMainFrame = true
 ): boolean {
-  if (nextUrl === 'about:blank' || nextUrl.startsWith('about:blank')) {
+  if (isAboutBlankUrl(nextUrl)) {
+    if (isMainFrame && isHttpOrHttpsUrl(currentUrl)) {
+      return false;
+    }
     return true;
   }
   const next = parseUrl(nextUrl);
@@ -106,7 +121,7 @@ export function isAllowedPopupRedirect(
   nextUrl: string,
   resourcesDir: string
 ): boolean {
-  if (nextUrl === 'about:blank' || nextUrl.startsWith('about:blank')) {
+  if (isAboutBlankUrl(nextUrl)) {
     return false;
   }
   return isAllowedInViewNavigation(currentUrl, nextUrl, resourcesDir);

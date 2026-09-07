@@ -112,6 +112,27 @@ describe('isAllowedInViewNavigation', () => {
       isAllowedInViewNavigation('https://example.com/', 'https://user@evil.example/', resources)
     ).toBe(false);
   });
+
+  it('denies main-frame about:blank when the current guest is http(s), keeps subframe blanks', () => {
+    expect(isAllowedInViewNavigation('https://example.com/', 'about:blank', resources, true)).toBe(
+      false
+    );
+    expect(isAllowedInViewNavigation('https://example.com/', 'about:blank#', resources, true)).toBe(
+      false
+    );
+    expect(isAllowedInViewNavigation('https://example.com/', 'about:blank', resources, false)).toBe(
+      true
+    );
+    expect(
+      isAllowedInViewNavigation('file:///app/resources/start.html', 'about:blank', resources, true)
+    ).toBe(true);
+  });
+
+  it('does not allow file: guest resources after an about:blank trampoline', () => {
+    expect(
+      isAllowedInViewNavigation('about:blank', 'file:///app/resources/start.html', resources)
+    ).toBe(false);
+  });
 });
 
 describe('isAllowedPopupRedirect', () => {

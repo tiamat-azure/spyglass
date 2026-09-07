@@ -9,6 +9,8 @@ const CHROME_UI_HINTS = [
   '/out/renderer/index.html'
 ];
 
+const VITE_UI_PORTS = new Set(['4173', '5173', '5174', '5175']);
+
 /** Logged when Observe / CDP targeting falls back to a chrome-UI page. */
 export const GUEST_FALLBACK_CHROME_WARNING =
   '[spyglass] WARNING: No non-chrome guest CDP target matched. Observe may attach to privileged chrome UI (renderer / DevTools). Falling back to the first page target.';
@@ -31,10 +33,11 @@ export function isChromeUiUrl(url) {
   }
   try {
     const parsed = new URL(url);
-    if (
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-      (parsed.port === '5173' || parsed.port === '5174' || parsed.port === '5175')
-    ) {
+    const loopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (loopback && VITE_UI_PORTS.has(parsed.port)) {
+      return true;
+    }
+    if (loopback && parsed.pathname.includes('/renderer/')) {
       return true;
     }
   } catch {

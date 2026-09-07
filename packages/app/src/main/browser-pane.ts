@@ -3,11 +3,16 @@ import { dirname, join } from 'node:path';
 import { type BrowserWindow, type WebContents, WebContentsView } from 'electron';
 import type { BrowserBounds, NavState, PopupRedirectedPayload } from '../shared/ipc.ts';
 import { BROWSER_PARTITION } from '../shared/ipc.ts';
+import { isGuestRequestToCdpPort } from './cdp-loopback.ts';
 import { isAllowedInViewNavigation, isAllowedPopupRedirect } from './nav-url.ts';
 
 export type BrowserPaneHandlers = {
   onState: (state: NavState) => void;
   onPopupRedirected: (payload: PopupRedirectedPayload) => void;
+};
+
+export type BrowserPaneOptions = {
+  cdpPort?: number;
 };
 
 function guestStartPagePath(): string {
@@ -27,7 +32,7 @@ export class BrowserPane {
   readonly view: WebContentsView;
   private readonly handlers: BrowserPaneHandlers;
 
-  constructor(win: BrowserWindow, handlers: BrowserPaneHandlers) {
+  constructor(win: BrowserWindow, handlers: BrowserPaneHandlers, options?: BrowserPaneOptions) {
     this.handlers = handlers;
     this.view = new WebContentsView({
       webPreferences: {
@@ -41,6 +46,7 @@ export class BrowserPane {
     win.contentView.addChildView(this.view);
     this.attachNavigation();
     this.attachSchemeGuard();
+    this.attachCdpPortBlock(options?.cdpPort ?? 0);
     // Replaces the C1 deny-all window.open default with F-04 in-view redirect.
     this.attachPopupRedirect();
   }
@@ -121,21 +127,48 @@ export class BrowserPane {
 
   private attachSchemeGuard(): void {
     const contents = this.webContents;
-    const denyIfDisallowed = (event: { url: string; preventDefault: () => void }): void => {
-      if (!isAllowedInViewNavigation(contents.getURL(), event.url, this.guestResourcesDir())) {
+    const denyIfDisallowed = (
+      event: { url: string; preventDefault: () => void },
+      isMainFrame: boolean
+    ): void => {
+      if (
+        !isAllowedInViewNavigation(
+          contents.getURL(),
+          event.url,
+          this.guestResourcesDir(),
+          isMainFrame
+        )
+      ) {
         event.preventDefault();
       }
     };
     contents.on('will-navigate', (event) => {
-      denyIfDisallowed(event);
+      denyIfDisallowed(event, true);
     });
     contents.on('will-frame-navigate', (event) => {
-      denyIfDisallowed(event);
+      denyIfDisallowed(event, event.isMainFrame);
     });
     // HTTP(S) 3xx redirects skip will-navigate; still enforce the scheme guard.
     contents.on('will-redirect', (event) => {
-      denyIfDisallowed(event);
+      denyIfDisallowed(event, event.isMainFrame);
     });
+  }
+
+  private attachCdpPortBlock(cdpPort: number): void {
+    if (cdpPort <= 0) {
+      return;
+    }
+    const ses = this.webContents.session;
+    ses.webRequest.onBeforeRequest(
+      { urls: ['*://127.0.0.1:*/*', '*://localhost:*/*'] },
+      (details, callback) => {
+        if (isGuestRequestToCdpPort(details.url, cdpPort)) {
+          callback({ cancel: true });
+          return;
+        }
+        callback({});
+      }
+    );
   }
 
   private attachPopupRedirect(): void {

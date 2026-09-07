@@ -369,18 +369,22 @@ void (async () => {
   const createShell = (): void => {
     const win = createWindow();
     winRef.current = win;
-    const pane = new BrowserPane(win, {
-      onState: (state: NavState) => {
-        emitToChrome(win, IPC.navState, state);
-        void persistCdpInfo(cdpPort, state.url, state.title).catch((error: unknown) => {
-          console.error('Failed to persist CDP info:', error);
-        });
+    const pane = new BrowserPane(
+      win,
+      {
+        onState: (state: NavState) => {
+          emitToChrome(win, IPC.navState, state);
+          void persistCdpInfo(cdpPort, state.url, state.title).catch((error: unknown) => {
+            console.error('Failed to persist CDP info:', error);
+          });
+        },
+        onPopupRedirected: (payload: PopupRedirectedPayload) => {
+          console.info('[spyglass] nav.popup-redirected', payload);
+          emitToChrome(win, IPC.navPopupRedirected, payload);
+        }
       },
-      onPopupRedirected: (payload: PopupRedirectedPayload) => {
-        console.info('[spyglass] nav.popup-redirected', payload);
-        emitToChrome(win, IPC.navPopupRedirected, payload);
-      }
-    });
+      { cdpPort }
+    );
     activePane = pane;
 
     const applyFallbackBounds = (): void => {
