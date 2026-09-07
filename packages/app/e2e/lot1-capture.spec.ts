@@ -108,6 +108,7 @@ test.describe('Lot 1 capture', () => {
       await guest.locator('#step-3').blur();
       await guest.locator('#step-4').selectOption('alpha');
       await guest.locator('#step-5').check();
+      await guest.locator('#step-5').uncheck();
       await guest.locator('#step-6').click();
       await guest.evaluate(() => window.scrollBy(0, 260));
       await guest.locator('#step-8').fill('ok');
@@ -180,6 +181,21 @@ test.describe('Lot 1 capture', () => {
         )
       ).toBe(true);
       expect(events.some((event) => event.kind === 'step.retracted')).toBe(true);
+      const checks = events.filter((event) => event.kind === 'dom.check');
+      expect(
+        checks.some((event) => {
+          const value = event.value as { text?: string } | undefined;
+          const args = (event.action as { arguments?: string[] } | undefined)?.arguments;
+          return value?.text === 'true' || args?.includes('true');
+        })
+      ).toBe(true);
+      expect(
+        checks.some((event) => {
+          const value = event.value as { text?: string } | undefined;
+          const args = (event.action as { arguments?: string[] } | undefined)?.arguments;
+          return value?.text === 'false' || args?.includes('false');
+        })
+      ).toBe(true);
 
       if (shotDir !== undefined && shotDir.length > 0) {
         const interesting = events.filter((event) => {
@@ -209,12 +225,14 @@ test.describe('Lot 1 capture', () => {
 
       await chrome.locator('#reload').click();
       await expect(guest.locator('#step-1')).toBeVisible({ timeout: 15_000 });
+      await expect(guest.locator('#step-5')).not.toBeChecked();
 
       await chrome.locator('#replay-act').click();
       await expect(chrome.locator('#log')).toContainText(/act\(\) ok · llmCalls=0/i, {
         timeout: 90_000
       });
       await expect(chrome.locator('#log')).not.toContainText(/act\(\) failed/i);
+      await expect(guest.locator('#step-5')).not.toBeChecked();
 
       if (shotDir !== undefined && shotDir.length > 0) {
         await chrome.screenshot({ path: join(shotDir, 'act-replay-success.png') });

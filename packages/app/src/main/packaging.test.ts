@@ -37,6 +37,8 @@ describe('packaged Observe', () => {
     expect(act).toContain('selfHeal: false');
     expect(act).toContain('Lot 1 act() must not call an LLM');
     expect(act).toContain('stagehand.act(observeResult');
+    expect(act).toContain('setChecked');
+    expect(act).toContain('applySetChecked');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).toContain('pageMatchesPickedGuest');
     expect(matcher).toContain('pickStagehandPage');

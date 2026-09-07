@@ -6,6 +6,7 @@ import type {
 } from '@spyglass/contracts';
 import {
   buildReplayDescriptor,
+  checkedStateArgument,
   maskCapturedValue,
   PAGE_ID_MAIN,
   type ProbeElementDescriptor,
@@ -152,12 +153,10 @@ function actionArgs(wire: ProbeWireEvent, value: CapturedValue | undefined): str
   if (wire.kind === 'dom.select' && wire.selectedValue !== undefined) {
     return [wire.selectedValue];
   }
-  if (
-    wire.kind === 'dom.check' ||
-    wire.kind === 'dom.click' ||
-    wire.kind === 'dom.dblclick' ||
-    wire.kind === 'dom.submit'
-  ) {
+  if (wire.kind === 'dom.check') {
+    return [checkedStateArgument(wire.checked)];
+  }
+  if (wire.kind === 'dom.click' || wire.kind === 'dom.dblclick' || wire.kind === 'dom.submit') {
     // Stagehand click() treats arguments[0] as the mouse button.
     return undefined;
   }

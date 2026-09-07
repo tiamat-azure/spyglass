@@ -36,6 +36,7 @@ export type {
 } from './replay.ts';
 export {
   buildReplayDescriptor,
+  checkedStateArgument,
   hopSelector,
   pickSelectorStrategy,
   replayTypeForKind,

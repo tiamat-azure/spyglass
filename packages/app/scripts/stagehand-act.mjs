@@ -113,6 +113,58 @@ function readActions() {
   return parsed;
 }
 
+function isCheckReplayMethod(method) {
+  return method === 'setChecked' || method === 'check' || method === 'uncheck';
+}
+
+function desiredCheckedState(method, args) {
+  if (method === 'uncheck') {
+    return false;
+  }
+  if (method === 'check' && args.length === 0) {
+    return true;
+  }
+  const raw = args[0];
+  if (raw === 'false' || raw === '0') {
+    return false;
+  }
+  return true;
+}
+
+async function applySetChecked(page, selector, desired) {
+  const locator = page.deepLocator(selector);
+  const current = await locator.isChecked();
+  if (current === desired) {
+    return;
+  }
+  const hops = selector.includes('>>');
+  if (!hops && typeof page.evaluate === 'function') {
+    const applied = await page.evaluate(
+      (payload) => {
+        const el = document.querySelector(payload.sel);
+        if (!(el instanceof HTMLInputElement)) {
+          return false;
+        }
+        if (el.checked !== payload.want) {
+          el.checked = payload.want;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        return el.checked === payload.want;
+      },
+      { sel: selector, want: desired }
+    );
+    if (applied === true) {
+      return;
+    }
+  }
+  await locator.click();
+  const after = await locator.isChecked();
+  if (after !== desired) {
+    throw new Error(`setChecked(${String(desired)}) left checked=${String(after)}`);
+  }
+}
+
 async function main() {
   const info = await readCdpInfo();
   const cdpUrl = argValue('--cdp-url') ?? process.env.SPYGLASS_CDP_URL ?? info?.cdpUrl;
@@ -197,6 +249,17 @@ async function main() {
           : []
       };
       try {
+        if (isCheckReplayMethod(observeResult.method)) {
+          const desired = desiredCheckedState(observeResult.method, observeResult.arguments);
+          await applySetChecked(match, observeResult.selector, desired);
+          results.push({
+            selector: observeResult.selector,
+            method: observeResult.method,
+            success: true,
+            message: `setChecked ${String(desired)}`
+          });
+          continue;
+        }
         const acted = await stagehand.act(observeResult, { page: match });
         results.push({
           selector: observeResult.selector,

@@ -120,7 +120,7 @@ describe('@spyglass/probe', () => {
     expect(hopSelector(iframeTarget.framePath, picked.selector)).toBe(
       'iframe#lot1-frame >> [data-testid="step-9"]'
     );
-    expect(stagehandMethodFor('dom.check', 'check')).toBe('click');
+    expect(stagehandMethodFor('dom.check', 'check')).toBe('setChecked');
     expect(stagehandMethodFor('dom.dblclick', 'click')).toBe('doubleClick');
     const action = toObserveResult(
       {
@@ -171,6 +171,9 @@ describe('@spyglass/probe', () => {
     expect(source).not.toContain("addEventListener('wheel'");
     expect(source).toMatch(/el\.type !== ["']file["']/);
     expect(source).toContain('scrollAccumByTarget');
+    expect(source).toContain('isFileField');
+    expect(source).toContain('configurable: false');
+    expect(source).not.toContain('still attach listeners');
   });
 
   it('escapes shadow host ids in the snapshot script', () => {

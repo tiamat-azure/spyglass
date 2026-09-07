@@ -9,7 +9,9 @@ export type ProbeInjectConfig = {
  * Self-contained page-world probe. Stringified into the guest (and every iframe).
  * Passive: capture-phase listeners, never preventDefault / stopPropagation.
  * No guessable globals: install mark is a non-enumerable `Symbol.for` sentinel
- * (overwritten if a page spoofed the key). The auth nonce stays in the IIFE
+ * (overwritten if a spoofed configurable key exists). If the mark cannot be
+ * claimed, inject is skipped (fail-closed — no duplicate listeners). Once
+ * owned, the mark is `configurable: false`. The auth nonce stays in the IIFE
  * closure used only for `SPYGLASS:${nonce}:` console lines.
  * Must not close over module bindings — `Function.prototype.toString` is the
  * injectable source, so imported constants would be ReferenceErrors in the page.
@@ -18,34 +20,51 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   const authToken = config.nonce;
   const installKey = Symbol.for('spyglass.probe.v1');
   const installSentinel = 0x5c0be1;
+  const markIsOurs = (desc: PropertyDescriptor | undefined): boolean =>
+    desc !== undefined &&
+    desc.value === installSentinel &&
+    desc.enumerable === false &&
+    desc.writable === false;
+
   const existingMark = Object.getOwnPropertyDescriptor(window, installKey);
-  const alreadyOurs =
-    existingMark !== undefined &&
-    existingMark.value === installSentinel &&
-    existingMark.enumerable === false &&
-    existingMark.writable === false;
-  if (alreadyOurs) {
+  if (markIsOurs(existingMark)) {
+    if (existingMark?.configurable === true) {
+      try {
+        Object.defineProperty(window, installKey, {
+          value: installSentinel,
+          enumerable: false,
+          configurable: false,
+          writable: false
+        });
+      } catch {
+        // already installed; do not attach again
+      }
+    }
     return;
   }
-  try {
+
+  let claimed = false;
+  const claim = (): boolean => {
     Object.defineProperty(window, installKey, {
       value: installSentinel,
       enumerable: false,
-      configurable: true,
+      configurable: false,
       writable: false
     });
+    return markIsOurs(Object.getOwnPropertyDescriptor(window, installKey));
+  };
+  try {
+    claimed = claim();
   } catch {
     try {
       delete (window as unknown as Record<symbol, unknown>)[installKey];
-      Object.defineProperty(window, installKey, {
-        value: installSentinel,
-        enumerable: false,
-        configurable: true,
-        writable: false
-      });
+      claimed = claim();
     } catch {
-      // page locked the key; still attach listeners
+      claimed = false;
     }
+  }
+  if (!claimed) {
+    return;
   }
 
   const TEXT_MAX = 512;
@@ -540,6 +559,9 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
       return;
     }
     const control = associatedControl(el);
+    if (isFileField(control) || isFileField(el)) {
+      return;
+    }
     if (isCheckable(control) || isSelect(control)) {
       return;
     }

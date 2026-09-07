@@ -2,6 +2,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateRawEvent } from '@spyglass/contracts';
+import { toObserveResult } from '@spyglass/probe';
 import { describe, expect, it } from 'vitest';
 import { buildRawEvent, redactNetRequestUrl } from './capture-pipeline.ts';
 import { iframeNameSelector } from './probe-host.ts';
@@ -160,9 +161,35 @@ describe('capture pipeline', () => {
       stepIndex: 5
     });
     expect(event.action?.type).toBe('check');
-    expect(event.action?.arguments).toBeUndefined();
+    expect(event.action?.arguments).toEqual(['true']);
+    expect(toObserveResult(event.action, 'dom.check').method).toBe('setChecked');
     expect(event.value).toEqual({ masked: false, text: 'true' });
     expect(JSON.stringify(event)).not.toContain('"on"');
+    expect(validateRawEvent(event).valid).toBe(true);
+  });
+
+  it('encodes unchecked state as setChecked false, not a click toggle', () => {
+    const event = buildRawEvent({
+      id: 'evt_000015',
+      sessionId: 'ses_test',
+      wire: {
+        kind: 'dom.check',
+        ts: 15,
+        checked: false,
+        type: 'checkbox',
+        target: {
+          tag: 'input',
+          framePath: ['main'],
+          shadowPath: [],
+          testId: 'step-5'
+        }
+      },
+      stepIndex: 15
+    });
+    expect(event.action?.type).toBe('check');
+    expect(event.action?.arguments).toEqual(['false']);
+    expect(toObserveResult(event.action, 'dom.check').arguments).toEqual(['false']);
+    expect(event.value).toEqual({ masked: false, text: 'false' });
     expect(validateRawEvent(event).valid).toBe(true);
   });
 

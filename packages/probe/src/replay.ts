@@ -159,8 +159,8 @@ export function stagehandMethodFor(kind: string, type: ReplayDescriptor['type'])
   if (kind === 'dom.dblclick') {
     return 'doubleClick';
   }
-  if (type === 'check') {
-    return 'click';
+  if (kind === 'dom.check' || type === 'check') {
+    return 'setChecked';
   }
   if (type === 'select') {
     return 'selectOption';
@@ -178,6 +178,11 @@ export function stagehandMethodFor(kind: string, type: ReplayDescriptor['type'])
     return 'click';
   }
   return type;
+}
+
+/** Journaled checkbox/radio state for `setChecked` (never a click-toggle). */
+export function checkedStateArgument(checked: boolean | undefined): string {
+  return checked === false ? 'false' : 'true';
 }
 
 export function buildReplayDescriptor(options: {

@@ -160,6 +160,7 @@ export class SessionOrchestrator {
     const sessionId = this.sessionId;
     const journal = this.journal;
     return await this.enqueueWrite(async () => {
+      let appendedStop = false;
       try {
         await this.flushPendingClick();
         const page = this.pageSnapshot();
@@ -171,26 +172,26 @@ export class SessionOrchestrator {
           ts: Date.now(),
           page
         });
+        await this.append(stopEvent);
+        appendedStop = true;
         const raw = await readFile(journal.path, 'utf8');
-        const eventCount = parseJsonl(raw).length + 1;
-        const stopLine = `${JSON.stringify(stopEvent)}\n`;
+        const eventCount = parseJsonl(raw).length;
         await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
-        try {
-          await this.append(stopEvent);
-        } catch (error) {
-          await this.patchMeta({ eventCount: eventCount - 1, sealedAt: undefined });
-          throw error;
-        }
         this.state = 'sealed';
         this.since = Date.now();
         this.emitState();
-        return {
-          sessionId,
-          eventCount,
-          sizeBytes: Buffer.byteLength(raw) + Buffer.byteLength(stopLine)
-        };
+        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
       } catch (error) {
-        this.state = 'recording';
+        if (appendedStop) {
+          this.state = 'sealed';
+          try {
+            await this.patchMeta({ sealedAt: new Date().toISOString() });
+          } catch {
+            // journal already has record.stop
+          }
+        } else {
+          this.state = 'recording';
+        }
         this.since = Date.now();
         this.emitState();
         throw error;

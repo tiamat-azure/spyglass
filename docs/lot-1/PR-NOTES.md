@@ -74,12 +74,14 @@ Electron security from Lot 0 is unchanged: sandboxed guest, no
 2. Schema corpus (`pnpm test:schemas`): iframe click, shadow click, and
    `step.retracted` examples validate.
 3. Playwright e2e `packages/app/e2e/lot1-capture.spec.ts` (`SPYGLASS_GUEST_PAGE=lot1-fixture.html`):
-   Record → 10 actions (click, fill, password, select, checkbox, continue,
-   scroll, Enter, iframe `#step-9`, open-shadow `#step-10`) → retract → Stop →
-   assert `raw.jsonl` (iframe `framePath`, non-empty `shadowPath`, masked
-   password, `step.retracted`) → reload guest → **Replay capture (no LLM)** →
-   log contains `act() ok · llmCalls=0` (11 local descriptors; checkbox
-   `click` has no mouse-button argument).
+   Record → 10 actions (click, fill, password, select, checkbox check then
+   uncheck, continue, scroll, Enter, iframe `#step-9`, open-shadow `#step-10`)
+   → retract → Stop → assert `raw.jsonl` (iframe `framePath`, non-empty
+   `shadowPath`, masked password, `dom.check` true **and** false, `step.retracted`)
+   → reload guest → **Replay capture (no LLM)** → log contains
+   `act() ok · llmCalls=0`. Checkbox replay uses `setChecked` with the
+   journaled boolean (C1b), not a click-toggle; after reload+replay `#step-5`
+   stays unchecked.
 
 The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 `selfHeal: false` and increments `llmCalls` only if the stub
@@ -96,6 +98,9 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
   `webContents.mainFrame` + `snapshotScript(['main'])`). Probe events still
   carry `framePath` / `shadowPath` on the element descriptor. Per-step
   `framePath` snapshots are deferred to a later lot.
+- **C1b (captain / Firstmate): applied.** `dom.check` records `true`/`false`
+  and replays with `setChecked` (plus `uncheck` when false) so reload cannot
+  invert the control. Not a click-toggle.
 - Replay of masked values uses the `SECRET_*` ref string, not the clear
   secret (F-15). Fixture proof fills `SECRET_PASSWORD` after reload.
 
