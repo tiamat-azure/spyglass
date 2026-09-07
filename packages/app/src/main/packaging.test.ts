@@ -37,6 +37,8 @@ describe('packaged Observe', () => {
     expect(matcher).not.toContain('eligible[0] ?? pages[0]');
     expect(matcher).toContain('isLoopbackHostname');
     expect(matcher).toContain('isDottedIpv4Loopback');
+    expect(matcher).toContain('ipv4OctetsFromMappedTail');
+    expect(matcher).not.toContain("mapped.startsWith('7f')");
     const main = readFileSync(join(appRoot, 'src/main/index.ts'), 'utf8');
     expect(main).toContain('getOrCreateDevToolsTargetId');
   });

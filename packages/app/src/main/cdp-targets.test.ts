@@ -294,6 +294,8 @@ describe('isChromeUiUrl', () => {
     expect(isChromeUiUrl('http://[::ffff:127.0.0.1]:4173/')).toBe(true);
     expect(isChromeUiUrl('http://[::1]:8080/out/renderer/index.html')).toBe(true);
     expect(isChromeUiUrl('http://[::ffff:127.0.0.1]:3000/@vite/client')).toBe(true);
+    expect(isChromeUiUrl('http://[::ffff:7f00:1]:4173/')).toBe(true);
+    expect(isChromeUiUrl('http://[::ffff:7ace:1]:4173/')).toBe(false);
     expect(isChromeUiUrl('http://[::1]:3000/__vite_ping')).toBe(true);
     expect(isChromeUiUrl('http://[::1]:3000/')).toBe(false);
   });
@@ -354,5 +356,13 @@ describe('pickStagehandPage', () => {
     const guest = { id: 'guest', url: 'https://example.com/' };
     const pages = [{ url: 'https://example.com/' }];
     expect(pickStagehandPage(pages, guest)?.url).toBe('https://example.com/');
+  });
+
+  it('fails closed when guest.id is missing from pages that expose CDP ids', () => {
+    const guest = { id: 'guest', url: colliding };
+    expect(pickStagehandPage([{ id: 'chrome', url: colliding }], guest)).toBeUndefined();
+    expect(
+      pickStagehandPage([{ id: 'chrome', url: colliding }, { url: colliding }], guest)
+    ).toBeUndefined();
   });
 });

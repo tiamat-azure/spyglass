@@ -22,6 +22,12 @@ dependencies. Production `node_modules` are asarUnpacked so the observe
 worker can import Stagehand. Launch a packaged binary with `SPYGLASS_CDP=1`.
 Linux CI runs `pnpm test:packaged-observe` against `release/linux-unpacked`.
 
+Residual Observe chrome-attachment risk is highest under `pnpm dev`, when the
+chrome BrowserWindow and the guest `WebContentsView` share a Vite origin
+(`localhost:5173`). Packaged `file://` chrome vs an `https:` (or start-page)
+guest is the safer path: URLs differ, so chrome pin + guest match stay
+distinct.
+
 Every `WebContents` gets deny-by-default `window.open` and session permission
 handlers (C1). The guest pane then replaces `setWindowOpenHandler` so F-04
 popup-redirect still loads in the current view.

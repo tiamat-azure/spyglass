@@ -28,33 +28,59 @@ export function isLoopbackHostname(hostname) {
   }
   if (host.startsWith('::ffff:')) {
     const mapped = host.slice('::ffff:'.length);
-    if (isDottedIpv4Loopback(mapped)) {
-      return true;
-    }
-    // IPv4-mapped hex: 127.x.x.x is 7fxx:xxxx (Chromium 127.0.0.0/8).
-    return mapped.startsWith('7f');
+    const octets = ipv4OctetsFromMappedTail(mapped);
+    return octets !== undefined && octets[0] === 127;
   }
   return false;
 }
 
 /** Chromium treats the entire 127.0.0.0/8 range as loopback, not only 127.0.0.1. */
 function isDottedIpv4Loopback(host) {
+  const octets = dottedIpv4Octets(host);
+  return octets !== undefined && octets[0] === 127;
+}
+
+function dottedIpv4Octets(host) {
   const parts = host.split('.');
   if (parts.length !== 4) {
-    return false;
+    return undefined;
   }
   const octets = [];
   for (const part of parts) {
     if (!/^(0|[1-9]\d{0,2})$/.test(part)) {
-      return false;
+      return undefined;
     }
     const n = Number.parseInt(part, 10);
     if (n > 255) {
-      return false;
+      return undefined;
     }
     octets.push(n);
   }
-  return octets[0] === 127;
+  return octets;
+}
+
+/** Last 32 bits of ::ffff:mapped — dotted IPv4 or two hextets (e.g. 7f00:1). */
+function ipv4OctetsFromMappedTail(mapped) {
+  if (mapped.includes('.')) {
+    return dottedIpv4Octets(mapped);
+  }
+  const hextets = mapped.split(':');
+  if (hextets.length !== 2) {
+    return undefined;
+  }
+  const hi = parseHextet(hextets[0]);
+  const lo = parseHextet(hextets[1]);
+  if (hi === undefined || lo === undefined) {
+    return undefined;
+  }
+  return [(hi >> 8) & 255, hi & 255, (lo >> 8) & 255, lo & 255];
+}
+
+function parseHextet(value) {
+  if (!/^[0-9a-f]{1,4}$/.test(value)) {
+    return undefined;
+  }
+  return Number.parseInt(value, 16);
 }
 
 export function isChromeUiUrl(url) {
@@ -157,8 +183,8 @@ function pageUrlString(page) {
 
 /**
  * After pickGuestTarget, attach only to the Stagehand page whose CDP id is guest.id.
- * A unique URL match is allowed when no target id is available. Multi-match without
- * an id (or several ids matching guest.id) fails closed — never matching[last].
+ * If guest.id is set and no page has that id, fail closed whenever any matching page
+ * exposes a CDP id. Sole-URL fallback only when no matching page has a target id.
  */
 export function pickStagehandPage(pages, guest, options) {
   if (guest === undefined || guest === null || typeof guest !== 'object') {
@@ -185,6 +211,10 @@ export function pickStagehandPage(pages, guest, options) {
       return byId[0];
     }
     if (byId.length > 1) {
+      return undefined;
+    }
+    const anyHasCdpId = matching.some((page) => typeof pageCdpTargetId(page) === 'string');
+    if (anyHasCdpId) {
       return undefined;
     }
   }

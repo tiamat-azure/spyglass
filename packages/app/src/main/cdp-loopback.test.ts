@@ -21,6 +21,10 @@ describe('isGuestRequestToCdpPort', () => {
     expect(isLoopbackHostname('127.0.0.2')).toBe(true);
     expect(isLoopbackHostname('127.255.255.255')).toBe(true);
     expect(isLoopbackHostname('::ffff:127.0.0.2')).toBe(true);
+    expect(isLoopbackHostname('::ffff:7f00:1')).toBe(true);
+    expect(isLoopbackHostname('::ffff:7f01:203')).toBe(true);
+    expect(isLoopbackHostname('::ffff:7ace:1')).toBe(false);
+    expect(isLoopbackHostname('::ffff:7e00:1')).toBe(false);
     expect(isLoopbackHostname('126.0.0.1')).toBe(false);
     expect(isLoopbackHostname('8.8.8.8')).toBe(false);
   });
