@@ -113,6 +113,18 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 - Replay of masked values uses the `SECRET_*` ref string, not the clear
   secret (F-15). Fixture proof fills `SECRET_PASSWORD` after reload.
 
+### Adversarial changelog (do not reopen locked S1 / C1b / S2a / P1a)
+
+- **Pass 9:** Stop last-fill is a real drain. `flushAllPendingInputs` **returns**
+  pending payloads; main `executeJavaScript` returns `eventsJson`; orchestrator
+  `processProbePayload`s them **before** `stopping` / `record.stop`. No
+  `console.log` + `setTimeout(0)` barrier. Missing `Symbol.for('spyglass.probe.flush')`
+  fails Stop (reinject once, then throw) — does not silently seal. Probe will
+  not attach listeners if the flush hook cannot be installed. `setChecked`
+  prefers Playwright `locator.setChecked`; otherwise click-to-desired plus
+  `isChecked()` verify. DOM-only `el.checked =` / CDP `Runtime.callFunctionOn`
+  is gone.
+
 ## Screenshots (committed)
 
 Playwright's chrome `Page.screenshot()` captures the Electron renderer, not the

@@ -479,7 +479,7 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   const isFileField = (el: Element): boolean =>
     el instanceof HTMLInputElement && el.type === 'file';
 
-  const flushInput = (el: EventTarget): void => {
+  const takePendingInput = (el: EventTarget): Record<string, unknown> | undefined => {
     const timer = inputTimers.get(el);
     if (timer !== undefined) {
       window.clearTimeout(timer);
@@ -487,27 +487,48 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     }
     const latest = inputLatest.get(el);
     inputLatest.delete(el);
+    return latest;
+  };
+
+  const flushInput = (el: EventTarget): void => {
+    const latest = takePendingInput(el);
     if (latest !== undefined) {
       emit(latest);
     }
   };
 
-  const flushAllPendingInputs = (): void => {
+  const flushAllPendingInputs = (): Record<string, unknown>[] => {
     const pending = new Set<EventTarget>([...inputTimers.keys(), ...inputLatest.keys()]);
+    const events: Record<string, unknown>[] = [];
     for (const el of pending) {
-      flushInput(el);
+      const latest = takePendingInput(el);
+      if (latest !== undefined) {
+        events.push(latest);
+      }
     }
+    return events;
   };
 
+  const flushKey = Symbol.for('spyglass.probe.flush');
+  let flushInstalled = false;
   try {
-    Object.defineProperty(window, Symbol.for('spyglass.probe.flush'), {
+    Object.defineProperty(window, flushKey, {
       value: flushAllPendingInputs,
       enumerable: false,
       configurable: false,
       writable: false
     });
+    flushInstalled = typeof (window as unknown as Record<symbol, unknown>)[flushKey] === 'function';
   } catch {
-    // flush hook is best-effort; capture still works without it
+    flushInstalled = false;
+  }
+  if (!flushInstalled) {
+    try {
+      delete (window as unknown as Record<symbol, unknown>)[installKey];
+    } catch {
+      // Stop fails closed if this mark remains without a flush hook
+    }
+    return;
   }
 
   const noteInput = (el: Element): void => {

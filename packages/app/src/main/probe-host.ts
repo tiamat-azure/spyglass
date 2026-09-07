@@ -189,37 +189,128 @@ export class ProbeHost {
     }
   }
 
-  async flushPendingInputs(): Promise<void> {
-    const source =
-      "(() => { const fn = window[Symbol.for('spyglass.probe.flush')]; if (typeof fn === 'function') { fn(); } })()";
-    const jobs: Array<Promise<void>> = [];
-    if (!this.contents.isDestroyed()) {
-      jobs.push(
-        this.contents.executeJavaScript(source, false).then(
-          () => undefined,
-          () => undefined
-        )
-      );
+  /**
+   * Synchronous evaluate drain: returns pending input payloads from the page
+   * world. Does not emit via console.log. Main frame is required (missing hook
+   * fails Stop after one reinject). Child frames are skipped on execute failure.
+   */
+  async drainPendingInputs(): Promise<unknown[]> {
+    if (this.contents.isDestroyed()) {
+      throw new Error('Cannot stop: guest webContents destroyed');
     }
+    const first = await this.drainFrameExecute(
+      () => this.contents.executeJavaScript(DRAIN_PENDING_SOURCE, false),
+      { required: false, label: 'main' }
+    );
+    let mainEvents: unknown[];
+    if (first.ok) {
+      mainEvents = first.events;
+    } else {
+      await this.injectTree();
+      mainEvents = (
+        await this.drainFrameExecute(
+          () => this.contents.executeJavaScript(DRAIN_PENDING_SOURCE, false),
+          { required: true, label: 'main' }
+        )
+      ).events;
+    }
+    const childEvents = await this.drainChildFrames();
+    return [...mainEvents, ...childEvents];
+  }
+
+  private async drainChildFrames(): Promise<unknown[]> {
+    const events: unknown[] = [];
     try {
       const main = this.contents.mainFrame;
-      jobs.push(
-        main.executeJavaScript(source, false).then(
-          () => undefined,
-          () => undefined
-        )
-      );
       for (const frame of main.framesInSubtree) {
-        jobs.push(
-          frame.executeJavaScript(source, false).then(
-            () => undefined,
-            () => undefined
-          )
+        if (frame === main || frame.isDestroyed()) {
+          continue;
+        }
+        const drained = await this.drainFrameExecute(
+          () => frame.executeJavaScript(DRAIN_PENDING_SOURCE, false),
+          { required: false, label: describeFramePath(frame).join(' >> ') }
         );
+        if (drained.ok) {
+          events.push(...drained.events);
+        }
       }
     } catch {
       // mainFrame may be unavailable during navigation
     }
-    await Promise.all(jobs);
+    return events;
   }
+
+  private async drainFrameExecute(
+    exec: () => Promise<unknown>,
+    opts: { required: boolean; label: string }
+  ): Promise<{ ok: true; events: unknown[] } | { ok: false; events: [] }> {
+    let raw: unknown;
+    try {
+      raw = await exec();
+    } catch (error) {
+      if (opts.required) {
+        throw new Error(
+          `Cannot stop: probe flush failed (${opts.label}): ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+      return { ok: false, events: [] };
+    }
+    const parsed = parseDrainResult(raw, opts.label);
+    if (parsed.ok) {
+      return parsed;
+    }
+    if (opts.required) {
+      throw new Error(`Cannot stop: ${parsed.error}`);
+    }
+    return { ok: false, events: [] };
+  }
+}
+
+const DRAIN_PENDING_SOURCE = `(() => {
+  try {
+    const fn = window[Symbol.for('spyglass.probe.flush')];
+    if (typeof fn !== 'function') {
+      return { ok: false, error: 'probe flush hook missing' };
+    }
+    const events = fn();
+    if (!Array.isArray(events)) {
+      return { ok: false, error: 'probe flush hook did not return events' };
+    }
+    return { ok: true, eventsJson: JSON.stringify(events) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
+  }
+})()`;
+
+function parseDrainResult(
+  raw: unknown,
+  label: string
+): { ok: true; events: unknown[] } | { ok: false; error: string; events: [] } {
+  if (raw === null || typeof raw !== 'object') {
+    return { ok: false, error: `probe flush returned invalid result (${label})`, events: [] };
+  }
+  const result = raw as { ok?: unknown; eventsJson?: unknown; error?: unknown };
+  if (result.ok !== true) {
+    const error =
+      typeof result.error === 'string' && result.error.length > 0
+        ? result.error
+        : 'probe flush hook missing';
+    return { ok: false, error, events: [] };
+  }
+  if (typeof result.eventsJson !== 'string') {
+    return { ok: false, error: `probe flush events missing (${label})`, events: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.eventsJson);
+  } catch {
+    return { ok: false, error: `probe flush events not JSON (${label})`, events: [] };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: `probe flush events not an array (${label})`, events: [] };
+  }
+  return { ok: true, events: parsed };
 }

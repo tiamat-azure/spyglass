@@ -408,6 +408,57 @@ describe('session stop after record.stop append', () => {
     expect(meta.eventCount).toBe(result.eventCount);
     expect(typeof meta.sealedAt).toBe('string');
   });
+
+  it('appends drained last fills before record.stop while still recording', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-drain-'));
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {}
+    });
+    const { sessionId } = await orch.start('https://example.test/');
+    (orch as unknown as { probe: { drainPendingInputs: () => Promise<unknown[]> } }).probe = {
+      drainPendingInputs: async () => [
+        {
+          v: 1,
+          kind: 'dom.input',
+          ts: Date.now(),
+          page: { url: 'https://example.test/', title: 'fixture' },
+          target: {
+            tag: 'input',
+            framePath: ['main'],
+            shadowPath: [],
+            id: 'name'
+          },
+          valueText: 'last fill'
+        }
+      ]
+    };
+    const result = await orch.stop();
+    expect(orch.snapshot().state).toBe('sealed');
+    const events = parseJsonl(await readFile(join(root, sessionId, 'raw.jsonl'), 'utf8'));
+    const kinds = events.map((event) => (event as { kind: string }).kind);
+    expect(kinds).toContain('dom.input');
+    expect(kinds.indexOf('dom.input')).toBeLessThan(kinds.indexOf('record.stop'));
+    expect(result.eventCount).toBe(events.length);
+  });
+
+  it('fails Stop without sealing when the probe flush hook cannot drain', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-flush-missing-'));
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {}
+    });
+    const { sessionId } = await orch.start('https://example.test/');
+    (orch as unknown as { probe: { drainPendingInputs: () => Promise<unknown[]> } }).probe = {
+      drainPendingInputs: async () => {
+        throw new Error('Cannot stop: probe flush hook missing');
+      }
+    };
+    await expect(orch.stop()).rejects.toThrow(/probe flush hook missing/);
+    expect(orch.snapshot().state).toBe('recording');
+    const events = parseJsonl(await readFile(join(root, sessionId, 'raw.jsonl'), 'utf8'));
+    expect(events.some((event) => (event as { kind: string }).kind === 'record.stop')).toBe(false);
+  });
 });
 
 describe('iframe name selector', () => {

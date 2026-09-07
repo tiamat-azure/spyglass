@@ -168,6 +168,16 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('spyglass.probe.v1');
     expect(source).toContain('spyglass.probe.flush');
     expect(source).toContain('flushAllPendingInputs');
+    expect(source).toContain('takePendingInput');
+    expect(source).toContain('flushInstalled');
+    expect(source).toContain('return events');
+    expect(source).not.toContain('flush hook is best-effort');
+    expect(source.indexOf("Symbol.for('spyglass.probe.flush')")).toBeLessThan(
+      source.indexOf("addEventListener('click'")
+    );
+    expect(source.indexOf('flushInstalled')).toBeLessThan(
+      source.indexOf("addEventListener('click'")
+    );
     expect(source).not.toContain('__sgInstalled');
     expect(source).not.toContain('__sdeadbeef');
     expect(source).not.toContain("addEventListener('wheel'");

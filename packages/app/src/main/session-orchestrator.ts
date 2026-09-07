@@ -164,13 +164,6 @@ export class SessionOrchestrator {
     }
     const sessionId = this.sessionId;
     const journal = this.journal;
-    await this.enqueueWrite(async () => {
-      if (this.state !== 'recording') {
-        return;
-      }
-      await this.probe?.flushPendingInputs();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
     return await this.enqueueWrite(async () => {
       if (this.state === 'sealed') {
         const raw = await readFile(journal.path, 'utf8');
@@ -195,19 +188,26 @@ export class SessionOrchestrator {
       ) {
         throw new Error('Not recording');
       }
-      this.state = 'stopping';
-      this.emitState();
       let durableStop = false;
       try {
         const existingRaw = await readFile(journal.path, 'utf8');
         const existingStops = countRecordStop(parseJsonl(existingRaw));
-        if (existingStops > 0) {
-          durableStop = true;
-          if (existingStops > 1) {
-            throw new Error('Cannot stop: journal already has multiple record.stop events');
+        if (existingStops === 0) {
+          if (this.probe !== undefined) {
+            const flushed = await this.probe.drainPendingInputs();
+            for (const payload of flushed) {
+              await this.processProbePayload(payload);
+            }
           }
-        } else {
           await this.flushPendingClick();
+        }
+        this.state = 'stopping';
+        this.emitState();
+        if (existingStops > 1) {
+          durableStop = true;
+          throw new Error('Cannot stop: journal already has multiple record.stop events');
+        }
+        if (existingStops === 0) {
           const page = this.pageSnapshot();
           const id = this.nextId();
           await this.append(
@@ -219,8 +219,8 @@ export class SessionOrchestrator {
               page
             })
           );
-          durableStop = true;
         }
+        durableStop = true;
         return await this.forceSeal(sessionId, journal);
       } catch (error) {
         if (!durableStop) {
