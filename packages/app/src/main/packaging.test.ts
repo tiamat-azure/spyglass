@@ -41,6 +41,9 @@ describe('packaged Observe', () => {
     expect(act).toContain('applySetChecked');
     expect(act).toContain('deepLocator');
     expect(act).not.toContain('document.querySelector');
+    expect(act).toContain('refusing click-toggle (C1b)');
+    expect(act).toContain('Runtime.callFunctionOn');
+    expect(act).toContain('el.checked = desired');
     expect(act).toContain('existsSync(fromArg)');
     expect(act).toContain('await readFile(fromArg');
     const actSpawn = readFileSync(join(appRoot, 'src/main/stagehand-act.ts'), 'utf8');
@@ -49,6 +52,14 @@ describe('packaged Observe', () => {
     expect(actSpawn).toContain('rm(actionsDir');
     expect(actSpawn).toContain('delete childEnv.SPYGLASS_ACT_ACTIONS');
     expect(actSpawn).not.toContain('SPYGLASS_ACT_ACTIONS = JSON.stringify');
+    const orch = readFileSync(join(appRoot, 'src/main/session-orchestrator.ts'), 'utf8');
+    expect(orch).toContain('await this.probe?.flushPendingInputs()');
+    const stopFn = orch.slice(orch.indexOf('async stop('), orch.indexOf('async retract('));
+    expect(stopFn).toContain('enqueueWrite');
+    expect(stopFn.indexOf('flushPendingInputs')).toBeLessThan(
+      stopFn.indexOf("this.state = 'stopping'")
+    );
+    expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).toContain('pageMatchesPickedGuest');
     expect(matcher).toContain('pickStagehandPage');

@@ -162,11 +162,41 @@ export class SessionOrchestrator {
     if (this.state !== 'recording' || this.sessionId === undefined || this.journal === undefined) {
       throw new Error('Not recording');
     }
-    this.state = 'stopping';
-    this.emitState();
     const sessionId = this.sessionId;
     const journal = this.journal;
+    await this.enqueueWrite(async () => {
+      if (this.state !== 'recording') {
+        return;
+      }
+      await this.probe?.flushPendingInputs();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     return await this.enqueueWrite(async () => {
+      if (this.state === 'sealed') {
+        const raw = await readFile(journal.path, 'utf8');
+        return {
+          sessionId,
+          eventCount: parseJsonl(raw).length,
+          sizeBytes: Buffer.byteLength(raw)
+        };
+      }
+      if (this.state === 'sealed-failed') {
+        try {
+          return await this.forceSeal(sessionId, journal);
+        } catch (error) {
+          this.enterSealedFailed();
+          throw wrapSealFailure(error);
+        }
+      }
+      if (
+        this.state !== 'recording' ||
+        this.sessionId === undefined ||
+        this.journal === undefined
+      ) {
+        throw new Error('Not recording');
+      }
+      this.state = 'stopping';
+      this.emitState();
       let durableStop = false;
       try {
         const existingRaw = await readFile(journal.path, 'utf8');

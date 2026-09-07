@@ -492,6 +492,24 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
     }
   };
 
+  const flushAllPendingInputs = (): void => {
+    const pending = new Set<EventTarget>([...inputTimers.keys(), ...inputLatest.keys()]);
+    for (const el of pending) {
+      flushInput(el);
+    }
+  };
+
+  try {
+    Object.defineProperty(window, Symbol.for('spyglass.probe.flush'), {
+      value: flushAllPendingInputs,
+      enumerable: false,
+      configurable: false,
+      writable: false
+    });
+  } catch {
+    // flush hook is best-effort; capture still works without it
+  }
+
   const noteInput = (el: Element): void => {
     try {
       if (

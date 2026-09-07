@@ -188,4 +188,38 @@ export class ProbeHost {
       console.error('[spyglass] probe inject failed', frame.url, error);
     }
   }
+
+  async flushPendingInputs(): Promise<void> {
+    const source =
+      "(() => { const fn = window[Symbol.for('spyglass.probe.flush')]; if (typeof fn === 'function') { fn(); } })()";
+    const jobs: Array<Promise<void>> = [];
+    if (!this.contents.isDestroyed()) {
+      jobs.push(
+        this.contents.executeJavaScript(source, false).then(
+          () => undefined,
+          () => undefined
+        )
+      );
+    }
+    try {
+      const main = this.contents.mainFrame;
+      jobs.push(
+        main.executeJavaScript(source, false).then(
+          () => undefined,
+          () => undefined
+        )
+      );
+      for (const frame of main.framesInSubtree) {
+        jobs.push(
+          frame.executeJavaScript(source, false).then(
+            () => undefined,
+            () => undefined
+          )
+        );
+      }
+    } catch {
+      // mainFrame may be unavailable during navigation
+    }
+    await Promise.all(jobs);
+  }
 }

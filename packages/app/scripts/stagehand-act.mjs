@@ -138,6 +138,44 @@ function desiredCheckedState(method, args) {
   return true;
 }
 
+async function applySetCheckedViaResolvedNode(locator, desired) {
+  const real = typeof locator.real === 'function' ? await locator.real() : locator;
+  const frame = typeof real.getFrame === 'function' ? real.getFrame() : undefined;
+  const session = frame?.session;
+  if (session === undefined || typeof real.resolveNode !== 'function') {
+    throw new Error('setChecked is not available; refusing click-toggle (C1b)');
+  }
+  const resolved = await real.resolveNode();
+  const objectId = resolved?.objectId;
+  if (typeof objectId !== 'string') {
+    throw new Error('setChecked is not available; refusing click-toggle (C1b)');
+  }
+  try {
+    const result = await session.send('Runtime.callFunctionOn', {
+      objectId,
+      functionDeclaration: `function (desired) {
+        const el = this;
+        if (el == null || typeof el.checked !== 'boolean') {
+          throw new Error('not checkable');
+        }
+        if (el.checked === desired) {
+          return;
+        }
+        el.checked = desired;
+        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      }`,
+      arguments: [{ value: desired }]
+    });
+    if (result?.exceptionDetails !== undefined) {
+      const text = result.exceptionDetails.text ?? 'setChecked CDP failed';
+      throw new Error(text);
+    }
+  } finally {
+    await session.send('Runtime.releaseObject', { objectId }).catch(() => undefined);
+  }
+}
+
 async function applySetChecked(page, selector, desired) {
   const locator = page.deepLocator(selector);
   const current = await locator.isChecked();
@@ -147,7 +185,7 @@ async function applySetChecked(page, selector, desired) {
   if (typeof locator.setChecked === 'function') {
     await locator.setChecked(desired);
   } else {
-    await locator.click();
+    await applySetCheckedViaResolvedNode(locator, desired);
   }
   const after = await locator.isChecked();
   if (after !== desired) {

@@ -166,6 +166,8 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('[id="');
     expect(source).toContain('Symbol.for');
     expect(source).toContain('spyglass.probe.v1');
+    expect(source).toContain('spyglass.probe.flush');
+    expect(source).toContain('flushAllPendingInputs');
     expect(source).not.toContain('__sgInstalled');
     expect(source).not.toContain('__sdeadbeef');
     expect(source).not.toContain("addEventListener('wheel'");
