@@ -171,6 +171,49 @@ describe('pickGuestTarget', () => {
     ).toBe('guest');
   });
 
+  it('fails closed when [guest, chrome] share localhost:5173 and chrome is not excluded', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const colliding = parseCdpTargetList([
+        {
+          id: 'guest',
+          type: 'page',
+          url: 'http://localhost:5173/',
+          title: 'Guest'
+        },
+        {
+          id: 'chrome',
+          type: 'page',
+          url: 'http://localhost:5173/',
+          title: 'Spyglass'
+        }
+      ]);
+      expect(pickGuestTarget(colliding, 'http://localhost:5173/')).toBeUndefined();
+      expect(
+        pickGuestTarget(
+          parseCdpTargetList([
+            {
+              id: 'chrome',
+              type: 'page',
+              url: 'http://localhost:5173/',
+              title: 'Spyglass'
+            },
+            {
+              id: 'guest',
+              type: 'page',
+              url: 'http://localhost:5173/',
+              title: 'Guest'
+            }
+          ]),
+          'http://localhost:5173/'
+        )
+      ).toBeUndefined();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('pins chrome by URL only while chrome and guest URLs differ', () => {
     const targets = parseCdpTargetList([
       {
@@ -243,6 +286,15 @@ describe('isChromeUiUrl', () => {
     expect(isChromeUiUrl('http://localhost:8080/out/renderer/index.html')).toBe(true);
     expect(isChromeUiUrl('http://127.0.0.1:3000/src/renderer/main.ts')).toBe(true);
     expect(isChromeUiUrl('http://localhost:3000/')).toBe(false);
+  });
+
+  it('treats IPv6 and IPv4-mapped loopback as local chrome for path and Vite hints', () => {
+    expect(isChromeUiUrl('http://[::1]:4173/')).toBe(true);
+    expect(isChromeUiUrl('http://[::ffff:127.0.0.1]:4173/')).toBe(true);
+    expect(isChromeUiUrl('http://[::1]:8080/out/renderer/index.html')).toBe(true);
+    expect(isChromeUiUrl('http://[::ffff:127.0.0.1]:3000/@vite/client')).toBe(true);
+    expect(isChromeUiUrl('http://[::1]:3000/__vite_ping')).toBe(true);
+    expect(isChromeUiUrl('http://[::1]:3000/')).toBe(false);
   });
 });
 

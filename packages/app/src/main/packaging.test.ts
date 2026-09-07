@@ -32,6 +32,9 @@ describe('packaged Observe', () => {
     expect(observe).not.toContain('!isChromeUiUrl(url) && url.length > 0');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).not.toContain('eligible[0] ?? pages[0]');
+    expect(matcher).toContain('isLoopbackHostname');
+    const main = readFileSync(join(appRoot, 'src/main/index.ts'), 'utf8');
+    expect(main).toContain('getOrCreateDevToolsTargetId');
   });
 
   it('asarUnpacks Stagehand runtime node_modules for packaged Observe', () => {

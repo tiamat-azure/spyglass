@@ -94,15 +94,36 @@ function pickGuestOptions(): { excludeTargetIds: string[] } | undefined {
   return { excludeTargetIds: [pinnedChromeTargetId] };
 }
 
-function pinChromeTargetFromList(
-  targets: ReturnType<typeof parseCdpTargetList>,
-  chromeUrl: string,
-  guestUrl: string
-): void {
+function pinChromeFromWebContents(webContents: WebContents | undefined): void {
   if (pinnedChromeTargetId !== undefined && pinnedChromeTargetId.length > 0) {
     return;
   }
-  const id = resolvePinnedChromeTargetId(targets, chromeUrl, guestUrl);
+  if (webContents === undefined || webContents.isDestroyed()) {
+    return;
+  }
+  try {
+    const id = webContents.getOrCreateDevToolsTargetId();
+    if (typeof id === 'string' && id.length > 0) {
+      pinnedChromeTargetId = id;
+    }
+  } catch {
+    // DevTools agent may not exist until the renderer has a CDP target.
+  }
+}
+
+function pinChromeTargetFromList(
+  webContents: WebContents | undefined,
+  targets: ReturnType<typeof parseCdpTargetList>,
+  guestUrl: string
+): void {
+  pinChromeFromWebContents(webContents);
+  if (pinnedChromeTargetId !== undefined && pinnedChromeTargetId.length > 0) {
+    return;
+  }
+  if (webContents === undefined || webContents.isDestroyed()) {
+    return;
+  }
+  const id = resolvePinnedChromeTargetId(targets, webContents.getURL(), guestUrl);
   if (id !== undefined) {
     pinnedChromeTargetId = id;
   }
@@ -112,7 +133,7 @@ async function persistCdpInfo(
   port: number,
   guestUrl: string,
   guestTitle: string,
-  chromeUrl?: string
+  chromeWebContents?: WebContents
 ): Promise<void> {
   if (port <= 0) {
     return;
@@ -124,9 +145,7 @@ async function persistCdpInfo(
   let target: ReturnType<typeof pickGuestTarget>;
   try {
     const targets = await fetchCdpTargets(port);
-    if (chromeUrl !== undefined && chromeUrl.length > 0) {
-      pinChromeTargetFromList(targets, chromeUrl, guestUrl);
-    }
+    pinChromeTargetFromList(chromeWebContents, targets, guestUrl);
     target = pickGuestTarget(targets, guestUrl, pickGuestOptions());
   } catch {
     target = undefined;
@@ -300,7 +319,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       const targets = await fetchCdpTargets(cdpPort);
       const win = winRef.current;
       if (win !== undefined && !win.isDestroyed()) {
-        pinChromeTargetFromList(targets, win.webContents.getURL(), snapshot.url);
+        pinChromeTargetFromList(win.webContents, targets, snapshot.url);
       }
       targetId = pickGuestTarget(targets, snapshot.url, pickGuestOptions())?.id;
     } catch {
@@ -356,7 +375,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (observeWin !== undefined && !observeWin.isDestroyed()) {
       try {
         const targets = await fetchCdpTargets(cdpPort);
-        pinChromeTargetFromList(targets, observeWin.webContents.getURL(), snapshot.url);
+        pinChromeTargetFromList(observeWin.webContents, targets, snapshot.url);
       } catch {
         // pin is best-effort; Observe still excludes whatever we already stored
       }
@@ -417,12 +436,15 @@ void (async () => {
     pinnedChromeTargetId = undefined;
     const win = createWindow();
     winRef.current = win;
+    if (cdpPort > 0) {
+      pinChromeFromWebContents(win.webContents);
+    }
     const pane = new BrowserPane(
       win,
       {
         onState: (state: NavState) => {
           emitToChrome(win, IPC.navState, state);
-          void persistCdpInfo(cdpPort, state.url, state.title, win.webContents.getURL()).catch(
+          void persistCdpInfo(cdpPort, state.url, state.title, win.webContents).catch(
             (error: unknown) => {
               console.error('Failed to persist CDP info:', error);
             }
@@ -464,7 +486,7 @@ void (async () => {
           const snapshot = pane.snapshot();
           try {
             const targets = await fetchCdpTargets(cdpPort);
-            pinChromeTargetFromList(targets, win.webContents.getURL(), snapshot.url);
+            pinChromeTargetFromList(win.webContents, targets, snapshot.url);
           } catch {
             // pin is best-effort
           }

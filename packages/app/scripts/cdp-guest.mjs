@@ -15,6 +15,21 @@ const VITE_UI_PORTS = new Set(['4173', '5173', '5174', '5175']);
 export const GUEST_FALLBACK_CHROME_WARNING =
   '[spyglass] WARNING: No non-chrome guest CDP target matched. Observe may attach to privileged chrome UI (renderer / DevTools). Falling back to the first page target.';
 
+export function isLoopbackHostname(hostname) {
+  let host = hostname.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.slice(1, -1);
+  }
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return true;
+  }
+  if (host === '::ffff:127.0.0.1' || host.startsWith('::ffff:127.')) {
+    return true;
+  }
+  // WHATWG URL may serialize IPv4-mapped 127.0.0.1 as ::ffff:7f00:1
+  return host === '::ffff:7f00:1' || host.startsWith('::ffff:7f');
+}
+
 export function isChromeUiUrl(url) {
   if (typeof url !== 'string' || url.length === 0 || url === 'about:blank') {
     return false;
@@ -27,7 +42,7 @@ export function isChromeUiUrl(url) {
   }
   try {
     const parsed = new URL(url);
-    const loopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    const loopback = isLoopbackHostname(parsed.hostname);
     const localChrome = parsed.protocol === 'file:' || loopback;
     // Path hints and Vite-client substrings only on file: / loopback — a real guest
     // may contain `/out/renderer/` or `@vite/client` on an arbitrary https origin.
@@ -85,9 +100,13 @@ export function pickGuestTarget(targets, guestUrl, options) {
     if (exactGuest !== undefined) {
       return exactGuest;
     }
-    // Same URL as Vite chrome: never prefer a pinned chrome id (already excluded).
-    // If every exact hit looks like chrome UI, take the last eligible page, not the first.
+    // Same URL as Vite chrome: both page targets look like chrome UI. Last-exact is
+    // chrome when the list is [guest, chrome] and excludeTargetIds is empty (pin
+    // skipped because chromeUrl === guestUrl). Fail closed unless chrome was excluded.
     if (exact.length > 0) {
+      if (excluded.size === 0) {
+        return undefined;
+      }
       return exact[exact.length - 1];
     }
     const byOriginPath = eligible
@@ -129,6 +148,8 @@ function excludeTargetIdSet(options) {
 
 /**
  * Pin the chrome BrowserWindow CDP target while its URL still differs from the guest.
+ * When URLs collide, URL matching can pin the guest; callers use
+ * webContents.getOrCreateDevToolsTargetId() instead.
  */
 export function resolvePinnedChromeTargetId(targets, chromeUrl, guestUrl) {
   if (typeof chromeUrl !== 'string' || chromeUrl.length === 0) {

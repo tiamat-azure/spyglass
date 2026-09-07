@@ -26,22 +26,9 @@ export function isGuestRequestToCdpPort(requestUrl: string, cdpPort: number): bo
   }
 }
 
-export function isLoopbackHostname(hostname: string): boolean {
-  let host = hostname.toLowerCase();
-  if (host.startsWith('[') && host.endsWith(']')) {
-    host = host.slice(1, -1);
-  }
-  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-    return true;
-  }
-  if (host === '::ffff:127.0.0.1' || host.startsWith('::ffff:127.')) {
-    return true;
-  }
-  // WHATWG URL may serialize IPv4-mapped 127.0.0.1 as ::ffff:7f00:1
-  return host === '::ffff:7f00:1' || host.startsWith('::ffff:7f');
-}
-
 /** CDP must not share implicit HTTP(S) ports or every `http://` / `https://` load would match. */
 export function isUsableCdpPort(port: number): boolean {
   return Number.isInteger(port) && port > 0 && port < 65536 && port !== 80 && port !== 443;
 }
+
+export { isLoopbackHostname } from '../../scripts/cdp-guest.mjs';
