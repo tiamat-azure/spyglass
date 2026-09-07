@@ -1,0 +1,28 @@
+{
+  "index": 4,
+  "intent": "Le tableau de bord est visible",
+  "action": {
+    "type": "wait",
+    "descriptor": {
+      "type": "wait",
+      "selector": "[data-testid='dashboard']"
+    }
+  },
+  "verification": {
+    "type": "elementVisible",
+    "expected": "[data-testid='dashboard']",
+    "strength": "weak",
+    "weakReason": "observable-state-change",
+    "confirmedByUser": true
+  },
+  "sourceEvents": ["evt_000130"],
+  "patchHistory": [
+    {
+      "runId": "run_0007",
+      "date": "2026-09-07T12:00:00.000Z",
+      "scope": "action.descriptor",
+      "reviewedBy": "qa",
+      "pullRequest": "https://github.com/example/target/pull/1"
+    }
+  ]
+}

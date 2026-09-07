@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+  FORCE_COLOR: "1"
+  SPYGLASS_DISABLE_GPU: "1"
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_script: package:linux
+          - os: macos-latest
+            package_script: package:mac
+          - os: windows-latest
+            package_script: package:win
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js (frozen Lot -1)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Schema fixtures (ajv)
+        run: pnpm test:schemas
+
+      - name: Contracts coverage threshold
+        run: pnpm test:coverage
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Electron e2e smoke (xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm test:e2e
+
+      - name: Electron e2e smoke
+        if: runner.os != 'Linux'
+        run: pnpm test:e2e
+
+      - name: Package unsigned installers
+        run: pnpm --filter @spyglass/app ${{ matrix.package_script }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spyglass-installers-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            packages/app/release/*.AppImage
+            packages/app/release/*.deb
+            packages/app/release/*.dmg
+            packages/app/release/*.exe
+            packages/app/release/*.yml
+            packages/app/release/*.blockmap

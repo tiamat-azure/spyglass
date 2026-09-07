@@ -1,0 +1,23 @@
+{
+  "index": 3,
+  "intent": "Je me connecte avec le compte de démonstration",
+  "action": {
+    "type": "click",
+    "descriptor": {
+      "type": "click",
+      "selector": "[data-testid='submit']",
+      "selectorStrategy": "testId",
+      "fallbackSelectors": ["button#login-submit"],
+      "framePath": ["main"],
+      "shadowPath": []
+    }
+  },
+  "verification": {
+    "type": "urlMatches",
+    "expected": "**/home",
+    "strength": "strong",
+    "confirmedByUser": true,
+    "timeoutMs": 10000
+  },
+  "sourceEvents": ["evt_000121", "evt_000123"]
+}

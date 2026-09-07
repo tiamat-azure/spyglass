@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000123",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000123,
+  "kind": "dom.click",
+  "stepIndex": 12,
+  "pageId": "page_main",
+  "page": {
+    "url": "https://app.example.test/login",
+    "title": "Login"
+  },
+  "target": {
+    "tag": "button",
+    "id": "login-submit",
+    "testId": "submit",
+    "role": "button",
+    "accessibleName": "Se connecter",
+    "text": "Se connecter",
+    "cssSelector": "button#login-submit",
+    "xpath": "//button[@id='login-submit']",
+    "framePath": ["main"],
+    "shadowPath": []
+  },
+  "action": {
+    "type": "click",
+    "selector": "[data-testid='submit']",
+    "selectorStrategy": "testId",
+    "fallbackSelectors": ["button#login-submit"],
+    "framePath": ["main"],
+    "shadowPath": []
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Clic sur « Se connecter »"
+  },
+  "snapshotRef": "snap_000123"
+}

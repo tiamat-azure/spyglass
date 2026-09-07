@@ -1,0 +1,39 @@
+{
+  "name": "spyglass",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spyglass monorepo — Lot -1 tooling socle",
+  "type": "module",
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": "24.20.0",
+    "pnpm": "10.33.3"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @spyglass/app dev",
+    "build": "pnpm -r --if-present build",
+    "start": "pnpm --filter @spyglass/app start",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "test:coverage": "pnpm --filter @spyglass/contracts test:coverage",
+    "test:schemas": "pnpm --filter @spyglass/contracts test:schemas",
+    "test:e2e": "pnpm --filter @spyglass/app test:e2e",
+    "package": "pnpm --filter @spyglass/app package",
+    "capture:shell": "node scripts/capture-empty-shell.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.12",
+    "@types/node": "24.10.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild"
+    ]
+  }
+}

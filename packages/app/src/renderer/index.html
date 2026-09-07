@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spyglass</title>
+    <link rel="stylesheet" href="./styles/tokens.css" />
+    <link rel="stylesheet" href="./src/shell.css" />
+  </head>
+  <body data-theme="dark">
+    <main class="shell" id="app">
+      <div class="mark" aria-hidden="true">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 64 64"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"
+          role="img"
+        >
+          <title>Spyglass</title>
+          <circle cx="32" cy="32" r="21" />
+          <path d="M32 11 47 28" />
+          <path d="M32 11 47 28" transform="rotate(60 32 32)" />
+          <path d="M32 11 47 28" transform="rotate(120 32 32)" />
+          <path d="M32 11 47 28" transform="rotate(180 32 32)" />
+          <path d="M32 11 47 28" transform="rotate(240 32 32)" />
+          <path d="M32 11 47 28" transform="rotate(300 32 32)" />
+        </svg>
+      </div>
+      <h1>Spyglass</h1>
+      <p class="tagline">Lot -1 empty shell — tooling socle</p>
+      <p class="meta" id="versions">Loading…</p>
+      <p class="note">
+        No product UI in this lot. WebContentsView, recording, chat, and voice arrive later.
+      </p>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

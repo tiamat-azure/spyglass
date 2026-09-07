@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000001",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000000,
+  "kind": "record.start"
+}

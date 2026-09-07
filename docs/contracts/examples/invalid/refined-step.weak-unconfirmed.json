@@ -1,0 +1,19 @@
+{
+  "index": 1,
+  "intent": "Clic",
+  "action": {
+    "type": "click",
+    "descriptor": {
+      "type": "click",
+      "selector": "#ok"
+    }
+  },
+  "verification": {
+    "type": "elementVisible",
+    "expected": "#ok",
+    "strength": "weak",
+    "weakReason": "no-observable-change",
+    "confirmedByUser": false
+  },
+  "sourceEvents": ["evt_000001"]
+}

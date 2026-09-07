@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "not-an-event-id",
+  "sessionId": "ses_20260907_demo",
+  "ts": 1757200000123,
+  "kind": "dom.click",
+  "extra": true
+}

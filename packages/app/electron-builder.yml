@@ -1,0 +1,48 @@
+appId: dev.spyglass.app
+productName: Spyglass
+executableName: spyglass
+copyright: Copyright © Spyglass contributors
+# Internal v1 (PRD §2.3 / §16.3): unsigned and not notarized.
+# Signing hooks are left in place so certificates can be added later without
+# restructuring targets. Do not set CSC_IDENTITY_AUTO_DISCOVERY=true until certs exist.
+forceCodeSigning: false
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asar: true
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+linux:
+  target:
+    - AppImage
+    - deb
+    - dir
+  category: Development
+  icon: build/icon.png
+  synopsis: Spyglass — AI-assisted web scenario recorder (internal v1, unsigned)
+  description: Empty Electron shell for the Spyglass tooling socle (Lot -1).
+  maintainer: Spyglass contributors <tiamat.azure@gmail.com>
+mac:
+  # identity: null disables signing. Replace with a Developer ID later.
+  identity: null
+  notarize: false
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.png
+win:
+  # signAndEditExecutable: false keeps NSIS unsigned. Add certificateFile later.
+  signAndEditExecutable: false
+  target:
+    - nsis
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  unicode: true

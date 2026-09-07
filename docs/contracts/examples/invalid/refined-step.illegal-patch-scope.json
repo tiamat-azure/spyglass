@@ -1,0 +1,27 @@
+{
+  "index": 1,
+  "intent": "Clic",
+  "action": {
+    "type": "click",
+    "descriptor": {
+      "type": "click",
+      "selector": "#ok"
+    }
+  },
+  "verification": {
+    "type": "elementVisible",
+    "expected": "#ok",
+    "strength": "strong",
+    "confirmedByUser": true
+  },
+  "sourceEvents": ["evt_000001"],
+  "patchHistory": [
+    {
+      "runId": "run_1",
+      "date": "2026-09-07T12:00:00.000Z",
+      "scope": "verification",
+      "reviewedBy": "qa",
+      "pullRequest": "https://github.com/example/target/pull/2"
+    }
+  ]
+}

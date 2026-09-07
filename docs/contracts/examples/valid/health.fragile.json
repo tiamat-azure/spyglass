@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "ses_20260907_demo",
+  "status": "fragile",
+  "appliedPatches": 3,
+  "patchCandidates": [
+    {
+      "stepIndex": 2,
+      "descriptorHash": "sha256:abc",
+      "consecutiveRuns": 1,
+      "lastRunId": "run_0008"
+    }
+  ]
+}

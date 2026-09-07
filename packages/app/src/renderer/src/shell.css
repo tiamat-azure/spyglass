@@ -1,0 +1,63 @@
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--sg-bg);
+  color: var(--sg-text);
+  font-family: var(--sg-font-sans);
+}
+
+.shell {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sg-space-5);
+  padding: var(--sg-space-8);
+  text-align: center;
+}
+
+.mark {
+  width: 96px;
+  height: 96px;
+  color: var(--sg-accent);
+  filter: drop-shadow(var(--sg-glow-accent));
+}
+
+.mark svg {
+  width: 96px;
+  height: 96px;
+  display: block;
+}
+
+h1 {
+  margin: 0;
+  font-family: var(--sg-font-display);
+  font-size: var(--sg-text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: var(--sg-leading-tight);
+}
+
+.tagline {
+  margin: 0;
+  font-size: var(--sg-text-md);
+  color: var(--sg-text-muted);
+}
+
+.meta {
+  margin: 0;
+  font-family: var(--sg-font-mono);
+  font-size: var(--sg-text-xs);
+  color: var(--sg-accent);
+}
+
+.note {
+  margin: var(--sg-space-4) 0 0;
+  max-width: 42ch;
+  font-size: var(--sg-text-sm);
+  line-height: var(--sg-leading-body);
+  color: var(--sg-text-muted);
+}

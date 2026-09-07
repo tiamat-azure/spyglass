@@ -1,0 +1,12 @@
+{
+  "index": 1,
+  "intent": "Clic",
+  "action": {
+    "type": "click",
+    "descriptor": {
+      "type": "click",
+      "selector": "#ok"
+    }
+  },
+  "sourceEvents": ["evt_000001"]
+}
