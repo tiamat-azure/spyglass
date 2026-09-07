@@ -12,7 +12,10 @@ directories:
 files:
   - out/**/*
   - package.json
-  - scripts/stagehand-observe.mjs
+  - from: scripts
+    to: scripts
+    filter:
+      - stagehand-observe.mjs
 # Unpack the observe worker so ELECTRON_RUN_AS_NODE can spawn a real filesystem
 # path. Main still passes --stagehand-module resolved from app.asar/package.json.
 asarUnpack:
