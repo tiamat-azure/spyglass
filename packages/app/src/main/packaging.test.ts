@@ -17,9 +17,10 @@ describe('packaged Observe', () => {
     expect(pkg.devDependencies?.['@browserbasehq/stagehand']).toBeUndefined();
   });
 
-  it('includes the observe script and shared guest matcher in the electron-builder payload', () => {
+  it('includes the observe script, act script, and shared guest matcher in the electron-builder payload', () => {
     const yml = readFileSync(join(appRoot, 'electron-builder.yml'), 'utf8');
     expect(yml).toContain('scripts/stagehand-observe.mjs');
+    expect(yml).toContain('scripts/stagehand-act.mjs');
     expect(yml).toContain('scripts/cdp-guest.mjs');
   });
 
@@ -31,6 +32,54 @@ describe('packaged Observe', () => {
     expect(observe).toContain('No guest CDP target');
     expect(observe).not.toContain('matching[matching.length - 1]');
     expect(observe).not.toContain('!isChromeUiUrl(url) && url.length > 0');
+    const act = readFileSync(join(appRoot, 'scripts/stagehand-act.mjs'), 'utf8');
+    expect(act).toContain("from './cdp-guest.mjs'");
+    expect(act).toContain('selfHeal: false');
+    expect(act).toContain('Lot 1 act() must not call an LLM');
+    expect(act).toContain('stagehand.act(observeResult');
+    expect(act).toContain('setChecked');
+    expect(act).toContain('applySetChecked');
+    expect(act).toContain('deepLocator');
+    expect(act).not.toContain('document.querySelector');
+    expect(act).toContain('refusing click-toggle (C1b)');
+    expect(act).toContain('locator.setChecked');
+    expect(act).toContain('locator.click');
+    expect(act).not.toContain('Runtime.callFunctionOn');
+    expect(act).not.toContain('el.checked = desired');
+    expect(act).toContain('existsSync(fromArg)');
+    expect(act).toContain('await readFile(fromArg');
+    const actSpawn = readFileSync(join(appRoot, 'src/main/stagehand-act.ts'), 'utf8');
+    expect(actSpawn).toContain("flags.push('--actions', actionsPath)");
+    expect(actSpawn).toContain('mkdtemp');
+    expect(actSpawn).toContain('rm(actionsDir');
+    expect(actSpawn).toContain('delete childEnv.SPYGLASS_ACT_ACTIONS');
+    expect(actSpawn).not.toContain('SPYGLASS_ACT_ACTIONS = JSON.stringify');
+    const orch = readFileSync(join(appRoot, 'src/main/session-orchestrator.ts'), 'utf8');
+    expect(orch).toContain('await this.probe.drainPendingInputs()');
+    const stopFn = orch.slice(orch.indexOf('async stop('), orch.indexOf('async retract('));
+    expect(stopFn).toContain('enqueueWrite');
+    expect(stopFn).toContain('drainPendingInputs');
+    expect(stopFn).toContain('processProbePayload');
+    expect(stopFn).not.toContain('setTimeout(resolve, 0)');
+    expect(stopFn).not.toContain('flushPendingInputs');
+    expect(stopFn.indexOf('drainPendingInputs')).toBeLessThan(
+      stopFn.indexOf("this.state = 'stopping'")
+    );
+    expect(stopFn.indexOf('processProbePayload')).toBeLessThan(
+      stopFn.indexOf("this.state = 'stopping'")
+    );
+    expect(stopFn.indexOf('flushPendingClick')).toBeLessThan(
+      stopFn.indexOf("this.state = 'stopping'")
+    );
+    expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(stopFn.indexOf("this.state = 'stopping'")).toBeLessThan(
+      stopFn.indexOf("kind: 'record.stop'")
+    );
+    const probeHost = readFileSync(join(appRoot, 'src/main/probe-host.ts'), 'utf8');
+    expect(probeHost).toContain('drainPendingInputs');
+    expect(probeHost).toContain('eventsJson');
+    expect(probeHost).toContain('probe flush hook missing');
+    expect(probeHost).not.toContain('flushPendingInputs');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).toContain('pageMatchesPickedGuest');
     expect(matcher).toContain('pickStagehandPage');

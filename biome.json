@@ -18,6 +18,7 @@
       "!**/pnpm-lock.yaml",
       "!**/docs/lot-m1/screenshots",
       "!**/docs/lot-0/screenshots",
+      "!**/docs/lot-1/screenshots",
       "!**/assets/icons",
       "!**/docs/contracts/schemas"
     ]

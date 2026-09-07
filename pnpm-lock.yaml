@@ -26,6 +26,12 @@ importers:
       '@browserbasehq/stagehand':
         specifier: 3.7.3
         version: 3.7.3(playwright-core@1.63.0)(zod@3.25.76)
+      '@spyglass/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@spyglass/probe':
+        specifier: workspace:*
+        version: link:../probe
       playwright-core:
         specifier: 1.63.0
         version: 1.63.0

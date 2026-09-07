@@ -104,6 +104,7 @@
         "type": { "enum": ["click", "fill", "select", "check", "press", "navigate", "wait", "scroll"] },
         "selector": { "type": "string", "description": "Sélecteur retenu, stratégie la plus stable disponible" },
         "selectorStrategy": { "enum": ["testId", "role+name", "id", "text", "css", "xpath"] },
+        "description": { "type": "string", "description": "Libellé ObserveResult-compatible (F-22)" },
         "fallbackSelectors": { "type": "array", "items": { "type": "string" } },
         "arguments": { "type": "array", "items": { "type": "string" } },
         "framePath": { "type": "array", "items": { "type": "string" } },

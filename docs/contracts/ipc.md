@@ -19,7 +19,11 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:session:pause` | invoke | `{}` | `{ state: RecorderState }` |
 | `spyglass:session:resume` | invoke | `{}` | `{ state: RecorderState }` |
 | `spyglass:session:retract` | invoke | `{ eventId: string }` | `{ retractedEventId: string }` (F-19) |
-| `spyglass:session:state` | emit | — | `{ state: RecorderState, since: number }` |
+| `spyglass:session:state` | emit | — | `{ state: RecorderState, since: number, sessionId? }` |
+
+`RecorderState` is `idle` | `recording` | `stopping` | `sealed` | `sealed-failed`.
+`sealed-failed` is terminal for that session after a durable `record.stop` when
+`meta.json` could not be sealed; retry Stop repairs meta only (no second stop event).
 
 ## Événements et chat
 

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lot 1 capture fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #f7f9fc;
+        color: #0b1220;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      label,
+      button,
+      input,
+      select {
+        display: block;
+        margin: 0.5rem 0;
+      }
+      .scroll-pad {
+        height: 480px;
+        background: linear-gradient(#eef2f8, #d9e4f2);
+      }
+      iframe {
+        width: 100%;
+        height: 8rem;
+        border: 1px solid #c9d4e5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lot 1 capture fixture</h1>
+      <p>Ten-action path: iframe + open shadow DOM.</p>
+      <button type="button" id="step-1" data-testid="step-1">Start</button>
+      <label>
+        Name
+        <input id="step-2" data-testid="step-2" name="displayName" />
+      </label>
+      <label>
+        Password
+        <input id="step-3" data-testid="step-3" name="password" type="password" autocomplete="current-password" />
+      </label>
+      <label>
+        Choice
+        <select id="step-4" data-testid="step-4" name="choice">
+          <option value="">Pick</option>
+          <option value="alpha">Alpha</option>
+        </select>
+      </label>
+      <label>
+        <input type="checkbox" id="step-5" data-testid="step-5" name="agree" />
+        Agree
+      </label>
+      <button type="button" id="step-6" data-testid="step-6">Continue</button>
+      <div class="scroll-pad" id="scroll-pad">Scroll past 200px</div>
+      <label>
+        Press Enter
+        <input id="step-8" data-testid="step-8" name="confirm" />
+      </label>
+      <iframe id="lot1-frame" data-testid="lot1-frame" name="lot1-frame" src="./lot1-iframe.html" title="Lot 1 iframe"></iframe>
+      <lot1-widget id="lot1-widget" data-testid="lot1-widget"></lot1-widget>
+    </main>
+    <script>
+      class Lot1Widget extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: "open" });
+          const button = document.createElement("button");
+          button.id = "step-10";
+          button.setAttribute("data-testid", "step-10");
+          button.type = "button";
+          button.textContent = "Shadow action";
+          root.append(button);
+        }
+      }
+      customElements.define("lot1-widget", Lot1Widget);
+    </script>
+  </body>
+</html>

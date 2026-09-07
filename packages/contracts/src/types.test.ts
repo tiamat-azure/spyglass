@@ -33,7 +33,8 @@ describe('schema-aligned contract types', () => {
       action: {
         type: 'click',
         selector: '[data-testid="submit"]',
-        selectorStrategy: 'testId'
+        selectorStrategy: 'testId',
+        description: 'Clic sur « Se connecter »'
       },
       narration: { mode: 'template', text: 'Clic' },
       voice: {

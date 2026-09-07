@@ -16,16 +16,19 @@ export type BrowserPaneOptions = {
 };
 
 function guestStartPagePath(): string {
+  const requested = process.env.SPYGLASS_GUEST_PAGE;
+  const name =
+    requested !== undefined && /^[A-Za-z0-9._-]+\.html$/.test(requested) ? requested : 'start.html';
   const candidates = [
-    join(import.meta.dirname, '../resources/start.html'),
-    join(import.meta.dirname, '../../resources/start.html')
+    join(import.meta.dirname, `../resources/${name}`),
+    join(import.meta.dirname, `../../resources/${name}`)
   ];
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       return candidate;
     }
   }
-  throw new Error('Lot 0 start page is missing (resources/start.html)');
+  throw new Error(`Lot 1 guest page is missing (resources/${name})`);
 }
 
 export class BrowserPane {
