@@ -13,6 +13,7 @@ import { infoFromTarget, writeCdpInfoFile } from './cdp-info.ts';
 import { isRemoteDebuggingRequested } from './cdp-policy.ts';
 import { cdpHttpUrl, enableRemoteDebugging, resolveCdpPort } from './cdp-port.ts';
 import { parseCdpTargetList, pickGuestTarget } from './cdp-targets.ts';
+import { isChromeIpcSender } from './ipc-sender.ts';
 import {
   parseBrowserBoundsPayload,
   parseEmptyPayload,
@@ -178,13 +179,28 @@ function requirePane(): BrowserPane {
   return activePane;
 }
 
+function rejectForeignIpc(
+  event: { sender: { id: number; isDestroyed?: () => boolean } },
+  winRef: { current: BrowserWindow | undefined },
+  channel: string
+): boolean {
+  if (isChromeIpcSender(event, winRef.current)) {
+    return false;
+  }
+  console.error(`Rejected ${channel} from non-chrome sender`);
+  return true;
+}
+
 function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefined }): void {
   if (ipcRegistered) {
     return;
   }
   ipcRegistered = true;
 
-  ipcMain.handle(IPC.navGoto, async (_event, raw: unknown) => {
+  ipcMain.handle(IPC.navGoto, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.navGoto)) {
+      return { ok: false, error: 'forbidden' };
+    }
     const payload = parseGotoPayload(raw);
     if (payload === undefined) {
       console.error('Rejected invalid spyglass:nav:goto payload');
@@ -198,7 +214,10 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true, url };
   });
 
-  ipcMain.handle(IPC.navBack, (_event, raw: unknown) => {
+  ipcMain.handle(IPC.navBack, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.navBack)) {
+      return { ok: false };
+    }
     if (!parseEmptyPayload(raw)) {
       console.error('Rejected invalid spyglass:nav:back payload');
       return { ok: false };
@@ -207,7 +226,10 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true };
   });
 
-  ipcMain.handle(IPC.navForward, (_event, raw: unknown) => {
+  ipcMain.handle(IPC.navForward, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.navForward)) {
+      return { ok: false };
+    }
     if (!parseEmptyPayload(raw)) {
       console.error('Rejected invalid spyglass:nav:forward payload');
       return { ok: false };
@@ -216,7 +238,10 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true };
   });
 
-  ipcMain.handle(IPC.navReload, (_event, raw: unknown) => {
+  ipcMain.handle(IPC.navReload, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.navReload)) {
+      return { ok: false };
+    }
     if (!parseEmptyPayload(raw)) {
       console.error('Rejected invalid spyglass:nav:reload payload');
       return { ok: false };
@@ -225,7 +250,10 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true };
   });
 
-  ipcMain.handle(IPC.stagehandCdp, async (): Promise<StagehandCdpResponse> => {
+  ipcMain.handle(IPC.stagehandCdp, async (event): Promise<StagehandCdpResponse> => {
+    if (rejectForeignIpc(event, winRef, IPC.stagehandCdp)) {
+      return { cdpUrl: '', port: 0, guestUrl: '' };
+    }
     const snapshot = requirePane().snapshot();
     if (cdpPort <= 0) {
       return {
@@ -252,7 +280,15 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return response;
   });
 
-  ipcMain.handle(IPC.stagehandObserve, async (_event, raw: unknown) => {
+  ipcMain.handle(IPC.stagehandObserve, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.stagehandObserve)) {
+      return {
+        ok: false,
+        instruction: '',
+        observations: [],
+        error: 'forbidden'
+      } satisfies StagehandObserveResponse;
+    }
     const payload = parseObservePayload(raw);
     if (payload === undefined) {
       console.error('Rejected invalid spyglass:stagehand:observe payload');
@@ -292,7 +328,10 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return result;
   });
 
-  ipcMain.on(IPC.layoutBrowserBounds, (_event, raw: unknown) => {
+  ipcMain.on(IPC.layoutBrowserBounds, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.layoutBrowserBounds)) {
+      return;
+    }
     const payload = parseBrowserBoundsPayload(raw);
     if (payload === undefined) {
       console.error('Rejected invalid spyglass:layout:browserBounds payload');
@@ -392,7 +431,7 @@ void (async () => {
     });
 
     const devUrl = process.env.ELECTRON_RENDERER_URL;
-    if (devUrl !== undefined && devUrl.length > 0) {
+    if (!app.isPackaged && devUrl !== undefined && devUrl.length > 0) {
       void win.loadURL(devUrl);
     } else {
       void win.loadFile(rendererIndexPath());

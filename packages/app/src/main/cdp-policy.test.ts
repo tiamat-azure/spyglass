@@ -10,9 +10,15 @@ describe('isRemoteDebuggingRequested', () => {
     expect(isRemoteDebuggingRequested({ SPYGLASS_OBSERVE_ON_START: '1' }, true)).toBe(true);
   });
 
-  it('enables electron-vite dev (ELECTRON_RENDERER_URL)', () => {
+  it('does not let ELECTRON_RENDERER_URL enable CDP when packaged', () => {
     expect(
       isRemoteDebuggingRequested({ ELECTRON_RENDERER_URL: 'http://localhost:5173' }, true)
+    ).toBe(false);
+  });
+
+  it('enables electron-vite dev (ELECTRON_RENDERER_URL) when unpackaged', () => {
+    expect(
+      isRemoteDebuggingRequested({ ELECTRON_RENDERER_URL: 'http://localhost:5173' }, false)
     ).toBe(true);
   });
 

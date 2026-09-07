@@ -132,6 +132,10 @@ export class BrowserPane {
     contents.on('will-frame-navigate', (event) => {
       denyIfDisallowed(event);
     });
+    // HTTP(S) 3xx redirects skip will-navigate; still enforce the scheme guard.
+    contents.on('will-redirect', (event) => {
+      denyIfDisallowed(event);
+    });
   }
 
   private attachPopupRedirect(): void {

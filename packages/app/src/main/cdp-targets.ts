@@ -40,6 +40,17 @@ export function isChromeUiUrl(url: string): boolean {
   return false;
 }
 
+/** Same origin + pathname (query/hash may differ). Never a raw string prefix. */
+export function urlsMatchOriginAndPathname(left: string, right: string): boolean {
+  try {
+    const a = new URL(left);
+    const b = new URL(right);
+    return a.origin === b.origin && a.pathname === b.pathname;
+  } catch {
+    return false;
+  }
+}
+
 export function pickGuestTarget(
   targets: readonly CdpTarget[],
   guestUrl?: string
@@ -53,11 +64,9 @@ export function pickGuestTarget(
   }
   const guests = pages.filter((target) => !isChromeUiUrl(target.url));
   if (guestUrl !== undefined && guestUrl.length > 0) {
-    const byPrefix = guests.find(
-      (target) => target.url.startsWith(guestUrl) || guestUrl.startsWith(target.url)
-    );
-    if (byPrefix !== undefined) {
-      return byPrefix;
+    const byOriginPath = guests.find((target) => urlsMatchOriginAndPathname(target.url, guestUrl));
+    if (byOriginPath !== undefined) {
+      return byOriginPath;
     }
   }
   if (guests[0] !== undefined) {

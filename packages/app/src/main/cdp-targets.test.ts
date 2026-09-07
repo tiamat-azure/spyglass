@@ -3,7 +3,8 @@ import {
   GUEST_FALLBACK_CHROME_WARNING,
   isChromeUiUrl,
   parseCdpTargetList,
-  pickGuestTarget
+  pickGuestTarget,
+  urlsMatchOriginAndPathname
 } from './cdp-targets.ts';
 
 describe('pickGuestTarget', () => {
@@ -53,5 +54,56 @@ describe('pickGuestTarget', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('matches same origin and pathname when query/hash differ', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'file:///app/out/renderer/index.html',
+        title: 'Spyglass'
+      },
+      { id: 'guest', type: 'page', url: 'https://example.com/', title: 'Example' },
+      { id: 'other', type: 'page', url: 'https://other.test/', title: 'Other' }
+    ]);
+    expect(pickGuestTarget(targets, 'https://example.com/?q=1')?.id).toBe('guest');
+    expect(urlsMatchOriginAndPathname('https://example.com/', 'https://example.com/?q=1')).toBe(
+      true
+    );
+  });
+
+  it('does not treat a hostname prefix as a match', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'file:///app/out/renderer/index.html',
+        title: 'Spyglass'
+      },
+      { id: 'evil', type: 'page', url: 'https://example.com.evil.com/', title: 'Evil' },
+      { id: 'guest', type: 'page', url: 'https://example.com/', title: 'Example' }
+    ]);
+    expect(pickGuestTarget(targets, 'https://example.com')?.id).toBe('guest');
+    expect(urlsMatchOriginAndPathname('https://example.com.evil.com/', 'https://example.com')).toBe(
+      false
+    );
+  });
+
+  it('does not match a different pathname on the same origin', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'file:///app/out/renderer/index.html',
+        title: 'Spyglass'
+      },
+      { id: 'other-path', type: 'page', url: 'https://example.com/other', title: 'Other path' },
+      { id: 'home', type: 'page', url: 'https://example.com/', title: 'Home' }
+    ]);
+    expect(pickGuestTarget(targets, 'https://example.com')?.id).toBe('home');
+    expect(urlsMatchOriginAndPathname('https://example.com/other', 'https://example.com')).toBe(
+      false
+    );
   });
 });
