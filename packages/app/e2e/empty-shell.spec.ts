@@ -1,21 +1,19 @@
-import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
 
+/** @spyglass/app package root; `package.json` `"main"` is `./out/main/index.js`. */
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
-const unpackedLinux = join(appDir, 'release/linux-unpacked/spyglass');
 const require = createRequire(import.meta.url);
 const bundledElectron = require('electron') as string;
 
 test.describe('Lot -1 empty Electron shell', () => {
-  test('launches the built app and shows the empty shell', async () => {
-    const linuxBinary = existsSync(unpackedLinux);
+  test('launches the electron-vite out/ build with bundled Electron', async () => {
     const electronApp = await electron.launch({
       cwd: appDir,
-      args: linuxBinary ? ['--no-sandbox', '--no-zygote'] : ['--no-sandbox', '--no-zygote', appDir],
-      executablePath: linuxBinary ? unpackedLinux : bundledElectron,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
       timeout: 45_000,
       env: {
         ...process.env,

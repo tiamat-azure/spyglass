@@ -118,11 +118,11 @@ Lot -1 does **not** implement the two-pane product shell.
 validation, contracts coverage, Electron smoke, and unsigned installer
 artifacts for the OS that can produce them.
 
-Playwright launches the **built Electron app** (and the unpacked dir when
-Linux packaging has produced `release/linux-unpacked`). Launching the final
-AppImage/dmg/NSIS inside CI is deferred: GitHub-hosted runners often lack
-FUSE / Gatekeeper / installer GUI. Installer files are still built and
-uploaded as artifacts.
+Playwright launches **bundled Electron** against the **electron-vite `out/`
+build** (`packages/app`, `"main": "./out/main/index.js"`). It does not use
+`release/` leftovers. Launching the final AppImage/dmg/NSIS inside CI is
+deferred: GitHub-hosted runners often lack FUSE / Gatekeeper / installer GUI.
+Installer files are still built and uploaded as artifacts.
 
 ## Lot boundary
 

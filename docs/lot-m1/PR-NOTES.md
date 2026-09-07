@@ -32,7 +32,7 @@ features** (no WebContentsView split, Stagehand, recording, chat, or voice).
 - [x] Biome lint/format for all five packages
 - [x] TypeScript `strict` / `noImplicitAny`
 - [x] vitest smoke tests; contracts coverage threshold only
-- [x] Playwright Electron smoke (built app; installer GUI e2e deferred)
+- [x] Playwright Electron smoke (bundled Electron + electron-vite `out/`; installer GUI e2e deferred)
 - [x] ajv corpus: `docs/contracts/examples/{valid,invalid}`
 - [x] electron-builder: Linux AppImage+deb, macOS dmg x64+arm64, Windows NSIS
 - [x] Unsigned / not notarized documented (`docs/UNSIGNED-DISTRIBUTION.md`)
