@@ -10,7 +10,7 @@ import {
   SCREENSHOT_RETENTION,
   snapshotScript
 } from '@spyglass/probe';
-import type { NavState } from '../shared/ipc.ts';
+import type { NavState, RecorderState } from '../shared/ipc.ts';
 import type { BrowserPane } from './browser-pane.ts';
 import {
   asProbeWireEvent,
@@ -25,7 +25,7 @@ import { parseJsonl, RawJournal } from './raw-journal.ts';
 import { CaptureRetention } from './retention.ts';
 import { formatEventId, newProbeNonce, newSessionId } from './session-ids.ts';
 
-export type RecorderState = 'idle' | 'recording' | 'stopping' | 'sealed';
+export type { RecorderState };
 
 export type SessionMeta = {
   sessionId: string;
@@ -156,6 +156,9 @@ export class SessionOrchestrator {
   }
 
   async stop(): Promise<{ sessionId: string; eventCount: number; sizeBytes: number }> {
+    if (this.state === 'sealed-failed') {
+      return await this.repairSeal();
+    }
     if (this.state !== 'recording' || this.sessionId === undefined || this.journal === undefined) {
       throw new Error('Not recording');
     }
@@ -164,64 +167,41 @@ export class SessionOrchestrator {
     const sessionId = this.sessionId;
     const journal = this.journal;
     return await this.enqueueWrite(async () => {
-      let appendedStop = false;
-      let raw = '';
-      let eventCount = 0;
-      const revertToRecordingAndThrow = (error: unknown): never => {
-        this.state = 'recording';
-        this.since = Date.now();
-        this.emitState();
-        throw error;
-      };
+      let durableStop = false;
       try {
-        await this.flushPendingClick();
-        const page = this.pageSnapshot();
-        const id = this.nextId();
-        const stopEvent = buildControlEvent({
-          id,
-          sessionId,
-          kind: 'record.stop',
-          ts: Date.now(),
-          page
-        });
-        await this.append(stopEvent);
-        appendedStop = true;
-        raw = await readFile(journal.path, 'utf8');
-        eventCount = parseJsonl(raw).length;
-        await this.writeSealMeta(eventCount, new Date().toISOString());
+        const existingRaw = await readFile(journal.path, 'utf8');
+        const existingStops = countRecordStop(parseJsonl(existingRaw));
+        if (existingStops > 0) {
+          durableStop = true;
+          if (existingStops > 1) {
+            throw new Error('Cannot stop: journal already has multiple record.stop events');
+          }
+        } else {
+          await this.flushPendingClick();
+          const page = this.pageSnapshot();
+          const id = this.nextId();
+          await this.append(
+            buildControlEvent({
+              id,
+              sessionId,
+              kind: 'record.stop',
+              ts: Date.now(),
+              page
+            })
+          );
+          durableStop = true;
+        }
+        return await this.forceSeal(sessionId, journal);
       } catch (error) {
-        if (!appendedStop) {
-          revertToRecordingAndThrow(error);
+        if (!durableStop) {
+          this.state = 'recording';
+          this.since = Date.now();
+          this.emitState();
+          throw error;
         }
-        try {
-          if (raw.length === 0) {
-            raw = await readFile(journal.path, 'utf8');
-          }
-          eventCount = parseJsonl(raw).length;
-        } catch {
-          eventCount = this.eventSeq;
-        }
-        const sealedAt = new Date().toISOString();
-        try {
-          await this.writeSealMeta(eventCount, sealedAt);
-        } catch {
-          try {
-            await this.writeSealMeta(eventCount, sealedAt);
-          } catch (metaError) {
-            revertToRecordingAndThrow(
-              new Error(
-                `Stop failed: record.stop is in the journal but meta.json could not be sealed (${
-                  metaError instanceof Error ? metaError.message : String(metaError)
-                })`
-              )
-            );
-          }
-        }
+        this.enterSealedFailed();
+        throw wrapSealFailure(error);
       }
-      this.state = 'sealed';
-      this.since = Date.now();
-      this.emitState();
-      return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
     });
   }
 
@@ -515,9 +495,66 @@ export class SessionOrchestrator {
     if (this.journal === undefined) {
       return;
     }
+    if (this.state === 'sealed' || this.state === 'sealed-failed') {
+      return;
+    }
     await this.journal.append(event);
     this.seenEventIds.add(event.id);
     this.handlers.onEvent(event);
+  }
+
+  private enterSealedFailed(): void {
+    this.state = 'sealed-failed';
+    this.since = Date.now();
+    this.emitState();
+  }
+
+  private async repairSeal(): Promise<{
+    sessionId: string;
+    eventCount: number;
+    sizeBytes: number;
+  }> {
+    if (this.sessionId === undefined || this.journal === undefined) {
+      throw new Error('No session to seal');
+    }
+    const sessionId = this.sessionId;
+    const journal = this.journal;
+    this.state = 'stopping';
+    this.emitState();
+    return await this.enqueueWrite(async () => {
+      try {
+        return await this.forceSeal(sessionId, journal);
+      } catch (error) {
+        this.enterSealedFailed();
+        throw wrapSealFailure(error);
+      }
+    });
+  }
+
+  private async forceSeal(
+    sessionId: string,
+    journal: RawJournal
+  ): Promise<{ sessionId: string; eventCount: number; sizeBytes: number }> {
+    const raw = await readFile(journal.path, 'utf8');
+    const events = parseJsonl(raw);
+    const stops = countRecordStop(events);
+    if (stops === 0) {
+      throw new Error('Cannot seal: journal has no record.stop');
+    }
+    if (stops > 1) {
+      throw new Error('Cannot seal: journal has multiple record.stop events');
+    }
+    const eventCount = events.length;
+    const sealedAt = new Date().toISOString();
+    try {
+      await this.writeSealMeta(eventCount, sealedAt);
+    } catch {
+      await this.writeSealMeta(eventCount, sealedAt);
+    }
+    this.state = 'sealed';
+    this.since = Date.now();
+    this.emitState();
+    return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
   }
 
   private nextId(): string {
@@ -585,6 +622,25 @@ export class SessionOrchestrator {
     }
     await writeFile(path, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
   }
+}
+
+function isRecordStopEvent(event: unknown): boolean {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    (event as { kind?: unknown }).kind === 'record.stop'
+  );
+}
+
+function countRecordStop(events: unknown[]): number {
+  return events.filter(isRecordStopEvent).length;
+}
+
+function wrapSealFailure(error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `Stop failed: record.stop is in the journal but meta.json could not be sealed (${detail}). Retry Stop to repair meta.`
+  );
 }
 
 export function replayFailureStepIndexes(

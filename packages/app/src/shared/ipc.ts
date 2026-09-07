@@ -95,7 +95,7 @@ export type CdpTarget = {
   webSocketDebuggerUrl?: string;
 };
 
-export type RecorderState = 'idle' | 'recording' | 'stopping' | 'sealed';
+export type RecorderState = 'idle' | 'recording' | 'stopping' | 'sealed' | 'sealed-failed';
 
 export type SessionStartRequest = {
   startUrl?: string;

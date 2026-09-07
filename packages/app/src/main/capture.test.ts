@@ -355,7 +355,7 @@ describe('session stop after record.stop append', () => {
     expect(events.some((event) => (event as { kind: string }).kind === 'record.stop')).toBe(true);
   });
 
-  it('throws a Stop failure and stays recording when meta stays unwritable after append', async () => {
+  it('enters sealed-failed after a durable stop when meta stays unwritable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-unwritable-'));
     const orch = new SessionOrchestrator(() => root, stubPane, {
       onEvent: () => {},
@@ -367,9 +367,47 @@ describe('session stop after record.stop append', () => {
       throw new Error('meta permanently unwritable');
     };
     await expect(orch.stop()).rejects.toThrow(/meta\.json could not be sealed/i);
-    expect(orch.snapshot().state).toBe('recording');
+    expect(orch.snapshot().state).toBe('sealed-failed');
+    await expect(orch.stop()).rejects.toThrow(/Retry Stop to repair meta/i);
+    expect(orch.snapshot().state).toBe('sealed-failed');
+    await expect(orch.start('https://example.test/')).rejects.toThrow(/sealed-failed/);
     const events = parseJsonl(await readFile(join(root, sessionId, 'raw.jsonl'), 'utf8'));
-    expect(events.some((event) => (event as { kind: string }).kind === 'record.stop')).toBe(true);
+    expect(
+      events.filter((event) => (event as { kind: string }).kind === 'record.stop')
+    ).toHaveLength(1);
+    await orch.recordNav('nav.load');
+    const afterNav = parseJsonl(await readFile(join(root, sessionId, 'raw.jsonl'), 'utf8'));
+    expect(afterNav).toHaveLength(events.length);
+  });
+
+  it('retry Stop from sealed-failed repairs meta without a second record.stop', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-repair-'));
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {}
+    });
+    const { sessionId } = await orch.start('https://example.test/');
+    const sealer = orch as unknown as MetaSealer;
+    const original = sealer.writeSealMeta.bind(orch);
+    sealer.writeSealMeta = async () => {
+      throw new Error('meta permanently unwritable');
+    };
+    await expect(orch.stop()).rejects.toThrow(/Retry Stop to repair meta/i);
+    expect(orch.snapshot().state).toBe('sealed-failed');
+    sealer.writeSealMeta = original;
+    const result = await orch.stop();
+    expect(orch.snapshot().state).toBe('sealed');
+    expect(result.eventCount).toBeGreaterThanOrEqual(2);
+    const events = parseJsonl(await readFile(join(root, sessionId, 'raw.jsonl'), 'utf8'));
+    expect(
+      events.filter((event) => (event as { kind: string }).kind === 'record.stop')
+    ).toHaveLength(1);
+    const meta = JSON.parse(await readFile(join(root, sessionId, 'meta.json'), 'utf8')) as {
+      eventCount: number;
+      sealedAt?: string;
+    };
+    expect(meta.eventCount).toBe(result.eventCount);
+    expect(typeof meta.sealedAt).toBe('string');
   });
 });
 

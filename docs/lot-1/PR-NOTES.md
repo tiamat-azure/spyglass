@@ -103,6 +103,11 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 - **C1b (captain / Firstmate): applied.** `dom.check` records `true`/`false`
   and replays with `setChecked` (plus `uncheck` when false) so reload cannot
   invert the control. Not a click-toggle.
+- **S2a (captain / Firstmate): applied.** Once `record.stop` is durable in
+  `raw.jsonl`, the session is terminal and non-recording. Meta write failure
+  enters `sealed-failed` (appends frozen, Record cannot continue that session).
+  Retry Stop repairs `meta.json` / force-seals only — it does not append a
+  second `record.stop`. Do not revert to `recording` after a durable stop.
 - Replay of masked values uses the `SECRET_*` ref string, not the clear
   secret (F-15). Fixture proof fills `SECRET_PASSWORD` after reload.
 

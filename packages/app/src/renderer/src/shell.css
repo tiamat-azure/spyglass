@@ -347,6 +347,13 @@ h1 {
   border-color: var(--sg-rec);
 }
 
+.record-btn[data-state="sealed-failed"] {
+  background: var(--sg-surface-2);
+  color: var(--sg-danger);
+  border-color: var(--sg-danger);
+  box-shadow: none;
+}
+
 .record-btn[data-state="stopping"],
 .record-btn:disabled {
   cursor: wait;

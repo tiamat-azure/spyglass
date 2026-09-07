@@ -115,12 +115,31 @@ if (api !== undefined) {
   api.session.onState((state: SessionStatePayload) => {
     const recording = state.state === 'recording';
     const stopping = state.state === 'stopping';
+    const sealedFailed = state.state === 'sealed-failed';
     const busy = recording || stopping;
-    recordBtn.dataset.state = stopping ? 'stopping' : recording ? 'recording' : 'idle';
-    recordBtn.textContent = stopping ? 'Stopping' : recording ? 'Stop' : 'Record';
+    recordBtn.dataset.state = stopping
+      ? 'stopping'
+      : recording
+        ? 'recording'
+        : sealedFailed
+          ? 'sealed-failed'
+          : 'idle';
+    recordBtn.textContent = stopping
+      ? 'Stopping'
+      : recording
+        ? 'Stop'
+        : sealedFailed
+          ? 'Retry Stop'
+          : 'Record';
     recordBtn.disabled = stopping;
     recPill.dataset.active = busy ? 'true' : 'false';
-    recPill.title = stopping ? 'Stopping' : recording ? 'Recording' : 'Recording idle';
+    recPill.title = stopping
+      ? 'Stopping'
+      : recording
+        ? 'Recording'
+        : sealedFailed
+          ? 'Seal failed — retry Stop to write meta.json'
+          : 'Recording idle';
     browserSlot.dataset.recording = busy ? 'true' : 'false';
   });
 
@@ -215,8 +234,9 @@ recordBtn.addEventListener('click', () => {
     return;
   }
   const recording = recordBtn.dataset.state === 'recording';
+  const retrySeal = recordBtn.dataset.state === 'sealed-failed';
   recordBtn.disabled = true;
-  const work = recording ? api.session.stop() : api.session.start();
+  const work = recording || retrySeal ? api.session.stop() : api.session.start();
   void work
     .catch((error: unknown) => {
       appendLog(log, `session failed: ${error instanceof Error ? error.message : String(error)}`);
