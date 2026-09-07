@@ -5,6 +5,7 @@ import {
   pageMatchesPickedGuest,
   parseCdpTargetList,
   pickGuestTarget,
+  resolvePinnedChromeTargetId,
   urlsMatchOriginAndPathname
 } from './cdp-targets.ts';
 
@@ -106,6 +107,73 @@ describe('pickGuestTarget', () => {
     expect(urlsMatchOriginAndPathname('https://example.com/other', 'https://example.com')).toBe(
       false
     );
+  });
+
+  it('does not return Vite chrome when chrome and guest share localhost:5173', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'http://localhost:5173/',
+        title: 'Spyglass'
+      },
+      {
+        id: 'guest',
+        type: 'page',
+        url: 'http://localhost:5173/',
+        title: 'Guest'
+      }
+    ]);
+    expect(
+      pickGuestTarget(targets, 'http://localhost:5173/', { excludeTargetIds: ['chrome'] })?.id
+    ).toBe('guest');
+    expect(
+      pickGuestTarget(
+        parseCdpTargetList([
+          {
+            id: 'guest',
+            type: 'page',
+            url: 'http://localhost:5173/',
+            title: 'Guest'
+          },
+          {
+            id: 'chrome',
+            type: 'page',
+            url: 'http://localhost:5173/',
+            title: 'Spyglass'
+          }
+        ]),
+        'http://localhost:5173/',
+        { excludeTargetIds: ['chrome'] }
+      )?.id
+    ).toBe('guest');
+  });
+
+  it('pins chrome by URL only while chrome and guest URLs differ', () => {
+    const targets = parseCdpTargetList([
+      {
+        id: 'chrome',
+        type: 'page',
+        url: 'http://localhost:5173/',
+        title: 'Spyglass'
+      },
+      {
+        id: 'guest',
+        type: 'page',
+        url: 'file:///app/out/resources/start.html',
+        title: 'start'
+      }
+    ]);
+    expect(
+      resolvePinnedChromeTargetId(
+        targets,
+        'http://localhost:5173/',
+        'file:///app/out/resources/start.html'
+      )
+    ).toBe('chrome');
+    expect(
+      resolvePinnedChromeTargetId(targets, 'http://localhost:5173/', 'http://localhost:5173/')
+    ).toBeUndefined();
   });
 });
 

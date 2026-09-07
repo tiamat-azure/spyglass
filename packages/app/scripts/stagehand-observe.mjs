@@ -22,7 +22,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { pageMatchesPickedGuest, pickGuestTarget } from './cdp-guest.mjs';
+import { isChromeUiUrl, pageMatchesPickedGuest, pickGuestTarget } from './cdp-guest.mjs';
 
 const DEFAULT_INSTRUCTION = 'Find interactive elements on the displayed page';
 
@@ -220,7 +220,11 @@ async function main() {
 
   const cdpHttpUrl = toHttpCdpUrl(cdpUrl);
   const targets = await listTargets(cdpHttpUrl);
-  const guest = pickGuestTarget(targets, guestUrl);
+  const chromeTargetId =
+    argValue('--chrome-target-id') ?? process.env.SPYGLASS_CHROME_TARGET_ID ?? info?.chromeTargetId;
+  const excludeTargetIds =
+    typeof chromeTargetId === 'string' && chromeTargetId.length > 0 ? [chromeTargetId] : [];
+  const guest = pickGuestTarget(targets, guestUrl, { excludeTargetIds });
   if (guest === undefined) {
     const failure = {
       ok: false,
@@ -261,10 +265,25 @@ async function main() {
       stagehand.context && typeof stagehand.context.pages === 'function'
         ? stagehand.context.pages()
         : [];
-    const match = pages.find((page) => {
+    const matching = pages.filter((page) => {
       const url = typeof page.url === 'function' ? page.url() : '';
-      return pageMatchesPickedGuest(url, guest.url);
+      if (!pageMatchesPickedGuest(url, guest.url)) {
+        return false;
+      }
+      const pageTargetId = playwrightTargetId(page);
+      if (pageTargetId !== undefined && excludeTargetIds.includes(pageTargetId)) {
+        return false;
+      }
+      return true;
     });
+    const match =
+      matching.length > 1 &&
+      matching.every((page) => {
+        const url = typeof page.url === 'function' ? page.url() : '';
+        return isChromeUiUrl(url);
+      })
+        ? matching[matching.length - 1]
+        : matching[0];
     if (match === undefined) {
       const failure = {
         ok: false,
@@ -323,6 +342,26 @@ async function main() {
       // Connecting over CDP must not close Electron.
     }
   }
+}
+
+function playwrightTargetId(page) {
+  if (page === undefined || page === null || typeof page !== 'object') {
+    return undefined;
+  }
+  if (typeof page._targetId === 'string' && page._targetId.length > 0) {
+    return page._targetId;
+  }
+  if (typeof page.target === 'function') {
+    try {
+      const target = page.target();
+      if (target && typeof target._targetId === 'string' && target._targetId.length > 0) {
+        return target._targetId;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 await main();

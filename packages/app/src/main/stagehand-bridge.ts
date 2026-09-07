@@ -85,6 +85,7 @@ export async function runStagehandObserve(options: {
   guestUrl: string;
   instruction?: string;
   appPath?: string;
+  chromeTargetId?: string;
 }): Promise<StagehandObserveResponse> {
   return await withObserveMutex(() => spawnStagehandObserve(options));
 }
@@ -111,6 +112,7 @@ async function spawnStagehandObserve(options: {
   guestUrl: string;
   instruction?: string;
   appPath?: string;
+  chromeTargetId?: string;
 }): Promise<StagehandObserveResponse> {
   const instruction =
     options.instruction !== undefined && options.instruction.trim().length > 0
@@ -140,6 +142,9 @@ async function spawnStagehandObserve(options: {
   const stagehandModule = resolveStagehandModule(options.appPath);
   if (stagehandModule !== undefined) {
     flags.push('--stagehand-module', stagehandModule);
+  }
+  if (options.chromeTargetId !== undefined && options.chromeTargetId.length > 0) {
+    flags.push('--chrome-target-id', options.chromeTargetId);
   }
 
   const childEnv: NodeJS.ProcessEnv = {

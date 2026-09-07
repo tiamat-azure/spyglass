@@ -159,16 +159,13 @@ export class BrowserPane {
       return;
     }
     const ses = this.webContents.session;
-    ses.webRequest.onBeforeRequest(
-      { urls: ['*://127.0.0.1:*/*', '*://localhost:*/*'] },
-      (details, callback) => {
-        if (isGuestRequestToCdpPort(details.url, cdpPort)) {
-          callback({ cancel: true });
-          return;
-        }
-        callback({});
+    ses.webRequest.onBeforeRequest((details, callback) => {
+      if (isGuestRequestToCdpPort(details.url, cdpPort)) {
+        callback({ cancel: true });
+        return;
       }
-    );
+      callback({});
+    });
   }
 
   private attachPopupRedirect(): void {

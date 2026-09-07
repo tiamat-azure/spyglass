@@ -12,7 +12,7 @@ import { BrowserPane } from './browser-pane.ts';
 import { infoFromTarget, writeCdpInfoFile } from './cdp-info.ts';
 import { isRemoteDebuggingRequested } from './cdp-policy.ts';
 import { cdpHttpUrl, enableRemoteDebugging, resolveCdpPort } from './cdp-port.ts';
-import { parseCdpTargetList, pickGuestTarget } from './cdp-targets.ts';
+import { parseCdpTargetList, pickGuestTarget, resolvePinnedChromeTargetId } from './cdp-targets.ts';
 import { isChromeIpcSender } from './ipc-sender.ts';
 import {
   parseBrowserBoundsPayload,
@@ -45,6 +45,7 @@ installWebContentsSecurityDefaults();
 
 let activePane: BrowserPane | undefined;
 let ipcRegistered = false;
+let pinnedChromeTargetId: string | undefined;
 
 function preloadPath(): string {
   return join(import.meta.dirname, '../preload/index.cjs');
@@ -86,7 +87,33 @@ async function fetchCdpTargets(port: number): Promise<ReturnType<typeof parseCdp
   return parseCdpTargetList(payload);
 }
 
-async function persistCdpInfo(port: number, guestUrl: string, guestTitle: string): Promise<void> {
+function pickGuestOptions(): { excludeTargetIds: string[] } | undefined {
+  if (pinnedChromeTargetId === undefined || pinnedChromeTargetId.length === 0) {
+    return undefined;
+  }
+  return { excludeTargetIds: [pinnedChromeTargetId] };
+}
+
+function pinChromeTargetFromList(
+  targets: ReturnType<typeof parseCdpTargetList>,
+  chromeUrl: string,
+  guestUrl: string
+): void {
+  if (pinnedChromeTargetId !== undefined && pinnedChromeTargetId.length > 0) {
+    return;
+  }
+  const id = resolvePinnedChromeTargetId(targets, chromeUrl, guestUrl);
+  if (id !== undefined) {
+    pinnedChromeTargetId = id;
+  }
+}
+
+async function persistCdpInfo(
+  port: number,
+  guestUrl: string,
+  guestTitle: string,
+  chromeUrl?: string
+): Promise<void> {
   if (port <= 0) {
     return;
   }
@@ -97,11 +124,17 @@ async function persistCdpInfo(port: number, guestUrl: string, guestTitle: string
   let target: ReturnType<typeof pickGuestTarget>;
   try {
     const targets = await fetchCdpTargets(port);
-    target = pickGuestTarget(targets, guestUrl);
+    if (chromeUrl !== undefined && chromeUrl.length > 0) {
+      pinChromeTargetFromList(targets, chromeUrl, guestUrl);
+    }
+    target = pickGuestTarget(targets, guestUrl, pickGuestOptions());
   } catch {
     target = undefined;
   }
-  await writeCdpInfoFile(path, infoFromTarget(port, guestUrl, guestTitle, target));
+  await writeCdpInfoFile(
+    path,
+    infoFromTarget(port, guestUrl, guestTitle, target, pinnedChromeTargetId)
+  );
 }
 
 async function waitForGuestPaint(guest: WebContents): Promise<void> {
@@ -265,7 +298,11 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     let targetId: string | undefined;
     try {
       const targets = await fetchCdpTargets(cdpPort);
-      targetId = pickGuestTarget(targets, snapshot.url)?.id;
+      const win = winRef.current;
+      if (win !== undefined && !win.isDestroyed()) {
+        pinChromeTargetFromList(targets, win.webContents.getURL(), snapshot.url);
+      }
+      targetId = pickGuestTarget(targets, snapshot.url, pickGuestOptions())?.id;
     } catch {
       targetId = undefined;
     }
@@ -315,11 +352,21 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       }
       return disabled;
     }
+    const observeWin = winRef.current;
+    if (observeWin !== undefined && !observeWin.isDestroyed()) {
+      try {
+        const targets = await fetchCdpTargets(cdpPort);
+        pinChromeTargetFromList(targets, observeWin.webContents.getURL(), snapshot.url);
+      } catch {
+        // pin is best-effort; Observe still excludes whatever we already stored
+      }
+    }
     const result = await runStagehandObserve({
       cdpUrl: cdpHttpUrl(cdpPort),
       guestUrl: snapshot.url,
       instruction: payload.instruction,
-      appPath: app.getAppPath()
+      appPath: app.getAppPath(),
+      chromeTargetId: pinnedChromeTargetId
     });
     const win = winRef.current;
     if (win !== undefined) {
@@ -367,6 +414,7 @@ void (async () => {
   registerIpc(cdpPort, winRef);
 
   const createShell = (): void => {
+    pinnedChromeTargetId = undefined;
     const win = createWindow();
     winRef.current = win;
     const pane = new BrowserPane(
@@ -374,9 +422,11 @@ void (async () => {
       {
         onState: (state: NavState) => {
           emitToChrome(win, IPC.navState, state);
-          void persistCdpInfo(cdpPort, state.url, state.title).catch((error: unknown) => {
-            console.error('Failed to persist CDP info:', error);
-          });
+          void persistCdpInfo(cdpPort, state.url, state.title, win.webContents.getURL()).catch(
+            (error: unknown) => {
+              console.error('Failed to persist CDP info:', error);
+            }
+          );
         },
         onPopupRedirected: (payload: PopupRedirectedPayload) => {
           console.info('[spyglass] nav.popup-redirected', payload);
@@ -412,11 +462,18 @@ void (async () => {
         if (process.env.SPYGLASS_OBSERVE_ON_START === '1' && cdpPort > 0) {
           await waitForGuestPaint(pane.webContents);
           const snapshot = pane.snapshot();
+          try {
+            const targets = await fetchCdpTargets(cdpPort);
+            pinChromeTargetFromList(targets, win.webContents.getURL(), snapshot.url);
+          } catch {
+            // pin is best-effort
+          }
           const result = await runStagehandObserve({
             cdpUrl: cdpHttpUrl(cdpPort),
             guestUrl: snapshot.url,
             instruction: process.env.SPYGLASS_OBSERVE_INSTRUCTION,
-            appPath: app.getAppPath()
+            appPath: app.getAppPath(),
+            chromeTargetId: pinnedChromeTargetId
           });
           emitToChrome(win, IPC.stagehandResult, result);
           await persistObserveResultIfRequested(result);

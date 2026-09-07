@@ -8,6 +8,7 @@ export type CdpEndpointInfo = {
   guestUrl: string;
   guestTitle: string;
   targetId?: string;
+  chromeTargetId?: string;
   updatedAt: string;
 };
 
@@ -20,7 +21,8 @@ export function infoFromTarget(
   port: number,
   guestUrl: string,
   guestTitle: string,
-  target?: CdpTarget
+  target?: CdpTarget,
+  chromeTargetId?: string
 ): CdpEndpointInfo {
   const info: CdpEndpointInfo = {
     cdpUrl: `http://127.0.0.1:${String(port)}`,
@@ -31,6 +33,9 @@ export function infoFromTarget(
   };
   if (target !== undefined) {
     info.targetId = target.id;
+  }
+  if (chromeTargetId !== undefined && chromeTargetId.length > 0) {
+    info.chromeTargetId = chromeTargetId;
   }
   return info;
 }

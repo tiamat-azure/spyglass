@@ -3,6 +3,7 @@ import {
   isChromeUiUrl,
   pageMatchesPickedGuest,
   pickGuestTarget as pickGuestTargetImpl,
+  resolvePinnedChromeTargetId,
   urlsMatchOriginAndPathname
 } from '../../scripts/cdp-guest.mjs';
 import type { CdpTarget } from '../shared/ipc.ts';
@@ -11,14 +12,16 @@ export {
   GUEST_FALLBACK_CHROME_WARNING,
   isChromeUiUrl,
   pageMatchesPickedGuest,
+  resolvePinnedChromeTargetId,
   urlsMatchOriginAndPathname
 };
 
 export function pickGuestTarget(
   targets: readonly CdpTarget[],
-  guestUrl?: string
+  guestUrl?: string,
+  options?: { excludeTargetIds?: readonly string[] }
 ): CdpTarget | undefined {
-  return pickGuestTargetImpl(targets, guestUrl);
+  return pickGuestTargetImpl(targets, guestUrl, options);
 }
 
 export function parseCdpTargetList(input: unknown): CdpTarget[] {
