@@ -6,7 +6,7 @@ import {
   fallbackBrowserBounds,
   roundBrowserBounds
 } from './layout.ts';
-import { observeScriptPath, parseObserveStdout } from './stagehand-bridge.ts';
+import { observeScriptPath, parseObserveStdout, withObserveMutex } from './stagehand-bridge.ts';
 
 describe('ipc payload validation', () => {
   it('accepts a goto url string and rejects junk', () => {
@@ -71,10 +71,55 @@ describe('layout', () => {
 describe('parseObserveStdout', () => {
   it('reads the last JSON object from mixed logs', () => {
     const parsed = parseObserveStdout('noise\n{"ok":true,"instruction":"x","observations":[]}\n');
+    expect(parsed).toEqual({
+      ok: true,
+      instruction: 'x',
+      observations: []
+    });
+  });
+
+  it('normalizes a missing observations array', () => {
+    const parsed = parseObserveStdout('{"ok":false,"instruction":"x","error":"nope"}');
+    expect(parsed).toEqual({
+      ok: false,
+      instruction: 'x',
+      observations: [],
+      error: 'nope'
+    });
+  });
+
+  it('rejects non-boolean ok and non-array observations', () => {
+    expect(parseObserveStdout('{"ok":true,"observations":"all of them"}')).toBeUndefined();
+    expect(parseObserveStdout('{"ok":"yes","observations":[]}')).toBeUndefined();
+  });
+
+  it('keeps a later valid payload when an earlier {ok} line is junk', () => {
+    const parsed = parseObserveStdout(
+      '{"ok":true}\n{"ok":true,"instruction":"find","observations":[{"description":"Go"}]}'
+    );
     expect(parsed?.ok).toBe(true);
+    expect(parsed?.instruction).toBe('find');
+    expect(parsed?.observations).toEqual([{ description: 'Go' }]);
   });
 
   it('resolves the observe script from the source checkout layout', () => {
     expect(observeScriptPath()).toMatch(/stagehand-observe\.mjs$/);
+  });
+});
+
+describe('withObserveMutex', () => {
+  it('runs overlapping observe work one at a time', async () => {
+    const order: number[] = [];
+    await Promise.all([
+      withObserveMutex(async () => {
+        order.push(1);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        order.push(2);
+      }),
+      withObserveMutex(async () => {
+        order.push(3);
+      })
+    ]);
+    expect(order).toEqual([1, 2, 3]);
   });
 });

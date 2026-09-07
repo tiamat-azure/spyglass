@@ -22,6 +22,11 @@ describe('normalizeGotoUrl', () => {
     expect(normalizeGotoUrl('javascript:alert(1)')).toBeUndefined();
     expect(normalizeGotoUrl('')).toBeUndefined();
   });
+
+  it('rejects embedded credentials', () => {
+    expect(normalizeGotoUrl('https://user:pass@example.com')).toBeUndefined();
+    expect(normalizeGotoUrl('https://user@example.com/path')).toBeUndefined();
+  });
 });
 
 describe('isAllowedGuestUrl', () => {
@@ -94,6 +99,19 @@ describe('isAllowedInViewNavigation', () => {
       isAllowedInViewNavigation('file:///app/resources/start.html', 'data:text/html,hi', resources)
     ).toBe(false);
   });
+
+  it('rejects http(s) URLs with embedded credentials', () => {
+    expect(
+      isAllowedInViewNavigation(
+        'https://example.com/',
+        'https://user:pass@example.com/secret',
+        resources
+      )
+    ).toBe(false);
+    expect(
+      isAllowedInViewNavigation('https://example.com/', 'https://user@evil.example/', resources)
+    ).toBe(false);
+  });
 });
 
 describe('isAllowedPopupRedirect', () => {
@@ -117,5 +135,15 @@ describe('isAllowedPopupRedirect', () => {
 
   it('does not load about:blank via main-process loadURL', () => {
     expect(isAllowedPopupRedirect('https://example.com/', 'about:blank', resources)).toBe(false);
+  });
+
+  it('does not loadURL http(s) with embedded credentials', () => {
+    expect(
+      isAllowedPopupRedirect(
+        'https://example.com/',
+        'https://user:pass@example.com/next',
+        resources
+      )
+    ).toBe(false);
   });
 });

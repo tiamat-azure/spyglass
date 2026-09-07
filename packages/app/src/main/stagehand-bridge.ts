@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { StagehandObserveResponse } from '../shared/ipc.ts';
+import type { StagehandObservation, StagehandObserveResponse } from '../shared/ipc.ts';
 
 export const DEFAULT_OBSERVE_INSTRUCTION = 'Find interactive elements on the displayed page';
 
@@ -58,6 +58,32 @@ export function resolveStagehandModule(appPath?: string): string | undefined {
 }
 
 export async function runStagehandObserve(options: {
+  cdpUrl: string;
+  guestUrl: string;
+  instruction?: string;
+  appPath?: string;
+}): Promise<StagehandObserveResponse> {
+  return await withObserveMutex(() => spawnStagehandObserve(options));
+}
+
+let observeMutex: Promise<void> = Promise.resolve();
+
+/** Serialize Observe so concurrent IPC / observe-on-start cannot share one CDP port. */
+export async function withObserveMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = observeMutex;
+  let release: () => void = () => {};
+  observeMutex = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  try {
+    await previous;
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+async function spawnStagehandObserve(options: {
   cdpUrl: string;
   guestUrl: string;
   instruction?: string;
@@ -182,11 +208,73 @@ export function parseObserveStdout(stdout: string): StagehandObserveResponse | u
     }
     try {
       const parsed: unknown = JSON.parse(candidate);
-      if (typeof parsed !== 'object' || parsed === null || !('ok' in parsed)) {
-        continue;
+      const response = asObserveResponse(parsed);
+      if (response !== undefined) {
+        return response;
       }
-      return parsed as StagehandObserveResponse;
     } catch {}
   }
   return undefined;
+}
+
+function asObserveResponse(parsed: unknown): StagehandObserveResponse | undefined {
+  if (typeof parsed !== 'object' || parsed === null) {
+    return undefined;
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.ok !== 'boolean') {
+    return undefined;
+  }
+  if (record.observations !== undefined && !Array.isArray(record.observations)) {
+    return undefined;
+  }
+  const observations: StagehandObservation[] = Array.isArray(record.observations)
+    ? record.observations.flatMap((item) => {
+        const observation = asObservation(item);
+        return observation === undefined ? [] : [observation];
+      })
+    : [];
+  const instruction = typeof record.instruction === 'string' ? record.instruction : '';
+  const response: StagehandObserveResponse = {
+    ok: record.ok,
+    instruction,
+    observations
+  };
+  if (typeof record.error === 'string') {
+    response.error = record.error;
+  }
+  if (typeof record.guestUrl === 'string') {
+    response.guestUrl = record.guestUrl;
+  }
+  if (typeof record.cdpUrl === 'string') {
+    response.cdpUrl = record.cdpUrl;
+  }
+  if (typeof record.model === 'string') {
+    response.model = record.model;
+  }
+  return response;
+}
+
+function asObservation(item: unknown): StagehandObservation | undefined {
+  if (typeof item !== 'object' || item === null) {
+    return undefined;
+  }
+  const record = item as Record<string, unknown>;
+  const observation: StagehandObservation = {};
+  if (typeof record.selector === 'string') {
+    observation.selector = record.selector;
+  }
+  if (typeof record.description === 'string') {
+    observation.description = record.description;
+  }
+  if (typeof record.method === 'string') {
+    observation.method = record.method;
+  }
+  if (
+    Array.isArray(record.arguments) &&
+    record.arguments.every((value) => typeof value === 'string')
+  ) {
+    observation.arguments = record.arguments;
+  }
+  return observation;
 }

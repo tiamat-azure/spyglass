@@ -16,6 +16,10 @@ function parseUrl(input: string): URL | undefined {
   }
 }
 
+function hasEmbeddedCredentials(url: URL): boolean {
+  return url.username.length > 0 || url.password.length > 0;
+}
+
 export function isHttpOrHttpsUrl(input: string): boolean {
   const url = parseUrl(input);
   return url !== undefined && (url.protocol === 'http:' || url.protocol === 'https:');
@@ -78,6 +82,9 @@ export function isAllowedInViewNavigation(
   }
   if (next.protocol === 'chrome-error:') {
     return true;
+  }
+  if (hasEmbeddedCredentials(next)) {
+    return false;
   }
   if (isHttpOrHttpsUrl(nextUrl)) {
     return true;
