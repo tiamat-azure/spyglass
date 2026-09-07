@@ -10,6 +10,11 @@ Remote debugging is **off** in electron-builder artifacts unless
 `pnpm dev`, e2e) enable it by default so this lot's Observe proof still works
 without extra flags. `SPYGLASS_CDP=0` forces it off.
 
+When CDP is on, `--remote-allow-origins` is the **empty string** (W2), never
+`*`. Chromium 111+ rejects DevTools WebSockets only when they send an `Origin`
+header that is not on the allowlist. Playwright/Stagehand Node clients omit
+`Origin`, so Observe still connects; browser-origin CDP is denied.
+
 In-app Observe is part of the packaged app: `scripts/stagehand-observe.mjs` is
 listed in `electron-builder.yml` (`files` + `extraResources` + `asarUnpack`)
 and `@browserbasehq/stagehand` / `playwright-core` / `zod` are production

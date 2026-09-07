@@ -36,4 +36,13 @@ describe('packaged Observe', () => {
     expect(yml).toContain('node_modules/**');
     expect(yml).toMatch(/asarUnpack:/);
   });
+
+  it('does not pass remote-allow-origins=*', () => {
+    const src = readFileSync(join(appRoot, 'src/main/cdp-origins.ts'), 'utf8');
+    const portSrc = readFileSync(join(appRoot, 'src/main/cdp-port.ts'), 'utf8');
+    expect(src).toContain("CDP_REMOTE_ALLOW_ORIGINS = ''");
+    expect(src).not.toContain("= '*'");
+    expect(portSrc).toContain('CDP_REMOTE_ALLOW_ORIGINS');
+    expect(portSrc).not.toMatch(/remote-allow-origins',\s*'\*'/);
+  });
 });

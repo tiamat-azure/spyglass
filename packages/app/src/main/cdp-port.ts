@@ -1,5 +1,8 @@
 import { createServer } from 'node:net';
 import { app } from 'electron';
+import { CDP_REMOTE_ALLOW_ORIGINS } from './cdp-origins.ts';
+
+export { CDP_REMOTE_ALLOW_ORIGINS };
 
 export async function findFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -38,7 +41,7 @@ export async function resolveCdpPort(): Promise<number> {
 
 export function enableRemoteDebugging(port: number): void {
   app.commandLine.appendSwitch('remote-debugging-port', String(port));
-  app.commandLine.appendSwitch('remote-allow-origins', '*');
+  app.commandLine.appendSwitch('remote-allow-origins', CDP_REMOTE_ALLOW_ORIGINS);
 }
 
 export function cdpHttpUrl(port: number): string {

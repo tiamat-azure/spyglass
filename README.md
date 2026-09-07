@@ -95,8 +95,10 @@ when any of these is true:
 
 `SPYGLASS_CDP=0` forces it off even in unpackaged runs. Packaged installers do
 **not** pass `remote-debugging-port` / `remote-allow-origins` unless a flag
-above is set. `remote-allow-origins=*` is applied only together with the debug
-port.
+above is set. When CDP is on, `--remote-allow-origins` is the **empty string**
+(not `*`). Chromium 111+ only rejects DevTools WebSockets that send an `Origin`
+header missing from that allowlist; Playwright/Stagehand Node clients omit
+`Origin`, so Observe still attaches. Browser-origin CDP is denied.
 
 In-app Observe is bundled in the installer (`scripts/stagehand-observe.mjs` plus
 `@browserbasehq/stagehand`, `playwright-core`, and `zod`, with production
