@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _electron as electron, expect, test } from '@playwright/test';
+import { _electron as electron, expect, type Page, test } from '@playwright/test';
 
 /** @spyglass/app package root; `package.json` `"main"` is `./out/main/index.js`. */
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,6 +21,42 @@ async function launchEnv(): Promise<NodeJS.ProcessEnv> {
   return env;
 }
 
+async function waitForPage(
+  electronApp: Awaited<ReturnType<typeof electron.launch>>,
+  predicate: (page: Page) => Promise<boolean>,
+  timeoutMs = 45_000
+): Promise<Page> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    for (const page of electronApp.windows()) {
+      try {
+        if (await predicate(page)) {
+          return page;
+        }
+      } catch {
+        // window may still be loading
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error('Timed out waiting for Electron page');
+}
+
+async function chromeWindow(
+  electronApp: Awaited<ReturnType<typeof electron.launch>>
+): Promise<Page> {
+  return await waitForPage(electronApp, async (page) => (await page.locator('#url').count()) > 0);
+}
+
+async function guestWindow(
+  electronApp: Awaited<ReturnType<typeof electron.launch>>
+): Promise<Page> {
+  return await waitForPage(
+    electronApp,
+    async (page) => (await page.locator('#popup-link').count()) > 0
+  );
+}
+
 test.describe('Lot 0 two-zone shell', () => {
   test('launches URL bar, chat pane, and WebContentsView', async () => {
     const env = await launchEnv();
@@ -33,29 +69,31 @@ test.describe('Lot 0 two-zone shell', () => {
     });
 
     try {
-      const window = await electronApp.firstWindow({ timeout: 45_000 });
-      await expect(window).toHaveTitle(/Spyglass/);
-      await expect(window.locator('h1')).toHaveText('Spyglass');
-      await expect(window.locator('.tagline')).toContainText('Lot 0');
-      await expect(window.locator('#url')).toBeVisible();
-      await expect(window.locator('#back')).toBeVisible();
-      await expect(window.locator('#forward')).toBeVisible();
-      await expect(window.locator('#reload')).toBeVisible();
-      await expect(window.locator('#browser-slot')).toBeVisible();
-      await expect(window.locator('#chat')).toBeVisible();
-      await expect(window.locator('#rec-pill')).toHaveAttribute('aria-disabled', 'true');
-      await expect(window.locator('#versions')).toContainText(/Electron/i);
+      const chrome = await chromeWindow(electronApp);
+      const guest = await guestWindow(electronApp);
 
-      await window.waitForFunction(() => {
-        const input = document.querySelector('#url');
-        return input instanceof HTMLInputElement && input.value.includes('start.html');
-      });
+      await expect(chrome).toHaveTitle(/Spyglass/);
+      await expect(chrome.locator('h1')).toHaveText('Spyglass');
+      await expect(chrome.locator('.tagline')).toContainText('Lot 0');
+      await expect(chrome.locator('#url')).toBeVisible();
+      await expect(chrome.locator('#back')).toBeVisible();
+      await expect(chrome.locator('#forward')).toBeVisible();
+      await expect(chrome.locator('#reload')).toBeVisible();
+      await expect(chrome.locator('#browser-slot')).toBeVisible();
+      await expect(chrome.locator('#chat')).toBeVisible();
+      await expect(chrome.locator('#rec-pill')).toHaveAttribute('aria-disabled', 'true');
+      await expect(chrome.locator('#versions')).toContainText(/Electron/i);
+      await expect(guest.locator('h1')).toHaveText('Spyglass start page');
+
+      await expect.poll(async () => chrome.locator('#url').inputValue()).toMatch(/start\.html/);
 
       const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
       if (shotDir !== undefined && shotDir.length > 0) {
-        await window.screenshot({
-          path: join(shotDir, 'e2e-two-zone-shell.png'),
-          fullPage: true
+        await chrome.screenshot({
+          path: join(shotDir, 'e2e-two-zone-shell.png')
+        });
+        await guest.screenshot({
+          path: join(shotDir, 'guest-start-page.png')
         });
       }
     } finally {
@@ -74,29 +112,30 @@ test.describe('Lot 0 two-zone shell', () => {
     });
 
     try {
-      const window = await electronApp.firstWindow({ timeout: 45_000 });
-      await window.waitForFunction(() => {
-        const input = document.querySelector('#url');
-        return input instanceof HTMLInputElement && input.value.length > 0;
-      });
+      const chrome = await chromeWindow(electronApp);
+      const guest = await guestWindow(electronApp);
 
-      await window.locator('#url').fill('https://example.com');
-      await window.locator('#url-form').evaluate((form) => {
+      await guest.locator('#popup-link').click();
+      await expect(chrome.locator('#log')).toContainText('nav.popup-redirected');
+      await expect(guest.locator('#popup-target')).toBeVisible();
+
+      await chrome.locator('#url').fill('https://example.com');
+      await chrome.locator('#url-form').evaluate((form) => {
         if (form instanceof HTMLFormElement) {
           form.requestSubmit();
         }
       });
 
-      await window.waitForFunction(
-        () => {
-          const input = document.querySelector('#url');
-          return input instanceof HTMLInputElement && input.value.includes('example.com');
-        },
-        undefined,
-        { timeout: 20_000 }
-      );
+      await expect
+        .poll(async () => chrome.locator('#url').inputValue(), { timeout: 20_000 })
+        .toMatch(/example\.com/);
 
-      await expect(window.locator('#url')).toHaveValue(/example\.com/);
+      const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
+      if (shotDir !== undefined && shotDir.length > 0) {
+        await guest.screenshot({
+          path: join(shotDir, 'navigated-webcontentsview.png')
+        });
+      }
 
       const infoPath = env.SPYGLASS_CDP_INFO;
       if (infoPath !== undefined) {
@@ -110,6 +149,34 @@ test.describe('Lot 0 two-zone shell', () => {
             }
           })
           .toBe(true);
+      }
+    } finally {
+      await electronApp.close();
+    }
+  });
+
+  test('Stagehand observe attaches to the displayed page', async () => {
+    test.setTimeout(120_000);
+    const env = await launchEnv();
+    const electronApp = await electron.launch({
+      cwd: appDir,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
+      timeout: 45_000,
+      env
+    });
+
+    try {
+      const chrome = await chromeWindow(electronApp);
+      await guestWindow(electronApp);
+      await chrome.locator('#observe').click();
+      await expect(chrome.locator('#log')).toContainText(/observe/i, { timeout: 90_000 });
+
+      const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
+      if (shotDir !== undefined && shotDir.length > 0) {
+        await chrome.screenshot({
+          path: join(shotDir, 'stagehand-observe.png')
+        });
       }
     } finally {
       await electronApp.close();

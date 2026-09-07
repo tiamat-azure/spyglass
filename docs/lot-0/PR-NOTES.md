@@ -7,14 +7,16 @@ is the hand-off for a later PR.
 
 | Relative path | What it shows |
 | --- | --- |
-| [`screenshots/two-zone-shell.png`](screenshots/two-zone-shell.png) | Two-zone shell: URL bar, nav controls, WebContentsView, chat placeholder |
-| [`screenshots/navigated-webcontentsview.png`](screenshots/navigated-webcontentsview.png) | Guest page loaded in the left `WebContentsView` |
-| [`screenshots/stagehand-observe.png`](screenshots/stagehand-observe.png) | Observe results in the side pane (Stagehand via CDP) |
-| [`screenshots/stagehand-observe.json`](screenshots/stagehand-observe.json) | JSON payload from `stagehand.observe()` |
+| [`screenshots/two-zone-shell.png`](screenshots/two-zone-shell.png) | Two-zone shell: URL bar, nav controls, start page in `WebContentsView`, chat placeholder |
+| [`screenshots/guest-start-page.png`](screenshots/guest-start-page.png) | Guest page DOM inside the `WebContentsView` |
+| [`screenshots/navigated-webcontentsview.png`](screenshots/navigated-webcontentsview.png) | `https://example.com` loaded in the displayed view after typing the URL |
+| [`screenshots/stagehand-observe.png`](screenshots/stagehand-observe.png) | In-app Observe button results in the side pane |
+| [`screenshots/stagehand-observe.json`](screenshots/stagehand-observe.json) | JSON from `pnpm observe` / Stagehand `observe()` over CDP |
 
 Absolute paths in a checkout:
 
 - `docs/lot-0/screenshots/two-zone-shell.png`
+- `docs/lot-0/screenshots/guest-start-page.png`
 - `docs/lot-0/screenshots/navigated-webcontentsview.png`
 - `docs/lot-0/screenshots/stagehand-observe.png`
 - `docs/lot-0/screenshots/stagehand-observe.json`
