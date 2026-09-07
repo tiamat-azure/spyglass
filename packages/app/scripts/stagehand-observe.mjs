@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { pageMatchesPickedGuest, pickGuestTarget } from './cdp-guest.mjs';
 
 const DEFAULT_INSTRUCTION = 'Find interactive elements on the displayed page';
 
@@ -131,27 +132,6 @@ class Lot0StubLlmClient {
   }
 }
 
-function isChromeUiUrl(url) {
-  if (typeof url !== 'string') {
-    return true;
-  }
-  if (url.includes('/renderer/index.html') || url.includes('/out/renderer/')) {
-    return true;
-  }
-  if (url.startsWith('devtools:') || url.startsWith('chrome-extension:')) {
-    return true;
-  }
-  try {
-    const parsed = new URL(url);
-    return (
-      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
-      (parsed.port === '5173' || parsed.port === '5174' || parsed.port === '5175')
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function listTargets(cdpHttpUrl) {
   const response = await fetch(`${cdpHttpUrl.replace(/\/$/, '')}/json/list`);
   if (!response.ok) {
@@ -162,29 +142,6 @@ async function listTargets(cdpHttpUrl) {
     return [];
   }
   return payload;
-}
-
-function pickGuest(targets, guestUrl) {
-  const pages = targets.filter((target) => target.type === 'page' || target.type === 'other');
-  if (guestUrl) {
-    const exact = pages.find((target) => target.url === guestUrl);
-    if (exact !== undefined) {
-      return exact;
-    }
-  }
-  return pages.find((target) => !isChromeUiUrl(target.url)) ?? fallbackFirstPage(pages);
-}
-
-function fallbackFirstPage(pages) {
-  const fallback = pages[0];
-  if (fallback === undefined) {
-    return undefined;
-  }
-  console.warn(
-    '[spyglass] WARNING: No non-chrome guest CDP target matched. Observe may attach to privileged chrome UI (renderer / DevTools). Falling back to the first page target.',
-    { fallbackId: fallback.id, fallbackUrl: fallback.url, fallbackTitle: fallback.title }
-  );
-  return fallback;
 }
 
 async function readCdpInfo() {
@@ -263,7 +220,7 @@ async function main() {
 
   const cdpHttpUrl = toHttpCdpUrl(cdpUrl);
   const targets = await listTargets(cdpHttpUrl);
-  const guest = pickGuest(targets, guestUrl);
+  const guest = pickGuestTarget(targets, guestUrl);
   if (guest === undefined) {
     const failure = {
       ok: false,
@@ -306,16 +263,28 @@ async function main() {
         : [];
     const match = pages.find((page) => {
       const url = typeof page.url === 'function' ? page.url() : '';
-      return url === guest.url || (!isChromeUiUrl(url) && url.length > 0);
+      return pageMatchesPickedGuest(url, guest.url);
     });
-    if (match !== undefined && stagehand.context?.setActivePage) {
+    if (match === undefined) {
+      const failure = {
+        ok: false,
+        instruction,
+        observations: [],
+        error:
+          'No Stagehand page matched the picked guest (exact or origin+pathname). Refusing to observe an unmatched page.',
+        guestUrl: guest.url,
+        cdpUrl,
+        targetId: guest.id
+      };
+      process.stdout.write(`${JSON.stringify(failure)}\n`);
+      process.exitCode = 1;
+      return;
+    }
+    if (stagehand.context?.setActivePage) {
       stagehand.context.setActivePage(match);
     }
 
-    const raw =
-      match !== undefined
-        ? await stagehand.observe(instruction, { page: match })
-        : await stagehand.observe(instruction);
+    const raw = await stagehand.observe(instruction, { page: match });
     const observations = Array.isArray(raw)
       ? raw.map((item) => ({
           selector: item?.selector,

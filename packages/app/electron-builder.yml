@@ -16,14 +16,18 @@ files:
     to: scripts
     filter:
       - stagehand-observe.mjs
+      - cdp-guest.mjs
 # D1: unpack Stagehand runtime so packaged Observe can import from disk
 # (ELECTRON_RUN_AS_NODE spawn of extraResources/scripts/stagehand-observe.mjs).
 asarUnpack:
   - scripts/stagehand-observe.mjs
+  - scripts/cdp-guest.mjs
   - node_modules/**
 extraResources:
   - from: scripts/stagehand-observe.mjs
     to: scripts/stagehand-observe.mjs
+  - from: scripts/cdp-guest.mjs
+    to: scripts/cdp-guest.mjs
 asar: true
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 linux:

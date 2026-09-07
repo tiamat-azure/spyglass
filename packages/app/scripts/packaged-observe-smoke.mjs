@@ -29,6 +29,7 @@ function requirePath(label, path) {
 function assertUnpackedLayout() {
   requirePath('linux-unpacked binary', binary);
   requirePath('observe extraResource', join(resources, 'scripts', 'stagehand-observe.mjs'));
+  requirePath('guest matcher extraResource', join(resources, 'scripts', 'cdp-guest.mjs'));
   const unpackedRoot = join(resources, 'app.asar.unpacked');
   requirePath(
     'unpacked Stagehand',

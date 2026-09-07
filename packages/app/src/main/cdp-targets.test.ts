@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GUEST_FALLBACK_CHROME_WARNING,
   isChromeUiUrl,
+  pageMatchesPickedGuest,
   parseCdpTargetList,
   pickGuestTarget,
   urlsMatchOriginAndPathname
@@ -105,5 +106,34 @@ describe('pickGuestTarget', () => {
     expect(urlsMatchOriginAndPathname('https://example.com/other', 'https://example.com')).toBe(
       false
     );
+  });
+});
+
+describe('isChromeUiUrl', () => {
+  it('treats chrome-devtools and Vite client URLs as chrome UI', () => {
+    expect(isChromeUiUrl('chrome-devtools://devtools/bundled/inspector.html')).toBe(true);
+    expect(isChromeUiUrl('devtools://devtools/bundled/inspector.html')).toBe(true);
+    expect(isChromeUiUrl('http://example.com/@vite/client')).toBe(true);
+    expect(isChromeUiUrl('http://example.com/__vite_ping')).toBe(true);
+  });
+
+  it('does not treat the guest start page as chrome UI', () => {
+    expect(isChromeUiUrl('file:///app/out/resources/start.html')).toBe(false);
+    expect(isChromeUiUrl('https://example.com/')).toBe(false);
+  });
+});
+
+describe('pageMatchesPickedGuest', () => {
+  it('prefers exact then origin+pathname against the picked guest', () => {
+    expect(pageMatchesPickedGuest('https://example.com/', 'https://example.com/')).toBe(true);
+    expect(pageMatchesPickedGuest('https://example.com/?q=1', 'https://example.com/')).toBe(true);
+  });
+
+  it('does not match the first non-chrome page or a hostname prefix', () => {
+    expect(pageMatchesPickedGuest('https://other.test/', 'https://example.com/')).toBe(false);
+    expect(pageMatchesPickedGuest('https://example.com.evil.com/', 'https://example.com')).toBe(
+      false
+    );
+    expect(pageMatchesPickedGuest('https://example.com/other', 'https://example.com/')).toBe(false);
   });
 });

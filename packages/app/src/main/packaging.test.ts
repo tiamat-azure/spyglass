@@ -17,9 +17,18 @@ describe('packaged Observe', () => {
     expect(pkg.devDependencies?.['@browserbasehq/stagehand']).toBeUndefined();
   });
 
-  it('includes the observe script in the electron-builder payload', () => {
+  it('includes the observe script and shared guest matcher in the electron-builder payload', () => {
     const yml = readFileSync(join(appRoot, 'electron-builder.yml'), 'utf8');
     expect(yml).toContain('scripts/stagehand-observe.mjs');
+    expect(yml).toContain('scripts/cdp-guest.mjs');
+  });
+
+  it('observe worker imports the shared guest matcher and fails closed on page match', () => {
+    const observe = readFileSync(join(appRoot, 'scripts/stagehand-observe.mjs'), 'utf8');
+    expect(observe).toContain("from './cdp-guest.mjs'");
+    expect(observe).toContain('pageMatchesPickedGuest');
+    expect(observe).toContain('pickGuestTarget');
+    expect(observe).not.toContain('!isChromeUiUrl(url) && url.length > 0');
   });
 
   it('asarUnpacks Stagehand runtime node_modules for packaged Observe', () => {
