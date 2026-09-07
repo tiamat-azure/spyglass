@@ -14,13 +14,15 @@ const env = {
   SPYGLASS_DISABLE_GPU: '1',
   SPYGLASS_NO_SANDBOX: '1'
 };
+delete env.ELECTRON_RENDERER_URL;
 
 const TIMEOUT_MS = 60_000;
 
 const child = spawn('pnpm', ['--filter', '@spyglass/app', 'capture:shell'], {
   cwd: root,
   env,
-  stdio: 'inherit'
+  stdio: 'inherit',
+  shell: process.platform === 'win32'
 });
 
 const timer = setTimeout(() => {
