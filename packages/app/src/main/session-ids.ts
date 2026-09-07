@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 export function newSessionId(now = new Date()): string {
-  const stamp = now.toISOString().replaceAll(/[-:]/g, '').replace('T', '').slice(0, 15);
+  const stamp = now.toISOString().replaceAll(/[-:]/g, '').replace('T', '').slice(0, 14);
   const suffix = randomBytes(3).toString('hex');
   return `ses_${stamp}_${suffix}`;
 }

@@ -78,7 +78,8 @@ Electron security from Lot 0 is unchanged: sandboxed guest, no
    scroll, Enter, iframe `#step-9`, open-shadow `#step-10`) → retract → Stop →
    assert `raw.jsonl` (iframe `framePath`, non-empty `shadowPath`, masked
    password, `step.retracted`) → reload guest → **Replay capture (no LLM)** →
-   log contains `act() ok · llmCalls=0`.
+   log contains `act() ok · llmCalls=0` (11 local descriptors; checkbox
+   `click` has no mouse-button argument).
 
 The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 `selfHeal: false` and increments `llmCalls` only if the stub
@@ -95,15 +96,20 @@ The act worker (`packages/app/scripts/stagehand-act.mjs`) sets
 
 ## Screenshots (committed)
 
+Playwright's chrome `Page.screenshot()` captures the Electron renderer, not the
+child `WebContentsView`, so the guest pane is black in chrome shots. Guest
+DOM evidence is `fixture-after-capture.png`. Iframe/shadow proof is the
+capture log plus `raw.jsonl`.
+
 | Relative path | What it shows |
 | --- | --- |
-| [`screenshots/record-stop-ui.png`](screenshots/record-stop-ui.png) | Record/Stop chrome UI + REC pill |
-| [`screenshots/iframe-shadow-capture.png`](screenshots/iframe-shadow-capture.png) | Capture log with iframe + shadow evidence |
-| [`screenshots/fixture-after-capture.png`](screenshots/fixture-after-capture.png) | Guest fixture after the 10-action path |
-| [`screenshots/raw-jsonl-excerpt.txt`](screenshots/raw-jsonl-excerpt.txt) | Readable `raw.jsonl` excerpt |
-| [`screenshots/act-replay-success.png`](screenshots/act-replay-success.png) | `act()` replay success, `llmCalls=0` |
+| [`screenshots/record-stop-ui.png`](screenshots/record-stop-ui.png) | Record / Replay (no LLM) chrome UI + REC pill (idle) |
+| [`screenshots/iframe-shadow-capture.png`](screenshots/iframe-shadow-capture.png) | Recording: Stop, REC active, iframe + shadow log rows, retract |
+| [`screenshots/fixture-after-capture.png`](screenshots/fixture-after-capture.png) | Guest fixture after the 10-action path (iframe + shadow controls) |
+| [`screenshots/raw-jsonl-excerpt.txt`](screenshots/raw-jsonl-excerpt.txt) | Pretty excerpt: masked password, iframe hop, open shadow, retract |
+| [`screenshots/act-replay-success.png`](screenshots/act-replay-success.png) | `act() ok · llmCalls=0 · 11 actions` |
 
-Absolute paths in a checkout:
+Absolute paths in this checkout:
 
 - `/workspace/docs/lot-1/screenshots/record-stop-ui.png`
 - `/workspace/docs/lot-1/screenshots/iframe-shadow-capture.png`
@@ -112,4 +118,5 @@ Absolute paths in a checkout:
 - `/workspace/docs/lot-1/screenshots/act-replay-success.png`
 
 Parent remounts copies to
-`/home/box/agent-data/grok-ship/reports/spyglass-screenshots/FM-spyglass-lot-1-20260908/`.
+`/home/box/agent-data/grok-ship/reports/spyglass-screenshots/FM-spyglass-lot-1-20260908/`
+(this environment could not write that path; files live under `docs/lot-1/screenshots/`).

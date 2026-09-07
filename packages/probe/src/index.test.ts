@@ -113,5 +113,9 @@ describe('@spyglass/probe', () => {
     expect(source).toContain('deadbeef');
     expect(source).not.toContain('window.spyglass');
     expect(source).toContain('addEventListener');
+    expect(source).toContain('console.log');
+    expect(source).toContain('SPYGLASS:');
+    expect(source).not.toMatch(/\bPROBE_CONSOLE_PREFIX\b/);
+    expect(source).not.toContain('__vite_ssr_import');
   });
 });

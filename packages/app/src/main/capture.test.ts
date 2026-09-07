@@ -130,6 +130,31 @@ describe('capture pipeline', () => {
     expect(event.action?.shadowPath).toEqual(['#lot1-widget']);
     expect(validateRawEvent(event).valid).toBe(true);
   });
+
+  it('does not pass checkbox values as Stagehand click mouse buttons', () => {
+    const event = buildRawEvent({
+      id: 'evt_000005',
+      sessionId: 'ses_test',
+      wire: {
+        kind: 'dom.check',
+        ts: 5,
+        valueText: 'on',
+        checked: true,
+        type: 'checkbox',
+        target: {
+          tag: 'input',
+          framePath: ['main'],
+          shadowPath: [],
+          testId: 'step-5'
+        }
+      },
+      stepIndex: 5
+    });
+    expect(event.action?.type).toBe('check');
+    expect(event.action?.arguments).toBeUndefined();
+    expect(event.value).toEqual({ masked: false, text: 'on' });
+    expect(validateRawEvent(event).valid).toBe(true);
+  });
 });
 
 describe('parseActStdout', () => {

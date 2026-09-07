@@ -228,12 +228,13 @@ replayActBtn.addEventListener('click', () => {
   void api.stagehand
     .act()
     .then((result) => {
-      appendLog(
-        log,
-        result.ok
-          ? `act() ok · llmCalls=${String(result.llmCalls)} · ${String(result.results.length)} actions`
-          : `act() failed: ${result.error ?? 'unknown'} (llmCalls=${String(result.llmCalls)})`
-      );
+      const summary = result.ok
+        ? `act() ok · llmCalls=${String(result.llmCalls)} · ${String(result.results.length)} actions`
+        : `act() failed: ${result.error ?? 'unknown'} (llmCalls=${String(result.llmCalls)})`;
+      const failures = result.results
+        .filter((row) => !row.success)
+        .map((row) => `act fail ${row.method} ${row.selector}: ${row.message}`);
+      appendLog(log, [summary, ...failures].join('\n'));
     })
     .finally(() => {
       replayActBtn.disabled = false;

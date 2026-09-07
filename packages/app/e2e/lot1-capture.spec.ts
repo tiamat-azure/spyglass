@@ -137,11 +137,14 @@ test.describe('Lot 1 capture', () => {
       if (sessionsDir === undefined) {
         throw new Error('SESSIONS_DIR missing');
       }
-      const jsonl = await expect
+      let jsonl = '';
+      await expect
         .poll(async () => {
           try {
-            return await latestRawJsonl(sessionsDir);
+            jsonl = await latestRawJsonl(sessionsDir);
+            return jsonl;
           } catch {
+            jsonl = '';
             return '';
           }
         })
@@ -179,17 +182,39 @@ test.describe('Lot 1 capture', () => {
       expect(events.some((event) => event.kind === 'step.retracted')).toBe(true);
 
       if (shotDir !== undefined && shotDir.length > 0) {
-        const excerpt = lines.slice(0, 12).join('\n');
-        await writeReadableExcerpt(join(shotDir, 'raw-jsonl-excerpt.txt'), excerpt);
+        const interesting = events.filter((event) => {
+          const kind = String(event.kind);
+          const target = event.target as
+            | { framePath?: string[]; shadowPath?: string[] }
+            | undefined;
+          return (
+            kind === 'record.start' ||
+            kind === 'record.stop' ||
+            kind === 'step.retracted' ||
+            kind === 'dom.check' ||
+            (kind === 'dom.input' &&
+              typeof event.value === 'object' &&
+              event.value !== null &&
+              (event.value as { masked?: boolean }).masked === true) ||
+            (Array.isArray(target?.framePath) &&
+              target.framePath.some((part) => part.includes('iframe'))) ||
+            (Array.isArray(target?.shadowPath) && target.shadowPath.length > 0)
+          );
+        });
+        await writeReadableExcerpt(
+          join(shotDir, 'raw-jsonl-excerpt.txt'),
+          interesting.map((event) => JSON.stringify(event, null, 2)).join('\n\n')
+        );
       }
 
       await chrome.locator('#reload').click();
       await expect(guest.locator('#step-1')).toBeVisible({ timeout: 15_000 });
 
       await chrome.locator('#replay-act').click();
-      await expect(chrome.locator('#log')).toContainText(/act\(\).*llmCalls=0|act\(\) ok/i, {
+      await expect(chrome.locator('#log')).toContainText(/act\(\) ok · llmCalls=0/i, {
         timeout: 90_000
       });
+      await expect(chrome.locator('#log')).not.toContainText(/act\(\) failed/i);
 
       if (shotDir !== undefined && shotDir.length > 0) {
         await chrome.screenshot({ path: join(shotDir, 'act-replay-success.png') });

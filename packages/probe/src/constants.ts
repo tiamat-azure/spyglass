@@ -5,4 +5,4 @@ export const SCREENSHOT_RETENTION = 10;
 export const SCREENSHOT_JPEG_QUALITY = 70;
 export const TEXT_MAX_LENGTH = 512;
 export const PAGE_ID_MAIN = 'page_main';
-export const PROBE_CONSOLE_PREFIX = '\u2063SPYGLASS:';
+export const PROBE_CONSOLE_PREFIX = 'SPYGLASS:';

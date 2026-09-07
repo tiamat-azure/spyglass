@@ -120,7 +120,7 @@ export class SessionOrchestrator {
     this.lastDom = undefined;
     this.state = 'recording';
     this.since = Date.now();
-    this.probe?.injectTree();
+    await this.probe?.injectTree();
     const page = this.pageSnapshot();
     await this.append(
       buildControlEvent({

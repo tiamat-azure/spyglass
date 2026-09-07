@@ -43,6 +43,16 @@ export function describeFramePath(frame: WebFrameMain): string[] {
   return chain.map((item, index) => frameSelector(item, index === 0));
 }
 
+export function consoleMessageText(details: { message?: string }, message?: string): string {
+  if (typeof details.message === 'string' && details.message.length > 0) {
+    return details.message;
+  }
+  if (typeof message === 'string') {
+    return message;
+  }
+  return '';
+}
+
 export class ProbeHost {
   private readonly nonce: string;
   private attached = false;
@@ -62,7 +72,9 @@ export class ProbeHost {
     this.attached = true;
     this.contents.on('console-message', this.onConsole);
     this.contents.on('did-frame-finish-load', this.onFrameLoad);
-    this.injectTree();
+    this.contents.on('did-finish-load', this.onMainLoad);
+    this.contents.on('dom-ready', this.onMainLoad);
+    void this.injectTree();
   }
 
   detach(): void {
@@ -72,14 +84,16 @@ export class ProbeHost {
     this.attached = false;
     this.contents.off('console-message', this.onConsole);
     this.contents.off('did-frame-finish-load', this.onFrameLoad);
+    this.contents.off('did-finish-load', this.onMainLoad);
+    this.contents.off('dom-ready', this.onMainLoad);
   }
 
   private readonly onConsole = (
-    details: { message?: string },
+    details: { message?: string; frame?: WebFrameMain },
     _level?: number,
     message?: string
   ): void => {
-    const text = message ?? details.message ?? '';
+    const text = consoleMessageText(details, message);
     const prefix = `${PROBE_CONSOLE_PREFIX}${this.nonce}:`;
     if (!text.startsWith(prefix)) {
       return;
@@ -87,29 +101,71 @@ export class ProbeHost {
     const raw = text.slice(prefix.length);
     try {
       const payload: unknown = JSON.parse(raw);
-      this.handlers.onProbeEvent(payload, ['main']);
+      const framePath =
+        details.frame !== undefined && !details.frame.isDestroyed()
+          ? describeFramePath(details.frame)
+          : ['main'];
+      this.handlers.onProbeEvent(payload, framePath);
     } catch {
       // ignore malformed probe lines
     }
   };
 
-  private readonly onFrameLoad = (
-    _event: Electron.Event,
-    _isMainFrame: boolean,
-    frameProcessId: number,
-    frameRoutingId: number
-  ): void => {
-    const frame = webFrameMain.fromId(frameProcessId, frameRoutingId);
-    if (frame !== undefined && !frame.isDestroyed()) {
-      void this.injectFrame(frame);
-    }
+  private readonly onMainLoad = (): void => {
+    void this.injectTree();
   };
 
-  injectTree(): void {
-    const main = this.contents.mainFrame;
-    void this.injectFrame(main);
-    for (const frame of main.framesInSubtree) {
-      void this.injectFrame(frame);
+  private readonly onFrameLoad = (
+    event: Electron.Event & {
+      isMainFrame?: boolean;
+      frameProcessId?: number;
+      frameRoutingId?: number;
+    },
+    isMainFrame?: boolean,
+    frameProcessId?: number,
+    frameRoutingId?: number
+  ): void => {
+    const pid = frameProcessId ?? event.frameProcessId;
+    const rid = frameRoutingId ?? event.frameRoutingId;
+    if (typeof pid === 'number' && typeof rid === 'number') {
+      const frame = webFrameMain.fromId(pid, rid);
+      if (frame !== undefined && !frame.isDestroyed()) {
+        void this.injectFrame(frame);
+        return;
+      }
+    }
+    void this.injectTree();
+    void isMainFrame;
+  };
+
+  async injectTree(): Promise<void> {
+    const jobs: Array<Promise<void>> = [this.injectMainViaContents()];
+    try {
+      const main = this.contents.mainFrame;
+      jobs.push(this.injectFrame(main));
+      for (const frame of main.framesInSubtree) {
+        jobs.push(this.injectFrame(frame));
+      }
+    } catch {
+      // mainFrame may be unavailable during navigation
+    }
+    await Promise.all(jobs);
+  }
+
+  private async injectMainViaContents(): Promise<void> {
+    if (this.contents.isDestroyed()) {
+      return;
+    }
+    const source = buildProbeSource({
+      nonce: this.nonce,
+      inputAggregationMs: INPUT_AGGREGATION_MS,
+      scrollThresholdPx: SCROLL_THRESHOLD_PX,
+      framePath: ['main']
+    });
+    try {
+      await this.contents.executeJavaScript(source, false);
+    } catch (error) {
+      console.error('[spyglass] probe inject (main) failed', error);
     }
   }
 
@@ -125,8 +181,8 @@ export class ProbeHost {
     });
     try {
       await frame.executeJavaScript(source, false);
-    } catch {
-      // frame may have navigated away
+    } catch (error) {
+      console.error('[spyglass] probe inject failed', frame.url, error);
     }
   }
 }

@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000001",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480219,
+  "kind": "record.start",
+  "pageId": "page_main",
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Enregistrement démarré"
+  }
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000004",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480674,
+  "kind": "dom.input",
+  "pageId": "page_main",
+  "stepIndex": 3,
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "target": {
+    "tag": "input",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [],
+    "id": "step-3",
+    "testId": "step-3",
+    "testAttributes": {
+      "data-testid": "step-3"
+    },
+    "accessibleName": "Password",
+    "name": "password",
+    "cssSelector": "#step-3",
+    "xpath": "/html/body[1]/main[1]/label[2]/input[1]",
+    "siblingIndex": 0,
+    "ancestors": [
+      "label",
+      "main",
+      "body",
+      "html"
+    ],
+    "boundingBox": {
+      "x": 152.5,
+      "y": 255.875,
+      "w": 205,
+      "h": 21
+    }
+  },
+  "value": {
+    "masked": true,
+    "secretRef": "SECRET_PASSWORD"
+  },
+  "action": {
+    "type": "fill",
+    "selector": "[data-testid=\"step-3\"]",
+    "selectorStrategy": "testId",
+    "description": "Saisie dans « Password »",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [],
+    "fallbackSelectors": [
+      "#step-3",
+      "xpath=/html/body[1]/main[1]/label[2]/input[1]"
+    ],
+    "arguments": [
+      "SECRET_PASSWORD"
+    ]
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Saisie dans « Password »"
+  },
+  "snapshotRef": "snap_000003",
+  "screenshotRef": "shot_000003"
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000006",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480731,
+  "kind": "dom.check",
+  "pageId": "page_main",
+  "stepIndex": 5,
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "target": {
+    "tag": "input",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [],
+    "id": "step-5",
+    "testId": "step-5",
+    "testAttributes": {
+      "data-testid": "step-5"
+    },
+    "accessibleName": "Agree",
+    "name": "agree",
+    "cssSelector": "#step-5",
+    "xpath": "/html/body[1]/main[1]/label[4]/input[1]",
+    "siblingIndex": 0,
+    "ancestors": [
+      "label",
+      "main",
+      "body",
+      "html"
+    ],
+    "boundingBox": {
+      "x": 152.5,
+      "y": 339.875,
+      "w": 13,
+      "h": 13
+    }
+  },
+  "value": {
+    "masked": false,
+    "text": "on"
+  },
+  "action": {
+    "type": "check",
+    "selector": "[data-testid=\"step-5\"]",
+    "selectorStrategy": "testId",
+    "description": "Case « Agree »",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [],
+    "fallbackSelectors": [
+      "#step-5",
+      "xpath=/html/body[1]/main[1]/label[4]/input[1]"
+    ]
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Case « Agree »"
+  },
+  "snapshotRef": "snap_000005",
+  "screenshotRef": "shot_000005"
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000011",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480854,
+  "kind": "dom.click",
+  "pageId": "page_main",
+  "stepIndex": 10,
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-iframe.html",
+    "title": "Lot 1 iframe"
+  },
+  "target": {
+    "tag": "button",
+    "framePath": [
+      "main",
+      "iframe#lot1-frame"
+    ],
+    "shadowPath": [],
+    "id": "step-9",
+    "testId": "step-9",
+    "testAttributes": {
+      "data-testid": "step-9"
+    },
+    "text": "Iframe action",
+    "cssSelector": "#step-9",
+    "xpath": "/html/body[1]/button[1]",
+    "siblingIndex": 0,
+    "ancestors": [
+      "body",
+      "html"
+    ],
+    "boundingBox": {
+      "x": 8,
+      "y": 8,
+      "w": 93.046875,
+      "h": 21
+    }
+  },
+  "action": {
+    "type": "click",
+    "selector": "iframe#lot1-frame >> [data-testid=\"step-9\"]",
+    "selectorStrategy": "testId",
+    "description": "Clic sur « Iframe action »",
+    "framePath": [
+      "main",
+      "iframe#lot1-frame"
+    ],
+    "shadowPath": [],
+    "fallbackSelectors": [
+      "iframe#lot1-frame >> #step-9",
+      "iframe#lot1-frame >> xpath=/html/body[1]/button[1]"
+    ]
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Clic sur « Iframe action »"
+  },
+  "snapshotRef": "snap_000010",
+  "screenshotRef": "shot_000010"
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000012",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480880,
+  "kind": "dom.click",
+  "pageId": "page_main",
+  "stepIndex": 11,
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "target": {
+    "tag": "button",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [
+      "#lot1-widget"
+    ],
+    "id": "step-10",
+    "testId": "step-10",
+    "testAttributes": {
+      "data-testid": "step-10"
+    },
+    "text": "Shadow action",
+    "cssSelector": "#step-10",
+    "xpath": "/button",
+    "boundingBox": {
+      "x": 152.5,
+      "y": 714.875,
+      "w": 103.4375,
+      "h": 21
+    }
+  },
+  "action": {
+    "type": "click",
+    "selector": "[data-testid=\"step-10\"]",
+    "selectorStrategy": "testId",
+    "description": "Clic sur « Shadow action »",
+    "framePath": [
+      "main"
+    ],
+    "shadowPath": [
+      "#lot1-widget"
+    ],
+    "fallbackSelectors": [
+      "#step-10",
+      "xpath=/button"
+    ]
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Clic sur « Shadow action »"
+  },
+  "snapshotRef": "snap_000011",
+  "screenshotRef": "shot_000011"
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000014",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815480963,
+  "kind": "step.retracted",
+  "pageId": "page_main",
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "retracts": "evt_000002",
+  "narration": {
+    "mode": "template",
+    "text": "Étape rétractée"
+  }
+}
+
+{
+  "schemaVersion": 1,
+  "id": "evt_000015",
+  "sessionId": "ses_20260907211120_efceb6",
+  "ts": 1788815481115,
+  "kind": "record.stop",
+  "pageId": "page_main",
+  "page": {
+    "url": "file:///workspace/packages/app/out/resources/lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Enregistrement arrêté"
+  }
+}

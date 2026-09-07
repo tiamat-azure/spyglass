@@ -1,5 +1,3 @@
-import { PROBE_CONSOLE_PREFIX } from './constants.ts';
-
 export type ProbeInjectConfig = {
   nonce: string;
   inputAggregationMs: number;
@@ -11,6 +9,8 @@ export type ProbeInjectConfig = {
  * Self-contained page-world probe. Stringified into the guest (and every iframe).
  * Passive: capture-phase listeners, never preventDefault / stopPropagation.
  * No guessable globals: install flag is `nonce`-suffixed and non-enumerable.
+ * Must not close over module bindings — `Function.prototype.toString` is the
+ * injectable source, so imported constants would be ReferenceErrors in the page.
  */
 export function spyglassProbeMain(config: ProbeInjectConfig): void {
   const flag = `__s${config.nonce}`;
@@ -31,7 +31,7 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
 
   const emit = (payload: Record<string, unknown>): void => {
     try {
-      console.debug(`${PROBE_CONSOLE_PREFIX}${config.nonce}:${JSON.stringify(payload)}`);
+      console.log(`SPYGLASS:${config.nonce}:${JSON.stringify(payload)}`);
     } catch {
       // never throw into the page
     }
@@ -279,8 +279,17 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
 
   const isSelect = (el: Element): el is HTMLSelectElement => el instanceof HTMLSelectElement;
 
-  const isTypedField = (el: Element): boolean =>
-    el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+  const isTypedField = (el: Element): boolean => {
+    if (el instanceof HTMLTextAreaElement) {
+      return true;
+    }
+    if (!(el instanceof HTMLInputElement)) {
+      return false;
+    }
+    return (
+      el.type !== 'checkbox' && el.type !== 'radio' && el.type !== 'button' && el.type !== 'submit'
+    );
+  };
 
   const flushInput = (el: EventTarget): void => {
     const timer = inputTimers.get(el);
@@ -296,7 +305,10 @@ export function spyglassProbeMain(config: ProbeInjectConfig): void {
   };
 
   const noteInput = (el: Element): void => {
-    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
+    if (
+      !isTypedField(el) ||
+      !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+    ) {
       return;
     }
     const extra: Record<string, unknown> = {

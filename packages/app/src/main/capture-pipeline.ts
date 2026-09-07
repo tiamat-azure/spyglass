@@ -103,6 +103,15 @@ function actionArgs(wire: ProbeWireEvent, value: CapturedValue | undefined): str
   if (wire.kind === 'dom.select' && wire.selectedValue !== undefined) {
     return [wire.selectedValue];
   }
+  if (
+    wire.kind === 'dom.check' ||
+    wire.kind === 'dom.click' ||
+    wire.kind === 'dom.dblclick' ||
+    wire.kind === 'dom.submit'
+  ) {
+    // Stagehand click() treats arguments[0] as the mouse button.
+    return undefined;
+  }
   if (value?.masked === true) {
     return [value.secretRef];
   }
