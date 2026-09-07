@@ -79,17 +79,18 @@ async function spawnStagehandAct(options: {
   if (options.chromeTargetId !== undefined && options.chromeTargetId.length > 0) {
     flags.push('--chrome-target-id', options.chromeTargetId);
   }
-  const actionsDir = await mkdtemp(join(tmpdir(), 'spyglass-act-'));
-  const actionsPath = join(actionsDir, 'actions.json');
-  await writeFile(actionsPath, `${JSON.stringify(options.actions)}\n`, 'utf8');
-  flags.push('--actions', actionsPath);
-  const childEnv: NodeJS.ProcessEnv = { ...process.env };
-  if (options.appPath !== undefined && options.appPath.length > 0) {
-    childEnv.SPYGLASS_APP_PATH = options.appPath;
-  }
-  childEnv.ELECTRON_RUN_AS_NODE = '1';
-  delete childEnv.SPYGLASS_ACT_ACTIONS;
+  let actionsDir: string | undefined;
   try {
+    actionsDir = await mkdtemp(join(tmpdir(), 'spyglass-act-'));
+    const actionsPath = join(actionsDir, 'actions.json');
+    await writeFile(actionsPath, `${JSON.stringify(options.actions)}\n`, 'utf8');
+    flags.push('--actions', actionsPath);
+    const childEnv: NodeJS.ProcessEnv = { ...process.env };
+    if (options.appPath !== undefined && options.appPath.length > 0) {
+      childEnv.SPYGLASS_APP_PATH = options.appPath;
+    }
+    childEnv.ELECTRON_RUN_AS_NODE = '1';
+    delete childEnv.SPYGLASS_ACT_ACTIONS;
     return await new Promise((resolve) => {
       const child = spawn(process.execPath, [script, ...flags], {
         env: childEnv,
@@ -153,7 +154,9 @@ async function spawnStagehandAct(options: {
       });
     });
   } finally {
-    await rm(actionsDir, { recursive: true, force: true }).catch(() => undefined);
+    if (actionsDir !== undefined) {
+      await rm(actionsDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 }
 
