@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000202",
+  "sessionId": "ses_20260908_lot1",
+  "ts": 1757300000202,
+  "kind": "dom.click",
+  "stepIndex": 10,
+  "pageId": "page_main",
+  "page": {
+    "url": "file:///lot1-fixture.html",
+    "title": "Lot 1 capture fixture"
+  },
+  "target": {
+    "tag": "button",
+    "id": "step-10",
+    "testId": "step-10",
+    "framePath": ["main"],
+    "shadowPath": ["#lot1-widget"]
+  },
+  "action": {
+    "type": "click",
+    "selector": "[data-testid=\"step-10\"]",
+    "selectorStrategy": "testId",
+    "description": "Clic sur « Shadow action »",
+    "framePath": ["main"],
+    "shadowPath": ["#lot1-widget"]
+  }
+}

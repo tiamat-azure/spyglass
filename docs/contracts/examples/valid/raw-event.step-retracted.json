@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000210",
+  "sessionId": "ses_20260908_lot1",
+  "ts": 1757300000210,
+  "kind": "step.retracted",
+  "pageId": "page_main",
+  "retracts": "evt_000201",
+  "narration": {
+    "mode": "template",
+    "text": "Étape rétractée"
+  }
+}

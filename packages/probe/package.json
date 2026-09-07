@@ -2,7 +2,7 @@
   "name": "@spyglass/probe",
   "version": "0.0.0",
   "private": true,
-  "description": "Injected DOM probe scaffold. Capture runtime lands in Lot 1.",
+  "description": "Injected DOM probe: multi-frame + open shadow capture (Lot 1).",
   "type": "module",
   "exports": {
     ".": {

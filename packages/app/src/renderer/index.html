@@ -45,7 +45,7 @@
           />
         </form>
         <div class="toolbar-status">
-          <span class="rec-pill" id="rec-pill" aria-disabled="true" title="Recording is Lot 1">REC</span>
+          <span class="rec-pill" id="rec-pill" data-active="false" title="Recording idle">REC</span>
         </div>
       </header>
       <div class="workspace" id="workspace">
@@ -72,12 +72,12 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 0 — shell + Stagehand CDP</p>
+              <p class="tagline">Lot 1 — capture</p>
             </div>
           </header>
           <p class="chat-copy">
-            Chat, recording, and narration arrive in later lots. This pane is a placeholder. Use the
-            URL bar to browse; popups stay in the current page.
+            Record a path in the guest page. Each capture step is appended to
+            <code>raw.jsonl</code>. Replay uses Stagehand <code>act()</code> with no LLM.
           </p>
           <p class="meta" id="versions">Loading…</p>
           <p class="cdp" id="cdp-status">CDP: waiting…</p>
@@ -89,6 +89,12 @@
             Observe page
           </button>
           <ol class="log" id="log" aria-live="polite"></ol>
+          <div class="composer">
+            <button type="button" class="record-btn" id="record-btn" data-state="idle">
+              Record
+            </button>
+            <button type="button" class="observe-btn" id="replay-act">Replay capture (no LLM)</button>
+          </div>
         </aside>
       </div>
     </div>

@@ -2,7 +2,7 @@
   "name": "@spyglass/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass Electron shell (Lot 0 two-zone WebContentsView)",
+  "description": "Spyglass Electron shell (Lot 1 capture + two-zone WebContentsView)",
   "author": {
     "name": "Spyglass contributors",
     "email": "tiamat.azure@gmail.com"
@@ -27,10 +27,13 @@
     "package:win": "electron-vite build && electron-builder --win nsis --publish never",
     "capture:shell": "electron-vite build && electron .",
     "observe": "node scripts/stagehand-observe.mjs",
+    "act": "node scripts/stagehand-act.mjs",
     "test:packaged-observe": "node scripts/packaged-observe-smoke.mjs"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "3.7.3",
+    "@spyglass/contracts": "workspace:*",
+    "@spyglass/probe": "workspace:*",
     "playwright-core": "1.63.0",
     "zod": "3.25.76"
   },

@@ -35,6 +35,7 @@ export type ReplayDescriptor = {
   type: 'click' | 'fill' | 'select' | 'check' | 'press' | 'navigate' | 'wait' | 'scroll';
   selector: string;
   selectorStrategy?: 'testId' | 'role+name' | 'id' | 'text' | 'css' | 'xpath';
+  description?: string;
   fallbackSelectors?: string[];
   arguments?: string[];
   framePath?: string[];

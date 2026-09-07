@@ -17,7 +17,7 @@ Règle : une exigence du PRD ne répète jamais une justification d'ADR, elle la
 | [0007](0007-verification-etape.md) | D-07 Vérification d'étape | Heuristique proposée, validation groupée au raffinement | Actée |
 | [0008](0008-auto-reparation.md) | D-08 Auto-réparation | Proposition en v1, application assistée au lot 7 | Actée |
 | [0009](0009-frames-et-shadow-dom.md) | D-09 Frames et shadow DOM | Support complet dès le lot 1 | Actée |
-| [0010](0010-popup-et-nouvel-onglet.md) | D-10 Popup et nouvel onglet | Redirection dans la page courante | Actée sous hypothèse (lot 0 bis) |
+| [0010](0010-popup-et-nouvel-onglet.md) | D-10 Popup et nouvel onglet | Redirection dans la page courante ; `loginRedirect` confirmé (2026-09-08) | Actée |
 | [0011](0011-retention-des-captures.md) | D-11 Rétention des captures | Tampon glissant | Actée |
 | [0012](0012-modele-narration-fast.md) | D-12 Modèle de narration | Fournisseur distant, Claude Haiku par défaut | Actée |
 | [0013](0013-moteur-transcription-whisper-cpp.md) | D-13 Moteur de transcription | `whisper.cpp`, modèle `small` quantifié embarqué | Actée |

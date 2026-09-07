@@ -1,4 +1,4 @@
-import type { NavState, StagehandObserveResponse } from '../../shared/ipc.ts';
+import type { NavState, SessionStatePayload, StagehandObserveResponse } from '../../shared/ipc.ts';
 import { DEFAULT_SPLIT_RATIO } from '../../shared/ipc.ts';
 
 const CHAT_MIN_PX = 300;
@@ -61,6 +61,9 @@ const gutter = requireEl<HTMLElement>('gutter');
 const versions = requireEl<HTMLElement>('versions');
 const cdpStatus = requireEl<HTMLElement>('cdp-status');
 const observeBtn = requireEl<HTMLButtonElement>('observe');
+const recordBtn = requireEl<HTMLButtonElement>('record-btn');
+const replayActBtn = requireEl<HTMLButtonElement>('replay-act');
+const recPill = requireEl<HTMLElement>('rec-pill');
 const log = requireEl<HTMLOListElement>('log');
 
 if (api === undefined) {
@@ -109,6 +112,49 @@ if (api !== undefined) {
     appendLog(log, formatObservations(result));
   });
 
+  api.session.onState((state: SessionStatePayload) => {
+    const recording = state.state === 'recording';
+    recordBtn.dataset.state = recording ? 'recording' : 'idle';
+    recordBtn.textContent = recording ? 'Stop' : 'Record';
+    recPill.dataset.active = recording ? 'true' : 'false';
+    recPill.title = recording ? 'Recording' : 'Recording idle';
+    browserSlot.dataset.recording = recording ? 'true' : 'false';
+  });
+
+  api.session.onEvent((event) => {
+    const kind = typeof event.kind === 'string' ? event.kind : 'event';
+    const id = typeof event.id === 'string' ? event.id : '';
+    const narration =
+      typeof event.narration === 'object' &&
+      event.narration !== null &&
+      typeof (event.narration as { text?: unknown }).text === 'string'
+        ? (event.narration as { text: string }).text
+        : kind;
+    const item = document.createElement('li');
+    item.dataset.eventId = id;
+    const label = document.createElement('span');
+    label.textContent = `${kind} · ${narration}`;
+    item.append(label);
+    if (kind.startsWith('dom.') && id.length > 0) {
+      const retract = document.createElement('button');
+      retract.type = 'button';
+      retract.className = 'retract';
+      retract.textContent = 'Retract';
+      retract.addEventListener('click', () => {
+        void api.session.retract(id);
+      });
+      item.append(retract);
+    }
+    if (kind === 'step.retracted' && typeof event.retracts === 'string') {
+      const previous = log.querySelector(`[data-event-id="${event.retracts}"]`);
+      if (previous instanceof HTMLElement) {
+        previous.dataset.retracted = 'true';
+      }
+    }
+    log.append(item);
+    log.scrollTop = log.scrollHeight;
+  });
+
   void api.stagehand.cdp().then((info) => {
     if (info.port <= 0 || info.cdpUrl.length === 0) {
       cdpStatus.textContent = 'CDP off — set SPYGLASS_CDP=1';
@@ -155,6 +201,42 @@ observeBtn.addEventListener('click', () => {
     })
     .finally(() => {
       observeBtn.disabled = false;
+    });
+});
+
+recordBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const recording = recordBtn.dataset.state === 'recording';
+  recordBtn.disabled = true;
+  const work = recording ? api.session.stop() : api.session.start();
+  void work
+    .catch((error: unknown) => {
+      appendLog(log, `session failed: ${error instanceof Error ? error.message : String(error)}`);
+    })
+    .finally(() => {
+      recordBtn.disabled = false;
+    });
+});
+
+replayActBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  replayActBtn.disabled = true;
+  void api.stagehand
+    .act()
+    .then((result) => {
+      appendLog(
+        log,
+        result.ok
+          ? `act() ok · llmCalls=${String(result.llmCalls)} · ${String(result.results.length)} actions`
+          : `act() failed: ${result.error ?? 'unknown'} (llmCalls=${String(result.llmCalls)})`
+      );
+    })
+    .finally(() => {
+      replayActBtn.disabled = false;
     });
 });
 

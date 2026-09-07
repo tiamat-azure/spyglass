@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseEmptyPayload, parseGotoPayload, parseObservePayload } from './ipc-validate.ts';
+import {
+  parseEmptyPayload,
+  parseGotoPayload,
+  parseObservePayload,
+  parseRetractPayload,
+  parseSessionStartPayload
+} from './ipc-validate.ts';
 import {
   clampBrowserBoundsToChrome,
   clampSplitRatio,
@@ -29,6 +35,17 @@ describe('ipc payload validation', () => {
       instruction: 'find links'
     });
     expect(parseObservePayload({ instruction: 1 })).toBeUndefined();
+  });
+});
+
+describe('session payload validation', () => {
+  it('accepts optional startUrl and retract event ids', () => {
+    expect(parseSessionStartPayload({})).toEqual({});
+    expect(parseSessionStartPayload({ startUrl: 'https://example.com' })).toEqual({
+      startUrl: 'https://example.com'
+    });
+    expect(parseRetractPayload({ eventId: 'evt_000001' })).toEqual({ eventId: 'evt_000001' });
+    expect(parseRetractPayload({})).toBeUndefined();
   });
 });
 

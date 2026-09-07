@@ -1,4 +1,4 @@
-export const SHELL_LOT = '0' as const;
+export const SHELL_LOT = '1' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -16,7 +16,13 @@ export const IPC = {
   layoutBrowserBounds: 'spyglass:layout:browserBounds',
   stagehandObserve: 'spyglass:stagehand:observe',
   stagehandCdp: 'spyglass:stagehand:cdp',
-  stagehandResult: 'spyglass:stagehand:result'
+  stagehandResult: 'spyglass:stagehand:result',
+  stagehandAct: 'spyglass:stagehand:act',
+  sessionStart: 'spyglass:session:start',
+  sessionStop: 'spyglass:session:stop',
+  sessionRetract: 'spyglass:session:retract',
+  sessionState: 'spyglass:session:state',
+  eventAppended: 'spyglass:event:appended'
 } as const;
 
 export type NavState = {
@@ -87,4 +93,39 @@ export type CdpTarget = {
   url: string;
   title: string;
   webSocketDebuggerUrl?: string;
+};
+
+export type RecorderState = 'idle' | 'recording' | 'stopping' | 'sealed';
+
+export type SessionStartRequest = {
+  startUrl?: string;
+};
+
+export type SessionStartResponse = {
+  sessionId: string;
+};
+
+export type SessionStopResponse = {
+  sessionId: string;
+  eventCount: number;
+  sizeBytes: number;
+};
+
+export type SessionRetractRequest = {
+  eventId: string;
+};
+
+export type SessionStatePayload = {
+  state: RecorderState;
+  since: number;
+  sessionId?: string;
+};
+
+export type StagehandActResponse = {
+  ok: boolean;
+  llmCalls: number;
+  results: Array<{ selector: string; method: string; success: boolean; message: string }>;
+  error?: string;
+  guestUrl?: string;
+  cdpUrl?: string;
 };

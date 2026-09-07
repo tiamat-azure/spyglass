@@ -1,9 +1,12 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { toObserveResult } from '@spyglass/probe';
 import { app, BrowserWindow, ipcMain, type WebContents } from 'electron';
 import type {
   NavState,
   PopupRedirectedPayload,
+  SessionStatePayload,
+  StagehandActResponse,
   StagehandCdpResponse,
   StagehandObserveResponse
 } from '../shared/ipc.ts';
@@ -18,10 +21,14 @@ import {
   parseBrowserBoundsPayload,
   parseEmptyPayload,
   parseGotoPayload,
-  parseObservePayload
+  parseObservePayload,
+  parseRetractPayload,
+  parseSessionStartPayload
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
+import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.ts';
+import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
@@ -44,6 +51,7 @@ if (userDataOverride !== undefined && userDataOverride.length > 0) {
 installWebContentsSecurityDefaults();
 
 let activePane: BrowserPane | undefined;
+let activeSession: SessionOrchestrator | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 
@@ -243,6 +251,13 @@ function rejectForeignIpc(
   return true;
 }
 
+function requireSession(): SessionOrchestrator {
+  if (activeSession === undefined) {
+    throw new Error('Session orchestrator is not ready');
+  }
+  return activeSession;
+}
+
 function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefined }): void {
   if (ipcRegistered) {
     return;
@@ -394,6 +409,83 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return result;
   });
 
+  ipcMain.handle(IPC.sessionStart, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionStart)) {
+      return { sessionId: '' };
+    }
+    const payload = parseSessionStartPayload(raw);
+    const snapshot = requirePane().snapshot();
+    const startUrl = payload.startUrl ?? snapshot.url;
+    return await requireSession().start(startUrl);
+  });
+
+  ipcMain.handle(IPC.sessionStop, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionStop)) {
+      return { sessionId: '', eventCount: 0, sizeBytes: 0 };
+    }
+    if (!parseEmptyPayload(raw)) {
+      return { sessionId: '', eventCount: 0, sizeBytes: 0 };
+    }
+    return await requireSession().stop();
+  });
+
+  ipcMain.handle(IPC.sessionRetract, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionRetract)) {
+      return { retractedEventId: '' };
+    }
+    const payload = parseRetractPayload(raw);
+    if (payload === undefined) {
+      console.error('Rejected invalid spyglass:session:retract payload');
+      return { retractedEventId: '' };
+    }
+    return await requireSession().retract(payload.eventId);
+  });
+
+  ipcMain.handle(IPC.stagehandAct, async (event): Promise<StagehandActResponse> => {
+    if (rejectForeignIpc(event, winRef, IPC.stagehandAct)) {
+      return { ok: false, llmCalls: 0, results: [], error: 'forbidden' };
+    }
+    const snapshot = requirePane().snapshot();
+    if (cdpPort <= 0) {
+      return {
+        ok: false,
+        llmCalls: 0,
+        results: [],
+        error: 'Remote debugging is off. Launch with SPYGLASS_CDP=1.',
+        guestUrl: snapshot.url
+      };
+    }
+    const events = await requireSession().readRawEvents();
+    const actions = events.flatMap((rawEvent) => {
+      if (rawEvent.action === undefined || rawEvent.kind === 'step.retracted') {
+        return [];
+      }
+      const retracted = events.some(
+        (other) => other.kind === 'step.retracted' && other.retracts === rawEvent.id
+      );
+      if (retracted) {
+        return [];
+      }
+      return [toObserveResult(rawEvent.action, rawEvent.kind)];
+    });
+    const observeWin = winRef.current;
+    if (observeWin !== undefined && !observeWin.isDestroyed()) {
+      try {
+        const targets = await fetchCdpTargets(cdpPort);
+        pinChromeTargetFromList(observeWin.webContents, targets, snapshot.url);
+      } catch {
+        // pin is best-effort
+      }
+    }
+    return await runStagehandAct({
+      cdpUrl: cdpHttpUrl(cdpPort),
+      guestUrl: snapshot.url,
+      actions,
+      appPath: app.getAppPath(),
+      chromeTargetId: pinnedChromeTargetId
+    });
+  });
+
   ipcMain.on(IPC.layoutBrowserBounds, (event, raw: unknown) => {
     if (rejectForeignIpc(event, winRef, IPC.layoutBrowserBounds)) {
       return;
@@ -453,11 +545,39 @@ void (async () => {
         onPopupRedirected: (payload: PopupRedirectedPayload) => {
           console.info('[spyglass] nav.popup-redirected', payload);
           emitToChrome(win, IPC.navPopupRedirected, payload);
+          void activeSession?.recordPopup(payload.url);
         }
       },
       { cdpPort }
     );
     activePane = pane;
+    activeSession = new SessionOrchestrator(
+      () => sessionsDirFromEnv(app.getPath('userData')),
+      () => requirePane(),
+      {
+        onEvent: (rawEvent) => {
+          emitToChrome(win, IPC.eventAppended, rawEvent);
+        },
+        onState: (state: SessionStatePayload) => {
+          emitToChrome(win, IPC.sessionState, state);
+        }
+      }
+    );
+    activeSession.attachProbe();
+    pane.webContents.on('did-navigate', () => {
+      void activeSession?.recordNav('nav.load', pane.snapshot());
+    });
+    pane.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
+      if (isMainFrame) {
+        void activeSession?.recordNav('nav.spa', pane.snapshot());
+      }
+    });
+    pane.webContents.session.webRequest.onCompleted((details) => {
+      const resourceType = String(details.resourceType);
+      if (resourceType === 'xhr' || resourceType === 'fetch') {
+        void activeSession?.recordNetRequest(details.url);
+      }
+    });
 
     const applyFallbackBounds = (): void => {
       const size = win.getContentSize();

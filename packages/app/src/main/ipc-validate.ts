@@ -1,4 +1,10 @@
-import type { BrowserBounds, NavGotoRequest, StagehandObserveRequest } from '../shared/ipc.ts';
+import type {
+  BrowserBounds,
+  NavGotoRequest,
+  SessionRetractRequest,
+  SessionStartRequest,
+  StagehandObserveRequest
+} from '../shared/ipc.ts';
 
 export function parseGotoPayload(input: unknown): NavGotoRequest | undefined {
   if (typeof input !== 'object' || input === null) {
@@ -60,4 +66,29 @@ export function parseObservePayload(input: unknown): StagehandObserveRequest | u
     return undefined;
   }
   return { instruction: record.instruction };
+}
+
+export function parseSessionStartPayload(input: unknown): SessionStartRequest {
+  if (input === undefined || input === null) {
+    return {};
+  }
+  if (typeof input !== 'object') {
+    return {};
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.startUrl === 'string') {
+    return { startUrl: record.startUrl };
+  }
+  return {};
+}
+
+export function parseRetractPayload(input: unknown): SessionRetractRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const eventId = (input as { eventId?: unknown }).eventId;
+  if (typeof eventId !== 'string' || eventId.length === 0) {
+    return undefined;
+  }
+  return { eventId };
 }

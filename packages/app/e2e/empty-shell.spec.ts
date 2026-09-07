@@ -75,14 +75,15 @@ test.describe('Lot 0 two-zone shell', () => {
 
       await expect(chrome).toHaveTitle(/Spyglass/);
       await expect(chrome.locator('h1')).toHaveText('Spyglass');
-      await expect(chrome.locator('.tagline')).toContainText('Lot 0');
+      await expect(chrome.locator('.tagline')).toContainText('Lot 1');
       await expect(chrome.locator('#url')).toBeVisible();
       await expect(chrome.locator('#back')).toBeVisible();
       await expect(chrome.locator('#forward')).toBeVisible();
       await expect(chrome.locator('#reload')).toBeVisible();
       await expect(chrome.locator('#browser-slot')).toBeVisible();
       await expect(chrome.locator('#chat')).toBeVisible();
-      await expect(chrome.locator('#rec-pill')).toHaveAttribute('aria-disabled', 'true');
+      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i);
+      await expect(chrome.locator('#rec-pill')).toBeVisible();
       await expect(chrome.locator('#versions')).toContainText(/Electron/i);
       await expect(guest.locator('h1')).toHaveText('Spyglass start page');
 

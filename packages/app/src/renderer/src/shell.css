@@ -85,6 +85,7 @@ body {
 
 .icon-btn:focus-visible,
 .observe-btn:focus-visible,
+.record-btn:focus-visible,
 .gutter:focus-visible,
 .url-form input:focus-visible {
   outline: 2px solid var(--sg-accent);
@@ -133,6 +134,30 @@ body {
   opacity: 0.55;
 }
 
+.rec-pill[data-active="true"] {
+  color: var(--sg-rec);
+  border-color: var(--sg-rec);
+  opacity: 1;
+  box-shadow: var(--sg-glow-rec);
+  animation: rec-pulse var(--sg-dur-pulse) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-pill[data-active="true"] {
+    animation: none;
+  }
+}
+
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 .workspace {
   flex: 1 1 auto;
   min-height: 0;
@@ -143,6 +168,11 @@ body {
   flex: 0 0 var(--sg-split-default);
   min-width: 240px;
   background: var(--sg-bg);
+}
+
+.browser-slot[data-recording="true"] {
+  outline: var(--sg-rec-frame) solid var(--sg-rec);
+  outline-offset: calc(-1 * var(--sg-rec-frame));
 }
 
 .gutter {
@@ -262,6 +292,8 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: var(--sg-space-2);
+  flex: 1 1 auto;
+  overflow: auto;
 }
 
 .log li {
@@ -272,6 +304,46 @@ h1 {
   color: var(--sg-text);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.log li[data-retracted="true"] {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.log li .retract {
+  margin-left: var(--sg-space-3);
+  border: 0;
+  background: transparent;
+  color: var(--sg-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-3);
+  margin-top: auto;
+}
+
+.record-btn {
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: var(--sg-radius-sm);
+  background: var(--sg-rec);
+  color: #fff;
+  font-size: var(--sg-text-sm);
+  font-weight: 600;
+  letter-spacing: var(--sg-tracking-caps);
+  cursor: pointer;
+  box-shadow: var(--sg-glow-rec);
+}
+
+.record-btn[data-state="recording"] {
+  background: var(--sg-surface-2);
+  color: var(--sg-rec);
+  border-color: var(--sg-rec);
 }
 
 .sr-only {

@@ -5,11 +5,11 @@ Enregistreur de scénarios de navigation web assisté par IA, propulsé par Stag
 | Champ | Valeur |
 |---|---|
 | Produit | Spyglass |
-| Version du document | 1.3 (arbitrages tranchés, contrats techniques et socle d'outillage actés) |
+| Version du document | 1.4 (D-10 / `loginRedirect` confirmé au lot 0 bis ; lot 1 débloqué) |
 | Périmètre v1 | Lots -1 à 6. Le lot 7 constitue la v1.1 |
-| Statut | Cadrage complet. **16 décisions fermes, 1 conditionnelle (D-10)**. Contrats techniques (§15) et socle d'outillage (§16) actés. Prêt pour le lancement du lot -1 |
+| Statut | Cadrage complet. **17 décisions fermes** (D-10 confirmée le 2026-09-08). Contrats techniques (§15) et socle d'outillage (§16) actés. Lot 1 (capture) ouvert. |
 | Décisions d'architecture | `docs/adr/` (ADR-0001 à ADR-0017), index en section 10 |
-| Dernière mise à jour | 2026-09-07 |
+| Dernière mise à jour | 2026-09-08 |
 
 ---
 
@@ -677,7 +677,7 @@ conséquences. Le tableau ci-dessous n'est qu'un index.
 | D-07 | Vérification d'étape | Heuristique proposée, validation groupée au raffinement, finalisation bloquante | [0007](docs/adr/0007-verification-etape.md) |
 | D-08 | Auto-réparation | Proposition en v1, application assistée au lot 7, limitée au descripteur d'action | [0008](docs/adr/0008-auto-reparation.md) |
 | D-09 | Frames et shadow DOM | Support complet dès le lot 1, shadow DOM fermé hors périmètre | [0009](docs/adr/0009-frames-et-shadow-dom.md) |
-| D-10 | Popup et nouvel onglet | Redirection dans la page courante. **Hypothèse `loginRedirect` à confirmer en lot 0 bis** | [0010](docs/adr/0010-popup-et-nouvel-onglet.md) |
+| D-10 | Popup et nouvel onglet | Redirection dans la page courante. **Hypothèse `loginRedirect` confirmée le 2026-09-08** (Outlook Web MSAL `interactionType: redirect`, pas de `window.open` / `nav.popup-redirected`). Hop MFA non parcouru : risque résiduel de fédération. `pageId` reste additif. | [0010](docs/adr/0010-popup-et-nouvel-onglet.md) |
 | D-11 | Rétention des captures | Tampon glissant : instantanés systématiques, captures sur N dernières étapes et échecs | [0011](docs/adr/0011-retention-des-captures.md) |
 | D-12 | Modèle de narration (`fast`) | Fournisseur distant via clé d'API, Claude Haiku par défaut, mode dégradé obligatoire | [0012](docs/adr/0012-modele-narration-fast.md) |
 | D-13 | Moteur de transcription | `whisper.cpp`, modèle `small` quantifié embarqué, sans installation tierce | [0013](docs/adr/0013-moteur-transcription-whisper-cpp.md) |
@@ -694,7 +694,7 @@ La **v1 couvre les lots -1 à 6**. Le lot 7 constitue la **v1.1**.
 |---|---|---|
 | **Lot -1 - Socle d'outillage** | Stack et versions figées, structure de dépôt, outillage de test, lint et formatage, packaging des trois plateformes, intégration continue, contrats techniques de la section 15 | Une application Electron vide se construit, se teste, se signe et s'installe sur les trois plateformes depuis la CI ; les schémas JSON valident un jeu d'exemples |
 | **Lot 0 - Socle** | Coquille Electron deux zones, `WebContentsView`, barre d'URL, page unique, Stagehand connecté en CDP à la vue affichée | Naviguer manuellement, Stagehand exécute un `observe` sur la page affichée |
-| **Lot 0 bis - Confirmation EntraID** ⚠️ **jalon go / no-go bloquant** | Vérification de l'hypothèse `loginRedirect` (D-10) sur une application cible réelle. En cas d'invalidation, le plan B (popup d'authentification éphémère non enregistrée) est **chiffré avant** d'engager le lot 1 | Authentification EntraID complétée dans la vue unique sans popup requise, **ou** plan B chiffré et arbitré |
+| **Lot 0 bis - Confirmation EntraID** | Vérification de l'hypothèse `loginRedirect` (D-10) sur une application cible réelle. **Confirmée le 2026-09-08** (capitaine + scout `docs/lot-0bis-scout/` @ `840f187`) : Outlook Web reste dans la vue unique. Le hop MFA n'a pas été joué ; le lot 1 n'est plus bloqué. | Hypothèse `loginRedirect` **confirmée**. Plan B (popup d'auth éphémère) non engagé. Lot 1 unblocked. |
 | **Lot 1 - Capture** | Sonde DOM multi-frames et shadow DOM, normalisation, masquage, débruitage, `stepIndex`, **descripteur d'action rejouable local (F-22)**, artefact brut append-only, rétractation (F-19), bouton Record / Stop, rétention D-11 | Un parcours de 10 actions, dont une dans une iframe et une dans un composant web, produit un `raw.jsonl` complet et fidèle ; **chaque descripteur local rejoue son action via `act()` sans appel LLM** |
 | **Lot 2 - Agent observateur** | Gabarits déterministes d'abord, abstraction LLM à deux profils, filtre d'expurgation, enrichissement distant mis en lot avec remplacement en place, compteurs en tokens, double seuil et seuil de débit, blocs techniques repliables, configuration depuis l'interface (F-29) | Le chat affiche chaque étape en moins de 200 ms puis l'enrichit ; en coupant le réseau, le chat reste complet en gabarits sans perte d'événement ; un plafond abaissé artificiellement déclenche avertissement puis suspension de l'enrichissement, sans interrompre l'enregistrement |
 | **Lot 3 - Voix** | Capture audio, sidecar de transcription embarqué, transport WebSocket depuis le main, corrélation temporelle, édition des segments | Dicter avant et après une action, retrouver l'association dans l'artefact brut, avec le réseau coupé |
@@ -705,15 +705,14 @@ La **v1 couvre les lots -1 à 6**. Le lot 7 constitue la **v1.1**.
 
 ## 12. Points ouverts d'implémentation
 
-**16 des 17 décisions d'architecture sont fermes. Une reste conditionnelle : D-10**, dont
-l'hypothèse `loginRedirect` est confirmée ou infirmée au lot 0 bis, jalon go / no-go
-bloquant (I-02). Les autres points ci-dessous relèvent de l'implémentation et seront
-tranchés au sein du lot concerné, sans remettre en cause le cadrage.
+**Les 17 décisions d'architecture sont fermes.** D-10 / I-02 : hypothèse `loginRedirect`
+**confirmée le 2026-09-08** (lot 0 bis). Les points ci-dessous relèvent de l'implémentation
+et seront tranchés au sein du lot concerné, sans remettre en cause le cadrage.
 
 | ID | Point | Lot |
 |---|---|---|
 | I-01 | Résolution de la cible CDP correspondant à la vue affichée, et maintien de la liaison à travers navigations et recréations de contexte | Lot 0 |
-| I-02 | Confirmation de l'hypothèse `loginRedirect` sur une application EntraID réelle (D-10). En cas d'invalidation, requalification vers le support d'une popup d'authentification éphémère non enregistrée | Lot 0 bis |
+| I-02 | Confirmation de l'hypothèse `loginRedirect` sur une application EntraID réelle (D-10). **Confirmée le 2026-09-08** : Outlook Web MSAL `interactionType: redirect`, vue unique, pas de popup. MFA / fédération d'annuaire non exercés (risque résiduel, `pageId` additif). Plan B non engagé. | Lot 0 bis (clos) |
 | I-03 | Version exacte du modèle du profil `fast` à figer, après mesure de latence et de qualité rédactionnelle en français | Lot 2 |
 | I-04 | Gabarits de narration du mode dégradé : couverture des types d'événements et qualité rédactionnelle | Lot 2 |
 | I-05 | Version exacte du modèle du profil `smart` à figer, après évaluation sur des raffinements et des diagnostics réels | Lot 4 |
@@ -726,7 +725,7 @@ tranchés au sein du lot concerné, sans remettre en cause le cadrage.
 | Risque | Impact | Atténuation |
 |---|---|---|
 | Sélecteurs fragiles sur applications à classes générées dynamiquement | Rejeu inexploitable | F-13 descripteur multi-stratégies, priorité aux attributs stables, rattrapage IA |
-| Hypothèse `loginRedirect` invalidée sur une application cible | Blocage de l'authentification en entreprise | Lot 0 bis bloquant, `pageId` prévu dès la v1 (ADR-0010) |
+| Un IdP d'entreprise ouvre encore une popup après l'e-mail / MFA (hypothèse `loginRedirect` confirmée sur Outlook Web, hop MFA non parcouru) | Authentification bloquée sur ce tenant | F-04 redirige dans la vue ; `pageId` additif (ADR-0010) ; Plan B chiffrable sans migration de format |
 | Indisponibilité réseau ou du fournisseur pendant un enregistrement | Narration perdue | F-23 mode dégradé, journalisation brute indépendante du réseau (6.6) |
 | Rafale d'événements sur une page pathologique | Consommation anormale, chat noyé | F-73 seuil de débit, F-24 mise en lot |
 | Estimation monétaire erronée par tarifs obsolètes | Décision utilisateur faussée | F-70 plafonnement en tokens, F-75 table versionnée et estimation indicative |

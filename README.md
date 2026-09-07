@@ -1,9 +1,9 @@
 # Spyglass
 
 AI-assisted web scenario recorder (Stagehand). This repository is a **pnpm
-monorepo**. Lot **-1** froze the toolchain. Lot **0** ships the **two-zone
-Electron shell**, a real `WebContentsView` for browsing, and **Stagehand
-attached over CDP** to that displayed view.
+monorepo**. Lot **-1** froze the toolchain. Lot **0** shipped the two-zone
+Electron shell and Stagehand CDP. Lot **1** adds **DOM capture** (probe,
+`raw.jsonl`, Record/Stop, local `act()` replay without an LLM).
 
 French product specs stay in [`PRD.md`](PRD.md) and [`webdesign.md`](webdesign.md).
 Implementation and CI comments are English.
@@ -38,9 +38,9 @@ publishing to the public registry is not part of Lot 0. Register the
 
 | Package | Role |
 | --- | --- |
-| `@spyglass/app` | Two-zone Electron shell, `WebContentsView`, typed nav IPC, CDP endpoint |
+| `@spyglass/app` | Two-zone Electron shell, capture session, Record/Stop, Stagehand `observe`/`act` |
 | `@spyglass/runner` | Library scaffold only — `runScenario` is Lot 5 |
-| `@spyglass/probe` | Injected probe scaffold only — capture is Lot 1 |
+| `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |
 | `@spyglass/stt` | Sidecar scaffold only — whisper.cpp binary is a later lot |
 
@@ -132,6 +132,20 @@ The CDP URL and guest target are written to `userData/cdp.json` (also
 
 `keepAlive` is set so Stagehand must **not** close the Electron browser.
 
+## Lot 1 — capture
+
+Record / Stop in the chat composer writes an append-only `raw.jsonl` under
+`SESSIONS_DIR` (default `userData/sessions`). The guest probe covers iframes and
+open shadow DOM. Local descriptors replay with Stagehand `act()` and **no LLM**
+(`selfHeal: false`; the act worker throws if a chat completion is requested).
+
+Local fixture: `packages/app/resources/lot1-fixture.html` (set
+`SPYGLASS_GUEST_PAGE=lot1-fixture.html`). E2E: `pnpm test:e2e`.
+
+D-10 (`loginRedirect`) was **confirmed 2026-09-08**. Scout evidence:
+`scout/lot-0bis-evidence-20260908` @ `840f187`. MFA hop was not completed;
+residual federation risk remains. `pageId` stays additive.
+
 ## Schema fixtures
 
 - Schemas: [`docs/contracts/schemas/`](docs/contracts/schemas/)
@@ -178,7 +192,13 @@ Installer files are still built and uploaded as artifacts.
 Implemented (Lot 0): two-zone shell (F-01), URL bar + History API updates (F-02),
 nav controls (F-03), popup redirect into the current view (F-04), loading
 indicator (F-05), persisted `persist:spyglass-browser` partition (F-06),
-disabled REC pill stub (F-07), Stagehand CDP attach + `observe` (ADR-0002 / I-01).
+Stagehand CDP attach + `observe` (ADR-0002 / I-01).
 
-**Not** implemented: Lot 0 bis EntraID confirmation, Lot 1+ capture probe,
-Record/Stop, agent narration, voice, refinement, runner execution.
+Implemented (Lot 1): DOM probe (frames + open shadow), Record/Stop (F-10),
+masking (F-15), denoising (F-16), retraction (F-19), local replay descriptor
+(F-22), append-only `raw.jsonl` (F-40), sliding screenshot retention (D-11),
+Stagehand `act()` without LLM (I-07). D-10 `loginRedirect` confirmed 2026-09-08.
+
+**Not** implemented: Lot 2+ narration/LLM chat, voice, refinement, runner
+execution. Closed shadow DOM remains out of scope (ADR-0009). I-08 extra DOM
+snapshot on mutation-without-user-action is not in this lot.

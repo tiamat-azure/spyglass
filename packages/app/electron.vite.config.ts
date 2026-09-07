@@ -18,7 +18,10 @@ function copyGuestResources() {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), copyGuestResources()]
+    plugins: [
+      externalizeDepsPlugin({ exclude: ['@spyglass/probe', '@spyglass/contracts'] }),
+      copyGuestResources()
+    ]
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
