@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spyglass.dev/schemas/health.v1.json",
+  "title": "Santé d'un scénario Spyglass",
+  "description": "health.json. Un scénario correspond à une session (6.14).",
+  "type": "object",
+  "required": ["schemaVersion", "sessionId", "status", "appliedPatches", "patchCandidates"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sessionId": { "type": "string" },
+    "status": { "enum": ["healthy", "fragile", "stale"], "description": "fragile au-delà de PATCH_WARN_THRESHOLD, stale au-delà de PATCH_STALE_THRESHOLD (F-65)" },
+    "appliedPatches": { "type": "integer", "minimum": 0 },
+    "patchCandidates": {
+      "type": "array",
+      "description": "État de confirmation des patchs (F-63). Une entrée est supprimée dès qu'une exécution produit un descripteur différent pour la même étape.",
+      "items": {
+        "type": "object",
+        "required": ["stepIndex", "descriptorHash", "consecutiveRuns", "lastRunId"],
+        "additionalProperties": false,
+        "properties": {
+          "stepIndex": { "type": "integer" },
+          "descriptorHash": { "type": "string" },
+          "consecutiveRuns": { "type": "integer", "minimum": 1 },
+          "lastRunId": { "type": "string" }
+        }
+      }
+    }
+  }
+}

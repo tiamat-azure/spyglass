@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+sessions/
+.env
+.env.*
+!.env.example
+.lavish/
+*.log

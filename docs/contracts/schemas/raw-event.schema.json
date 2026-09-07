@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spyglass.dev/schemas/raw-event.v1.json",
+  "title": "Événement brut Spyglass",
+  "description": "Une ligne de raw.jsonl. Append-only, jamais réécrit (F-40, F-42).",
+  "type": "object",
+  "required": ["schemaVersion", "id", "sessionId", "ts", "kind"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^evt_[0-9]{6,}$" },
+    "sessionId": { "type": "string", "pattern": "^ses_" },
+    "ts": { "type": "integer", "description": "Epoch millisecondes, horloge monotone corrigée" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "dom.click", "dom.dblclick", "dom.input", "dom.change", "dom.check",
+        "dom.select", "dom.submit", "dom.key", "dom.scroll",
+        "nav.load", "nav.spa", "nav.redirect", "nav.back", "nav.forward",
+        "nav.popup-redirected", "net.request",
+        "selection.text", "selection.value",
+        "voice.partial", "voice.final", "voice.edited",
+        "agent.message", "agent.narration-mode", "user.message",
+        "record.start", "record.pause", "record.resume", "record.stop",
+        "step.retracted"
+      ]
+    },
+    "stepIndex": { "type": "integer", "minimum": 0, "description": "Étape de capture (5.2). Absent pour les événements de contrôle de session." },
+    "pageId": { "type": "string", "default": "page_main" },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "url": { "type": "string" }, "title": { "type": "string" } }
+    },
+    "target": { "$ref": "#/$defs/elementDescriptor" },
+    "value": { "$ref": "#/$defs/capturedValue" },
+    "action": { "$ref": "#/$defs/replayDescriptor" },
+    "narration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["template", "llm"] },
+        "batchId": { "type": "string" },
+        "text": { "type": "string" }
+      },
+      "required": ["mode"]
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "startTs": { "type": "integer" },
+        "endTs": { "type": "integer" },
+        "editedFrom": { "type": "string" },
+        "audioRef": { "type": ["string", "null"], "description": "null si AUDIO_RETENTION=none (F-49)" }
+      }
+    },
+    "retracts": { "type": "string", "description": "id de l'événement rétracté, pour kind=step.retracted (F-19)" },
+    "snapshotRef": { "type": "string" },
+    "screenshotRef": { "type": "string" }
+  },
+  "$defs": {
+    "elementDescriptor": {
+      "type": "object",
+      "description": "Descripteur multi-stratégies (F-13). Toutes les stratégies disponibles sont renseignées, aucune n'est prioritaire à la capture.",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "id": { "type": "string" },
+        "testId": { "type": "string" },
+        "testAttributes": { "type": "object", "additionalProperties": { "type": "string" } },
+        "role": { "type": "string" },
+        "accessibleName": { "type": "string" },
+        "text": { "type": "string", "maxLength": 512 },
+        "name": { "type": "string" },
+        "cssSelector": { "type": "string" },
+        "xpath": { "type": "string" },
+        "siblingIndex": { "type": "integer" },
+        "ancestors": { "type": "array", "items": { "type": "string" } },
+        "framePath": { "type": "array", "items": { "type": "string" }, "description": "Chemin de frames, 'main' en tête (F-13, ADR-0009)" },
+        "shadowPath": { "type": "array", "items": { "type": "string" }, "description": "Traversée des shadow roots ouverts" },
+        "boundingBox": {
+          "type": "object",
+          "properties": { "x": {"type":"number"}, "y": {"type":"number"}, "w": {"type":"number"}, "h": {"type":"number"} }
+        }
+      },
+      "required": ["tag", "framePath", "shadowPath"]
+    },
+    "capturedValue": {
+      "type": "object",
+      "description": "Une valeur est soit en clair, soit masquée (F-15). Jamais les deux.",
+      "oneOf": [
+        { "required": ["masked", "text"], "properties": { "masked": { "const": false }, "text": { "type": "string" } }, "additionalProperties": false },
+        { "required": ["masked", "secretRef"], "properties": { "masked": { "const": true }, "secretRef": { "type": "string", "pattern": "^SECRET_" } }, "additionalProperties": false }
+      ]
+    },
+    "replayDescriptor": {
+      "type": "object",
+      "description": "Descripteur d'action rejouable construit LOCALEMENT par la sonde, sans appel LLM (F-22). Format compatible ObserveResult Stagehand.",
+      "additionalProperties": false,
+      "required": ["type", "selector"],
+      "properties": {
+        "type": { "enum": ["click", "fill", "select", "check", "press", "navigate", "wait", "scroll"] },
+        "selector": { "type": "string", "description": "Sélecteur retenu, stratégie la plus stable disponible" },
+        "selectorStrategy": { "enum": ["testId", "role+name", "id", "text", "css", "xpath"] },
+        "fallbackSelectors": { "type": "array", "items": { "type": "string" } },
+        "arguments": { "type": "array", "items": { "type": "string" } },
+        "framePath": { "type": "array", "items": { "type": "string" } },
+        "shadowPath": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

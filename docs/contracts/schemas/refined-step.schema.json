@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spyglass.dev/schemas/refined-step.v1.json",
+  "title": "Étape raffinée Spyglass",
+  "type": "object",
+  "required": ["index", "intent", "action", "verification", "sourceEvents"],
+  "additionalProperties": false,
+  "properties": {
+    "index": { "type": "integer", "minimum": 0 },
+    "intent": { "type": "string", "minLength": 1, "description": "Intention en langage naturel. Jamais réécrite par l'IA après validation (F-62)." },
+    "action": {
+      "type": "object",
+      "required": ["type", "descriptor"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["click", "fill", "select", "check", "press", "navigate", "wait", "scroll"] },
+        "descriptor": { "$ref": "raw-event.schema.json#/$defs/replayDescriptor" },
+        "fallbackSelectors": { "type": "array", "items": { "type": "string" } },
+        "parameterRef": { "type": "string", "description": "Nom de variable si la valeur est paramétrée (F-48)" }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "description": "Obligatoire (F-44). La finalisation est bloquée tant qu'une vérification weak n'est pas confirmée.",
+      "required": ["type", "expected", "strength", "confirmedByUser"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["urlMatches", "elementVisible", "elementAbsent", "textPresent", "valueEquals"] },
+        "expected": { "type": "string" },
+        "strength": { "enum": ["strong", "weak"] },
+        "weakReason": {
+          "enum": ["observable-state-change", "no-observable-change", "ambiguous-target", "value-assertion"],
+          "description": "Requis si strength=weak. observable-state-change classe la vérification comme routinière, confirmable en un geste groupé ; les trois autres valeurs imposent une confirmation unitaire (F-44b)."
+        },
+        "confirmedByUser": { "type": "boolean" },
+        "timeoutMs": { "type": "integer", "default": 10000 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "strength": { "const": "weak" } } },
+          "then": { "properties": { "confirmedByUser": { "const": true } },
+                    "description": "Un scénario finalisé ne peut contenir de vérification weak non confirmée (F-44)." }
+        }
+      ]
+    },
+    "sourceEvents": {
+      "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^evt_" },
+      "description": "Traçabilité amont vers l'artefact brut (F-42)"
+    },
+    "patchHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["runId", "date", "scope", "reviewedBy", "pullRequest"],
+        "additionalProperties": false,
+        "properties": {
+          "runId": { "type": "string" },
+          "date": { "type": "string", "format": "date-time" },
+          "scope": { "const": "action.descriptor", "description": "INVARIANT F-62 : aucune autre valeur n'est admise, par conception." },
+          "reviewedBy": { "type": "string", "minLength": 1 },
+          "pullRequest": { "type": "string", "description": "URL de la PR fusionnée (F-64)" }
+        }
+      }
+    }
+  }
+}
