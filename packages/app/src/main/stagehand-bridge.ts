@@ -42,17 +42,34 @@ function electronResourcesPath(): string | undefined {
 
 export function resolveStagehandModule(appPath?: string): string | undefined {
   const pkgCandidates: string[] = [];
+  const unpacked = unpackedAsarPath(appPath);
+  if (unpacked !== undefined) {
+    pkgCandidates.push(join(unpacked, 'node_modules/@browserbasehq/stagehand/package.json'));
+  }
   if (appPath !== undefined && appPath.length > 0) {
     pkgCandidates.push(join(appPath, 'package.json'));
   }
   pkgCandidates.push(join(import.meta.dirname, '../../package.json'));
   for (const pkg of pkgCandidates) {
+    if (!existsSync(pkg)) {
+      continue;
+    }
     try {
       const require = createRequire(pkg);
       return pathToFileURL(require.resolve('@browserbasehq/stagehand')).href;
     } catch {
       // try the next package.json
     }
+  }
+  return undefined;
+}
+
+function unpackedAsarPath(appPath?: string): string | undefined {
+  if (appPath === undefined || appPath.length === 0) {
+    return undefined;
+  }
+  if (appPath.endsWith('.asar')) {
+    return `${appPath}.unpacked`;
   }
   return undefined;
 }
@@ -105,8 +122,7 @@ async function spawnStagehandObserve(options: {
     };
   }
 
-  const args = [
-    script,
+  const flags = [
     '--cdp-url',
     options.cdpUrl,
     '--guest-url',
@@ -117,72 +133,177 @@ async function spawnStagehandObserve(options: {
   ];
   const stagehandModule = resolveStagehandModule(options.appPath);
   if (stagehandModule !== undefined) {
-    args.push('--stagehand-module', stagehandModule);
+    flags.push('--stagehand-module', stagehandModule);
   }
 
   const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ELECTRON_RUN_AS_NODE: '1'
+    ...process.env
   };
   if (options.appPath !== undefined && options.appPath.length > 0) {
     childEnv.SPYGLASS_APP_PATH = options.appPath;
   }
 
+  const viaUtility = await runObserveViaUtilityProcess(script, flags, childEnv, {
+    instruction,
+    guestUrl: options.guestUrl,
+    cdpUrl: options.cdpUrl
+  });
+  if (viaUtility !== undefined) {
+    return viaUtility;
+  }
+
+  childEnv.ELECTRON_RUN_AS_NODE = '1';
+  return await runObserveViaSpawn(script, flags, childEnv, {
+    instruction,
+    guestUrl: options.guestUrl,
+    cdpUrl: options.cdpUrl
+  });
+}
+
+type ObserveContext = {
+  instruction: string;
+  guestUrl: string;
+  cdpUrl: string;
+};
+
+async function runObserveViaUtilityProcess(
+  script: string,
+  flags: string[],
+  env: NodeJS.ProcessEnv,
+  context: ObserveContext
+): Promise<StagehandObserveResponse | undefined> {
+  let utilityProcess: UtilityProcessApi | undefined;
+  try {
+    const electronMod = (await import('electron')) as { utilityProcess?: UtilityProcessApi };
+    utilityProcess = electronMod.utilityProcess;
+  } catch {
+    return undefined;
+  }
+  if (utilityProcess === undefined || typeof utilityProcess.fork !== 'function') {
+    return undefined;
+  }
+  const api = utilityProcess;
+
   return await new Promise((resolve) => {
-    const child = spawn(process.execPath, args, {
-      env: childEnv,
+    let child: UtilityChild | undefined;
+    try {
+      child = api.fork(script, flags, {
+        env,
+        stdio: 'pipe',
+        serviceName: 'spyglass-observe'
+      });
+    } catch {
+      resolve(undefined);
+      return;
+    }
+    if (child === undefined) {
+      resolve(undefined);
+      return;
+    }
+    collectObserveChild(child, context, (value) => {
+      resolve(value);
+    });
+  });
+}
+
+async function runObserveViaSpawn(
+  script: string,
+  flags: string[],
+  env: NodeJS.ProcessEnv,
+  context: ObserveContext
+): Promise<StagehandObserveResponse> {
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, [script, ...flags], {
+      env,
       stdio: ['ignore', 'pipe', 'pipe']
     });
+    collectObserveChild(child, context, resolve);
+  });
+}
 
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM');
-      resolve({
-        ok: false,
-        instruction,
-        observations: [],
-        error: 'Stagehand observe timed out',
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
-      });
-    }, 90_000);
+type UtilityProcessApi = {
+  fork: (
+    modulePath: string,
+    args?: string[],
+    options?: {
+      env?: NodeJS.ProcessEnv;
+      stdio?: 'pipe' | 'ignore' | 'inherit';
+      serviceName?: string;
+    }
+  ) => UtilityChild;
+};
 
-    child.stdout.on('data', (chunk: string | Uint8Array) => {
-      stdout += chunkToString(chunk);
+type UtilityChild = {
+  stdout?: { on: (event: 'data', listener: (chunk: string | Uint8Array) => void) => void } | null;
+  stderr?: { on: (event: 'data', listener: (chunk: string | Uint8Array) => void) => void } | null;
+  on: (event: 'exit' | 'error', listener: (...args: unknown[]) => void) => void;
+  kill: () => void;
+};
+
+function collectObserveChild(
+  child: UtilityChild,
+  context: ObserveContext,
+  resolve: (value: StagehandObserveResponse) => void
+): void {
+  let stdout = '';
+  let stderr = '';
+  let settled = false;
+  const finish = (value: StagehandObserveResponse): void => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    clearTimeout(timer);
+    resolve(value);
+  };
+  const timer = setTimeout(() => {
+    child.kill();
+    finish({
+      ok: false,
+      instruction: context.instruction,
+      observations: [],
+      error: 'Stagehand observe timed out',
+      guestUrl: context.guestUrl,
+      cdpUrl: context.cdpUrl
     });
-    child.stderr.on('data', (chunk: string | Uint8Array) => {
-      stderr += chunkToString(chunk);
+  }, 90_000);
+
+  child.stdout?.on('data', (chunk: string | Uint8Array) => {
+    stdout += chunkToString(chunk);
+  });
+  child.stderr?.on('data', (chunk: string | Uint8Array) => {
+    stderr += chunkToString(chunk);
+  });
+  child.on('error', (...args: unknown[]) => {
+    const error = args[0];
+    const message =
+      error instanceof Error ? error.message : String(error ?? 'observe worker error');
+    finish({
+      ok: false,
+      instruction: context.instruction,
+      observations: [],
+      error: message,
+      guestUrl: context.guestUrl,
+      cdpUrl: context.cdpUrl
     });
-    child.on('error', (error: Error) => {
-      clearTimeout(timer);
-      resolve({
-        ok: false,
-        instruction,
-        observations: [],
-        error: error.message,
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
-      });
-    });
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      const parsed = parseObserveStdout(stdout);
-      if (parsed !== undefined) {
-        resolve(parsed);
-        return;
-      }
-      resolve({
-        ok: false,
-        instruction,
-        observations: [],
-        error:
-          stderr.trim().length > 0
-            ? stderr.trim()
-            : `Stagehand observe exited ${String(code ?? 'null')} without JSON`,
-        guestUrl: options.guestUrl,
-        cdpUrl: options.cdpUrl
-      });
+  });
+  child.on('exit', (...args: unknown[]) => {
+    const parsed = parseObserveStdout(stdout);
+    if (parsed !== undefined) {
+      finish(parsed);
+      return;
+    }
+    const code = args[0];
+    finish({
+      ok: false,
+      instruction: context.instruction,
+      observations: [],
+      error:
+        stderr.trim().length > 0
+          ? stderr.trim()
+          : `Stagehand observe exited ${String(code ?? 'null')} without JSON`,
+      guestUrl: context.guestUrl,
+      cdpUrl: context.cdpUrl
     });
   });
 }

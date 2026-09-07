@@ -16,10 +16,12 @@ files:
     to: scripts
     filter:
       - stagehand-observe.mjs
-# Unpack the observe worker so ELECTRON_RUN_AS_NODE can spawn a real filesystem
-# path. Main still passes --stagehand-module resolved from app.asar/package.json.
+# D1: unpack Stagehand, playwright-core, zod, and the rest of the production
+# node_modules tree so packaged Observe can import from a real filesystem
+# (utilityProcess / ELECTRON_RUN_AS_NODE).
 asarUnpack:
   - scripts/stagehand-observe.mjs
+  - node_modules/**
 extraResources:
   - from: scripts/stagehand-observe.mjs
     to: scripts/stagehand-observe.mjs

@@ -20,6 +20,7 @@
     "test:coverage": "pnpm --filter @spyglass/contracts test:coverage",
     "test:schemas": "pnpm --filter @spyglass/contracts test:schemas",
     "test:e2e": "pnpm --filter @spyglass/app test:e2e",
+    "test:packaged-observe": "pnpm --filter @spyglass/app test:packaged-observe",
     "package": "pnpm --filter @spyglass/app package",
     "capture:shell": "node scripts/capture-empty-shell.mjs",
     "capture:lot0": "node scripts/capture-lot-0.mjs",

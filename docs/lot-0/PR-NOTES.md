@@ -13,7 +13,13 @@ without extra flags. `SPYGLASS_CDP=0` forces it off.
 In-app Observe is part of the packaged app: `scripts/stagehand-observe.mjs` is
 listed in `electron-builder.yml` (`files` + `extraResources` + `asarUnpack`)
 and `@browserbasehq/stagehand` / `playwright-core` / `zod` are production
-dependencies. Launch a packaged binary with `SPYGLASS_CDP=1` to use Observe.
+dependencies. Production `node_modules` are asarUnpacked so the observe
+worker can import Stagehand. Launch a packaged binary with `SPYGLASS_CDP=1`.
+Linux CI runs `pnpm test:packaged-observe` against `release/linux-unpacked`.
+
+Every `WebContents` gets deny-by-default `window.open` and session permission
+handlers (C1). The guest pane then replaces `setWindowOpenHandler` so F-04
+popup-redirect still loads in the current view.
 
 Guest navigation is deny-by-default (`will-navigate` / `will-frame-navigate`).
 `file:` popups/`loadURL` are refused when the current guest is http(s); start

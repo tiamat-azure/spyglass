@@ -99,12 +99,14 @@ above is set. `remote-allow-origins=*` is applied only together with the debug
 port.
 
 In-app Observe is bundled in the installer (`scripts/stagehand-observe.mjs` plus
-`@browserbasehq/stagehand`, `playwright-core`, and `zod`). A packaged build
-still needs CDP on:
+`@browserbasehq/stagehand`, `playwright-core`, and `zod`, with production
+`node_modules` asarUnpacked). A packaged build still needs CDP on:
 
 ```bash
 SPYGLASS_CDP=1 /path/to/Spyglass
 ```
+
+Linux: `pnpm test:packaged-observe` smokes `release/linux-unpacked`.
 
 From a source checkout:
 

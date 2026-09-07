@@ -72,6 +72,10 @@ jobs:
       - name: Package unsigned installers
         run: pnpm --filter @spyglass/app ${{ matrix.package_script }}
 
+      - name: Packaged Observe smoke (linux-unpacked)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm test:packaged-observe
+
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:

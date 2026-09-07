@@ -22,6 +22,7 @@ import {
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
+import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
 if (process.platform === 'linux' || process.env.SPYGLASS_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();
@@ -38,6 +39,8 @@ const userDataOverride = process.env.SPYGLASS_USER_DATA;
 if (userDataOverride !== undefined && userDataOverride.length > 0) {
   app.setPath('userData', userDataOverride);
 }
+
+installWebContentsSecurityDefaults();
 
 let activePane: BrowserPane | undefined;
 let ipcRegistered = false;
@@ -115,6 +118,14 @@ async function waitForGuestPaint(guest: WebContents): Promise<void> {
     guest.once('did-fail-load', done);
   });
   await new Promise((resolve) => setTimeout(resolve, 400));
+}
+
+async function persistObserveResultIfRequested(result: StagehandObserveResponse): Promise<void> {
+  const out = process.env.SPYGLASS_OBSERVE_RESULT;
+  if (out === undefined || out.length === 0) {
+    return;
+  }
+  await writeFile(out, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 }
 
 async function captureIfRequested(win: BrowserWindow, guest: WebContents): Promise<void> {
@@ -313,12 +324,6 @@ void (async () => {
 
   await app.whenReady();
 
-  app.on('web-contents-created', (_event, contents) => {
-    contents.on('will-attach-webview', (event) => {
-      event.preventDefault();
-    });
-  });
-
   const winRef: { current: BrowserWindow | undefined } = { current: undefined };
   registerIpc(cdpPort, winRef);
 
@@ -371,6 +376,12 @@ void (async () => {
             appPath: app.getAppPath()
           });
           emitToChrome(win, IPC.stagehandResult, result);
+          await persistObserveResultIfRequested(result);
+          if (process.env.SPYGLASS_OBSERVE_REQUIRE_OK === '1' && !result.ok) {
+            console.error('Packaged Observe smoke failed:', result.error);
+            app.exit(1);
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, 600));
         }
         await captureIfRequested(win, pane.webContents);

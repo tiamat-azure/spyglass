@@ -41,6 +41,7 @@ export class BrowserPane {
     win.contentView.addChildView(this.view);
     this.attachNavigation();
     this.attachSchemeGuard();
+    // Replaces the C1 deny-all window.open default with F-04 in-view redirect.
     this.attachPopupRedirect();
   }
 

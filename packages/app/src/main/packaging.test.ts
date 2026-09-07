@@ -21,4 +21,10 @@ describe('packaged Observe', () => {
     const yml = readFileSync(join(appRoot, 'electron-builder.yml'), 'utf8');
     expect(yml).toContain('scripts/stagehand-observe.mjs');
   });
+
+  it('asarUnpacks Stagehand runtime node_modules for packaged Observe', () => {
+    const yml = readFileSync(join(appRoot, 'electron-builder.yml'), 'utf8');
+    expect(yml).toContain('node_modules/**');
+    expect(yml).toMatch(/asarUnpack:/);
+  });
 });

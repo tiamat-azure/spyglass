@@ -26,7 +26,8 @@
     "package:mac": "electron-vite build && electron-builder --mac dmg --x64 --arm64 --publish never",
     "package:win": "electron-vite build && electron-builder --win nsis --publish never",
     "capture:shell": "electron-vite build && electron .",
-    "observe": "node scripts/stagehand-observe.mjs"
+    "observe": "node scripts/stagehand-observe.mjs",
+    "test:packaged-observe": "node scripts/packaged-observe-smoke.mjs"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "3.7.3",
