@@ -6,22 +6,19 @@
  * Does not launch Chromium and does not use Browserbase.
  *
  * Usage:
- *   1. Start Spyglass with CDP on (`pnpm dev`, or `SPYGLASS_CDP=1` for packaged)
+ *   1. Start Spyglass with CDP on (`pnpm start` or `pnpm dev`;
+ *      packaged binaries need `SPYGLASS_CDP=1`)
  *   2. Navigate the embedded view
  *   3. pnpm observe
  *      or: node packages/app/scripts/stagehand-observe.mjs --cdp-url http://127.0.0.1:PORT
  *
  * LLM: set OPENAI_API_KEY or ANTHROPIC_API_KEY for a live model.
  * Without a key, a local stub LLM still exercises Stagehand.observe() over CDP.
- *
- * Packaged in-app Observe resolves Stagehand via --stagehand-module / SPYGLASS_APP_PATH.
  */
 
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const DEFAULT_INSTRUCTION = 'Find interactive elements on the displayed page';
 
@@ -35,27 +32,6 @@ function argValue(flag) {
 
 function hasFlag(flag) {
   return process.argv.includes(flag);
-}
-
-function resolveStagehandSpecifier() {
-  const fromArg = argValue('--stagehand-module');
-  if (fromArg !== undefined && fromArg.length > 0) {
-    return fromArg;
-  }
-  const appPath = process.env.SPYGLASS_APP_PATH;
-  if (appPath !== undefined && appPath.length > 0) {
-    try {
-      const require = createRequire(join(appPath, 'package.json'));
-      return pathToFileURL(require.resolve('@browserbasehq/stagehand')).href;
-    } catch {
-      // fall through to the bare specifier (source checkout)
-    }
-  }
-  return '@browserbasehq/stagehand';
-}
-
-async function importStagehand() {
-  return await import(resolveStagehandSpecifier());
 }
 
 function messageText(message) {
@@ -266,7 +242,7 @@ async function main() {
     return;
   }
 
-  const { Stagehand } = await importStagehand();
+  const { Stagehand } = await import('@browserbasehq/stagehand');
   const live = liveModel();
   const stub = new Lot0StubLlmClient();
   const browserWs = cdpUrl.startsWith('ws') ? cdpUrl : await resolveBrowserWebSocket(cdpHttpUrl);
