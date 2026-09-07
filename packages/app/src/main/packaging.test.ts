@@ -39,6 +39,8 @@ describe('packaged Observe', () => {
     expect(act).toContain('stagehand.act(observeResult');
     expect(act).toContain('setChecked');
     expect(act).toContain('applySetChecked');
+    expect(act).toContain('deepLocator');
+    expect(act).not.toContain('document.querySelector');
     const matcher = readFileSync(join(appRoot, 'scripts/cdp-guest.mjs'), 'utf8');
     expect(matcher).toContain('pageMatchesPickedGuest');
     expect(matcher).toContain('pickStagehandPage');

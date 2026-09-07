@@ -9,7 +9,11 @@ import { iframeNameSelector } from './probe-host.ts';
 import { parseJsonl, RawJournal } from './raw-journal.ts';
 import { CaptureRetention } from './retention.ts';
 import { formatEventId, newSessionId } from './session-ids.ts';
-import { screenshotLimitFromEnv, sessionsDirFromEnv } from './session-orchestrator.ts';
+import {
+  SessionOrchestrator,
+  screenshotLimitFromEnv,
+  sessionsDirFromEnv
+} from './session-orchestrator.ts';
 import { parseActStdout } from './stagehand-act.ts';
 
 describe('session ids', () => {
@@ -256,6 +260,75 @@ describe('session env', () => {
     expect(screenshotLimitFromEnv({ SCREENSHOT_RETENTION: '4' })).toBe(4);
     expect(sessionsDirFromEnv('/tmp/ud', {})).toBe('/tmp/ud/sessions');
     expect(sessionsDirFromEnv('/tmp/ud', { SESSIONS_DIR: '/tmp/sessions' })).toBe('/tmp/sessions');
+  });
+});
+
+describe('session stop after record.stop append', () => {
+  function stubPane() {
+    return {
+      snapshot: () => ({
+        url: 'https://example.test/',
+        title: 'fixture',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
+      })
+    } as never;
+  }
+
+  type MetaPatcher = {
+    patchMeta: (patch: { eventCount?: number; sealedAt?: string }) => Promise<void>;
+  };
+
+  it('retries {eventCount, sealedAt} and succeeds when meta recovers', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-retry-'));
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {}
+    });
+    await orch.start('https://example.test/');
+    const patcher = orch as unknown as MetaPatcher;
+    const original = patcher.patchMeta.bind(orch);
+    let calls = 0;
+    patcher.patchMeta = async (patch) => {
+      calls += 1;
+      expect(patch.eventCount).toEqual(expect.any(Number));
+      expect(typeof patch.sealedAt).toBe('string');
+      if (calls === 1) {
+        throw new Error('simulated meta write failure');
+      }
+      await original(patch);
+    };
+    const result = await orch.stop();
+    expect(orch.snapshot().state).toBe('sealed');
+    expect(result.eventCount).toBeGreaterThanOrEqual(2);
+    expect(calls).toBeGreaterThanOrEqual(2);
+    const meta = JSON.parse(await readFile(join(root, result.sessionId, 'meta.json'), 'utf8')) as {
+      eventCount: number;
+      sealedAt?: string;
+    };
+    expect(meta.eventCount).toBe(result.eventCount);
+    expect(typeof meta.sealedAt).toBe('string');
+    const events = parseJsonl(await readFile(join(root, result.sessionId, 'raw.jsonl'), 'utf8'));
+    expect(events.some((event) => (event as { kind: string }).kind === 'record.stop')).toBe(true);
+  });
+
+  it('does not throw a Stop failure when meta stays unwritable after append', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-sealed-'));
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {}
+    });
+    await orch.start('https://example.test/');
+    const patcher = orch as unknown as MetaPatcher;
+    patcher.patchMeta = async () => {
+      throw new Error('meta permanently unwritable');
+    };
+    const result = await orch.stop();
+    expect(orch.snapshot().state).toBe('sealed');
+    expect(result.sessionId.length).toBeGreaterThan(0);
+    const events = parseJsonl(await readFile(join(root, result.sessionId, 'raw.jsonl'), 'utf8'));
+    expect(events.some((event) => (event as { kind: string }).kind === 'record.stop')).toBe(true);
   });
 });
 

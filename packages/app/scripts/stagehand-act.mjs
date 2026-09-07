@@ -137,28 +137,11 @@ async function applySetChecked(page, selector, desired) {
   if (current === desired) {
     return;
   }
-  const hops = selector.includes('>>');
-  if (!hops && typeof page.evaluate === 'function') {
-    const applied = await page.evaluate(
-      (payload) => {
-        const el = document.querySelector(payload.sel);
-        if (!(el instanceof HTMLInputElement)) {
-          return false;
-        }
-        if (el.checked !== payload.want) {
-          el.checked = payload.want;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        return el.checked === payload.want;
-      },
-      { sel: selector, want: desired }
-    );
-    if (applied === true) {
-      return;
-    }
+  if (typeof locator.setChecked === 'function') {
+    await locator.setChecked(desired);
+  } else {
+    await locator.click();
   }
-  await locator.click();
   const after = await locator.isChecked();
   if (after !== desired) {
     throw new Error(`setChecked(${String(desired)}) left checked=${String(after)}`);

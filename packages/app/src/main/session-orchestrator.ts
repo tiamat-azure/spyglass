@@ -161,6 +161,8 @@ export class SessionOrchestrator {
     const journal = this.journal;
     return await this.enqueueWrite(async () => {
       let appendedStop = false;
+      let raw = '';
+      let eventCount = 0;
       try {
         await this.flushPendingClick();
         const page = this.pageSnapshot();
@@ -174,28 +176,41 @@ export class SessionOrchestrator {
         });
         await this.append(stopEvent);
         appendedStop = true;
-        const raw = await readFile(journal.path, 'utf8');
-        const eventCount = parseJsonl(raw).length;
+        raw = await readFile(journal.path, 'utf8');
+        eventCount = parseJsonl(raw).length;
         await this.patchMeta({ eventCount, sealedAt: new Date().toISOString() });
-        this.state = 'sealed';
-        this.since = Date.now();
-        this.emitState();
-        return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
       } catch (error) {
-        if (appendedStop) {
-          this.state = 'sealed';
+        if (!appendedStop) {
+          this.state = 'recording';
+          this.since = Date.now();
+          this.emitState();
+          throw error;
+        }
+        try {
+          if (raw.length === 0) {
+            raw = await readFile(journal.path, 'utf8');
+          }
+          eventCount = parseJsonl(raw).length;
+        } catch {
+          if (eventCount === 0) {
+            eventCount = this.eventSeq;
+          }
+        }
+        const sealedAt = new Date().toISOString();
+        try {
+          await this.patchMeta({ eventCount, sealedAt });
+        } catch {
           try {
-            await this.patchMeta({ sealedAt: new Date().toISOString() });
+            await this.patchMeta({ eventCount, sealedAt });
           } catch {
             // journal already has record.stop
           }
-        } else {
-          this.state = 'recording';
         }
-        this.since = Date.now();
-        this.emitState();
-        throw error;
       }
+      this.state = 'sealed';
+      this.since = Date.now();
+      this.emitState();
+      return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
     });
   }
 
