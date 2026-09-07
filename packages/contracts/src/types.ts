@@ -41,18 +41,37 @@ export type ReplayDescriptor = {
   shadowPath?: string[];
 };
 
+export type BoundingBox = {
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+};
+
 export type ElementDescriptor = {
   tag: string;
   framePath: string[];
   shadowPath: string[];
   id?: string;
   testId?: string;
+  testAttributes?: Record<string, string>;
   role?: string;
   accessibleName?: string;
   text?: string;
   name?: string;
   cssSelector?: string;
   xpath?: string;
+  siblingIndex?: number;
+  ancestors?: string[];
+  boundingBox?: BoundingBox;
+};
+
+export type VoiceCapture = {
+  text?: string;
+  startTs?: number;
+  endTs?: number;
+  editedFrom?: string;
+  audioRef?: string | null;
 };
 
 export type RawEvent = {
@@ -68,6 +87,7 @@ export type RawEvent = {
   value?: CapturedValue;
   action?: ReplayDescriptor;
   narration?: { mode: 'template' | 'llm'; batchId?: string; text?: string };
+  voice?: VoiceCapture;
   retracts?: string;
   snapshotRef?: string;
   screenshotRef?: string;
