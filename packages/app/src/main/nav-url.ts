@@ -30,9 +30,14 @@ export function isFileUrl(input: string): boolean {
   return url !== undefined && url.protocol === 'file:';
 }
 
+function normalizeContainmentPath(input: string): string {
+  const resolved = resolve(input);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
 export function isInsideDir(dir: string, targetPath: string): boolean {
-  const root = resolve(dir);
-  const target = resolve(targetPath);
+  const root = normalizeContainmentPath(dir);
+  const target = normalizeContainmentPath(targetPath);
   const rel = relative(root, target);
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
@@ -44,6 +49,24 @@ export function fileUrlToPath(input: string): string | undefined {
   }
   try {
     return fileURLToPath(url);
+  } catch {
+    // Windows Node requires a drive letter (`file:///C:/...`). POSIX `file:///app/...`
+    // URLs (tests, some Chromium listings) throw; resolve the pathname instead.
+    return fileUrlToPathWithoutDrive(url);
+  }
+}
+
+function fileUrlToPathWithoutDrive(url: URL): string | undefined {
+  if (url.hostname.length > 0) {
+    return undefined;
+  }
+  try {
+    const decoded = decodeURIComponent(url.pathname);
+    if (decoded.includes('\0')) {
+      return undefined;
+    }
+    const native = process.platform === 'win32' ? decoded.replaceAll('/', '\\') : decoded;
+    return resolve(native);
   } catch {
     return undefined;
   }

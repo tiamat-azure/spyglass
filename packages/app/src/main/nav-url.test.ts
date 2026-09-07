@@ -1,11 +1,20 @@
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   isAllowedGuestUrl,
   isAllowedInViewNavigation,
   isAllowedPopupRedirect,
+  isAppResourceFileUrl,
   isInsideDir,
   normalizeGotoUrl
 } from './nav-url.ts';
+
+/** Platform-native guest resource dir + file: URLs (Windows drive letter, POSIX root). */
+const resources = resolve('/app/resources');
+function resourceFileUrl(name: string): string {
+  return pathToFileURL(join(resources, name)).href;
+}
 
 describe('normalizeGotoUrl', () => {
   it('adds https when the scheme is missing', () => {
@@ -42,8 +51,6 @@ describe('isAllowedGuestUrl', () => {
 });
 
 describe('isAllowedInViewNavigation', () => {
-  const resources = '/app/resources';
-
   it('allows http(s) from any current guest', () => {
     expect(
       isAllowedInViewNavigation('https://example.com/', 'https://example.org/next', resources)
@@ -54,19 +61,24 @@ describe('isAllowedInViewNavigation', () => {
   it('allows app start-page file: only when the current guest is not http(s)', () => {
     expect(
       isAllowedInViewNavigation(
-        'file:///app/resources/start.html',
-        'file:///app/resources/second.html',
+        resourceFileUrl('start.html'),
+        resourceFileUrl('second.html'),
         resources
       )
     ).toBe(true);
-    expect(isAllowedInViewNavigation('', 'file:///app/resources/start.html', resources)).toBe(true);
+    expect(isAllowedInViewNavigation('', resourceFileUrl('start.html'), resources)).toBe(true);
+    expect(
+      isAllowedInViewNavigation('https://example.com/', resourceFileUrl('start.html'), resources)
+    ).toBe(false);
+    // POSIX file: URLs without a drive letter (Windows fileURLToPath throws otherwise).
     expect(
       isAllowedInViewNavigation(
-        'https://example.com/',
         'file:///app/resources/start.html',
-        resources
+        'file:///app/resources/second.html',
+        '/app/resources'
       )
-    ).toBe(false);
+    ).toBe(true);
+    expect(isAppResourceFileUrl('file:///app/resources/second.html', '/app/resources')).toBe(true);
   });
 
   it('rejects file: outside the app resource dir, including ../ escapes', () => {
@@ -136,8 +148,6 @@ describe('isAllowedInViewNavigation', () => {
 });
 
 describe('isAllowedPopupRedirect', () => {
-  const resources = '/app/resources';
-
   it('refuses file: loadURL when the displayed guest is http(s)', () => {
     expect(
       isAllowedPopupRedirect('https://example.com/', 'file:///app/resources/start.html', resources)
@@ -147,12 +157,32 @@ describe('isAllowedPopupRedirect', () => {
   it('allows same-origin app start-page popups (F-04 start.html → second.html)', () => {
     expect(
       isAllowedPopupRedirect(
-        'file:///app/resources/start.html',
-        'file:///app/resources/second.html',
+        resourceFileUrl('start.html'),
+        resourceFileUrl('second.html'),
         resources
       )
     ).toBe(true);
+    expect(
+      isAllowedPopupRedirect(
+        'file:///app/resources/start.html',
+        'file:///app/resources/second.html',
+        '/app/resources'
+      )
+    ).toBe(true);
   });
+
+  it.skipIf(process.platform !== 'win32')(
+    'allows Windows drive-letter file URLs case-insensitively (F-04)',
+    () => {
+      expect(
+        isAllowedPopupRedirect(
+          'file:///C:/app/resources/start.html',
+          'file:///c:/app/resources/second.html',
+          'C:\\APP\\resources'
+        )
+      ).toBe(true);
+    }
+  );
 
   it('does not load about:blank via main-process loadURL', () => {
     expect(isAllowedPopupRedirect('https://example.com/', 'about:blank', resources)).toBe(false);
