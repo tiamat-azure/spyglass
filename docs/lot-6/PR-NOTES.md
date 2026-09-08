@@ -425,6 +425,10 @@ Locks **R42a**, **E43a**, and **S44b** (product notes 9–11).
   `runScenario`. Documented in JSDoc, root README, generated README, and
   this file. In-app `ReplayEngine` still passes `driver: this.deps.driver()`.
 
+Unit tests after this pass: **395 passed, 1 skipped**, 53 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lot 6 e2e spec passed
+(headed+headless with `DISPLAY=:1`; shots in temp, not tracked evidence).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
