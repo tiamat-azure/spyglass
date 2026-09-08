@@ -394,6 +394,9 @@ Applied on tip `ddffb3cd462ea03854da8ff65af0f61b9c765829`. Product decisions
 - **L6-041** Generated `scenario.ts` uses the local `argv` constant for
   `--headless` (same as `--help`), not a fresh `process.argv.includes`.
 
+Unit tests after this pass: **392 passed, 1 skipped**, 53 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
