@@ -26,7 +26,7 @@ export type VoiceBridgeHandlers = {
     startTs: number;
     endTs: number;
     pcm: Buffer;
-  }) => void;
+  }) => void | Promise<void>;
   onLevel: (rms: number) => void;
   onError: (message: string) => void;
 };
@@ -93,6 +93,8 @@ export class VoiceBridge {
   private captureMode: VoiceMode = 'hold';
   private vad: VadState = createVadState();
   private utteranceSeq = 0;
+  private pendingFinals: Promise<void>[] = [];
+  private finalWaiters = new Map<string, () => void>();
 
   constructor(
     private readonly handlers: VoiceBridgeHandlers,
@@ -113,7 +115,22 @@ export class VoiceBridge {
     return status;
   }
 
-  stopCapture(): void {
+  setCaptureMode(mode: VoiceMode): void {
+    if (this.captureMode === mode) {
+      return;
+    }
+    if (this.live !== undefined) {
+      if (this.pcmBytes(this.live.id) === 0) {
+        this.dropUtterance(this.live.id);
+      } else {
+        this.endUtterance(Date.now());
+      }
+    }
+    this.captureMode = mode;
+    this.vad = createVadState();
+  }
+
+  async stopCapture(): Promise<void> {
     this.capturing = false;
     if (this.live !== undefined) {
       if (this.pcmBytes(this.live.id) === 0) {
@@ -123,6 +140,7 @@ export class VoiceBridge {
       }
     }
     this.vad = createVadState();
+    await Promise.race([Promise.all(this.pendingFinals), sleep(4_000)]);
   }
 
   private nextUtteranceId(): string {
@@ -162,6 +180,7 @@ export class VoiceBridge {
   }
 
   private async connect(): Promise<VoiceBridgeStatus> {
+    this.releaseSidecarTransport();
     if (this.preferInProcess()) {
       this.inProcess = createInProcessStt(this.env);
       this.status = {
@@ -197,7 +216,28 @@ export class VoiceBridge {
     return this.status;
   }
 
+  /** Kill a previous sidecar child and close a half-open socket before spawn/reconnect. */
+  private releaseSidecarTransport(): void {
+    try {
+      this.socket?.close();
+    } catch {
+      // already closed
+    }
+    this.socket = undefined;
+    if (this.child !== undefined) {
+      this.child.kill('SIGKILL');
+      this.child.unref();
+      this.child = undefined;
+    }
+    const closing = this.sidecar?.close();
+    this.sidecar = undefined;
+    if (closing !== undefined) {
+      void closing.catch(() => undefined);
+    }
+  }
+
   private async bootSidecar(): Promise<{ port: number; engine: SttEngineName; model: string }> {
+    this.releaseSidecarTransport();
     const script = sidecarScriptPath();
     if (script === undefined) {
       this.sidecar = await startSidecarServer(this.env);
@@ -328,11 +368,11 @@ export class VoiceBridge {
     if (this.inProcess !== undefined) {
       const pcm = Buffer.concat(this.pcmByUtterance.get(live.id) ?? []);
       this.pcmByUtterance.delete(live.id);
-      void this.inProcess.end(endTs).then((result) => {
+      const work = this.inProcess.end(endTs).then(async (result) => {
         if (result === undefined || result.text.trim().length === 0) {
           return;
         }
-        this.handlers.onFinal({
+        await this.handlers.onFinal({
           utteranceId: result.utteranceId,
           text: result.text,
           startTs: result.startTs,
@@ -340,9 +380,16 @@ export class VoiceBridge {
           pcm
         });
       });
+      this.trackFinal(work);
       return;
     }
     this.socket?.send(JSON.stringify({ type: 'end', utteranceId: live.id, endTs }));
+    this.trackFinal(
+      new Promise<void>((resolve) => {
+        this.finalWaiters.set(live.id, resolve);
+        setTimeout(resolve, 4_000);
+      })
+    );
   }
 
   abort(): void {
@@ -352,9 +399,14 @@ export class VoiceBridge {
     this.vad = createVadState();
     if (live !== undefined) {
       this.pcmByUtterance.delete(live.id);
+      this.resolveFinalWaiter(live.id);
     }
     this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
+    for (const resolve of this.finalWaiters.values()) {
+      resolve();
+    }
+    this.finalWaiters.clear();
   }
 
   private dropUtterance(utteranceId: string): void {
@@ -362,8 +414,26 @@ export class VoiceBridge {
     if (this.live?.id === utteranceId) {
       this.live = undefined;
     }
+    this.resolveFinalWaiter(utteranceId);
     this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
+  }
+
+  private trackFinal(work: Promise<void>): void {
+    const tracked = work.then(
+      () => undefined,
+      () => undefined
+    );
+    this.pendingFinals.push(tracked);
+    void tracked.finally(() => {
+      this.pendingFinals = this.pendingFinals.filter((item) => item !== tracked);
+    });
+  }
+
+  private resolveFinalWaiter(utteranceId: string): void {
+    const resolve = this.finalWaiters.get(utteranceId);
+    this.finalWaiters.delete(utteranceId);
+    resolve?.();
   }
 
   private pcmBytes(utteranceId: string): number {
@@ -377,24 +447,9 @@ export class VoiceBridge {
   async dispose(): Promise<void> {
     this.disposed = true;
     this.abort();
-    try {
-      this.socket?.close();
-    } catch {
-      // already closed
-    }
-    this.socket = undefined;
-    if (this.child !== undefined) {
-      this.child.kill('SIGKILL');
-      this.child.unref();
-      this.child = undefined;
-    }
-    const closing = this.sidecar?.close();
-    this.sidecar = undefined;
+    this.inProcess?.dispose?.();
     this.inProcess = undefined;
-    if (closing === undefined) {
-      return;
-    }
-    await Promise.race([closing.catch(() => undefined), sleep(400)]);
+    this.releaseSidecarTransport();
   }
 
   private onSocketMessage(data: unknown): void {
@@ -422,16 +477,21 @@ export class VoiceBridge {
       const chunks = this.pcmByUtterance.get(message.utteranceId) ?? [];
       this.pcmByUtterance.delete(message.utteranceId);
       const pcm = Buffer.concat(chunks);
+      this.resolveFinalWaiter(message.utteranceId);
       if (pcm.length === 0 || message.text.trim().length === 0) {
         return;
       }
-      this.handlers.onFinal({
-        utteranceId: message.utteranceId,
-        text: message.text,
-        startTs: message.startTs,
-        endTs: message.endTs,
-        pcm
-      });
+      this.trackFinal(
+        Promise.resolve(
+          this.handlers.onFinal({
+            utteranceId: message.utteranceId,
+            text: message.text,
+            startTs: message.startTs,
+            endTs: message.endTs,
+            pcm
+          })
+        )
+      );
       return;
     }
     if (message.type === 'error') {

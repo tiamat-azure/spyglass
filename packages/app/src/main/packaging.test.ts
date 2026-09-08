@@ -75,6 +75,7 @@ describe('packaged Observe', () => {
     );
     expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
     expect(stopFn.indexOf('onBeforeSeal')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(stopFn.indexOf('onBeforeStop')).toBeLessThan(stopFn.indexOf('enqueueWrite'));
     expect(orch).toContain('AsyncLocalStorage');
     expect(stopFn.indexOf("this.state = 'stopping'")).toBeLessThan(
       stopFn.indexOf("kind: 'record.stop'")
@@ -161,5 +162,14 @@ describe('packaged Observe', () => {
     const sidecar = readFileSync(join(appRoot, '../../packages/stt/src/sidecar.ts'), 'utf8');
     expect(sidecar).toContain('sessions.set(message.utteranceId');
     expect(sidecar).toContain('Do not abort or reuse a shared session');
+    expect(main).toContain('await voiceBridge?.stopCapture()');
+    expect(bridge).toContain('releaseSidecarTransport');
+    expect(bridge).toContain('setCaptureMode');
+    expect(voiceUi).toContain('setArmed');
+    expect(renderer).toContain('voice?.setArmed(recording)');
+    const whisper = readFileSync(join(appRoot, '../../packages/stt/src/whisper-engine.ts'), 'utf8');
+    expect(whisper).toContain('process.kill(-job.child.pid');
+    expect(whisper).toContain('dispose(): void');
+    expect(preload).toContain('IPC.voiceSetMode');
   });
 });

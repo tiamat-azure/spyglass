@@ -444,6 +444,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (!parseEmptyPayload(raw)) {
       return { sessionId: '', eventCount: 0, sizeBytes: 0 };
     }
+    await voiceBridge?.stopCapture();
     return await requireSession().stop();
   });
 
@@ -647,14 +648,14 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
   });
 
-  ipcMain.handle(IPC.voiceStop, (event, raw: unknown) => {
+  ipcMain.handle(IPC.voiceStop, async (event, raw: unknown) => {
     if (rejectForeignIpc(event, winRef, IPC.voiceStop)) {
       return { ok: false };
     }
     if (!parseEmptyPayload(raw)) {
       return { ok: false };
     }
-    voiceBridge?.stopCapture();
+    await voiceBridge?.stopCapture();
     return { ok: true };
   });
 
@@ -667,6 +668,18 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     voiceBridge?.abort();
     return { ok: true };
+  });
+
+  ipcMain.handle(IPC.voiceSetMode, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceSetMode)) {
+      return { ok: false };
+    }
+    const payload = parseVoiceStartPayload(raw);
+    if (payload === undefined) {
+      return { ok: false };
+    }
+    voiceBridge?.setCaptureMode(payload.mode);
+    return { ok: true, mode: payload.mode };
   });
 
   ipcMain.on(IPC.voiceFrame, (event, raw: unknown) => {
@@ -749,6 +762,9 @@ void (async () => {
         },
         onBeforeSeal: async () => {
           await observerRuntime?.observer.flush();
+        },
+        onBeforeStop: async () => {
+          await voiceBridge?.stopCapture();
         }
       }
     );
@@ -768,7 +784,7 @@ void (async () => {
           if (payload.text.trim().length === 0) {
             return;
           }
-          void requireSession()
+          return requireSession()
             .recordVoiceFinal({
               text: payload.text,
               startTs: payload.startTs,

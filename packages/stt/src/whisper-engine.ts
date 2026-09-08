@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +16,11 @@ type Utterance = {
   chunks: Buffer[];
   lastPartialAt: number;
   lastPartial: string;
+};
+
+type WhisperJob = {
+  utteranceId: string;
+  child: ChildProcess;
 };
 
 export function whisperCandidateBins(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -102,12 +107,17 @@ export async function runWhisperCli(options: {
   wav: Buffer;
   language: string;
   timeoutMs: number;
+  signal?: AbortSignal;
+  onSpawn?: (child: ChildProcess) => void;
 }): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-'));
   const wavPath = join(dir, 'utterance.wav');
   const outBase = join(dir, 'out');
   await writeFile(wavPath, options.wav);
   try {
+    if (options.signal?.aborted === true) {
+      return '';
+    }
     const args = [
       '-m',
       options.model,
@@ -128,13 +138,44 @@ export async function runWhisperCli(options: {
           HOME: process.env.HOME,
           TMPDIR: process.env.TMPDIR
         },
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true
       });
+      options.onSpawn?.(child);
       let stdout = '';
       let stderr = '';
+      let settled = false;
+      const finish = (fn: () => void): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        fn();
+      };
+      const killChild = (): void => {
+        try {
+          if (child.pid !== undefined) {
+            process.kill(-child.pid, 'SIGKILL');
+          }
+        } catch {
+          child.kill('SIGKILL');
+        }
+      };
+      if (options.signal !== undefined) {
+        if (options.signal.aborted) {
+          killChild();
+          finish(() => {
+            resolve('');
+          });
+          return;
+        }
+        options.signal.addEventListener('abort', killChild, { once: true });
+      }
       const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error(`whisper.cpp exceeded ${String(options.timeoutMs)} ms`));
+        killChild();
+        finish(() => {
+          reject(new Error(`whisper.cpp exceeded ${String(options.timeoutMs)} ms`));
+        });
       }, options.timeoutMs);
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout += chunk.toString();
@@ -144,43 +185,61 @@ export async function runWhisperCli(options: {
       });
       child.on('error', (error) => {
         clearTimeout(timer);
-        reject(error);
+        finish(() => {
+          reject(error);
+        });
       });
       child.on('exit', (code) => {
         clearTimeout(timer);
+        if (options.signal?.aborted === true) {
+          finish(() => {
+            resolve('');
+          });
+          return;
+        }
         void readFile(`${outBase}.txt`, 'utf8')
           .then((fileText) => {
             const parsed = parseWhisperText(stdout, fileText);
             if (parsed.length > 0) {
-              resolve(parsed);
+              finish(() => {
+                resolve(parsed);
+              });
               return;
             }
             const fromStdout = parseWhisperText(stdout);
             if (fromStdout.length > 0) {
-              resolve(fromStdout);
+              finish(() => {
+                resolve(fromStdout);
+              });
               return;
             }
-            reject(
-              new Error(
-                stderr.trim().length > 0
-                  ? stderr.trim()
-                  : `whisper.cpp exited ${String(code ?? 'null')} without text`
-              )
-            );
+            finish(() => {
+              reject(
+                new Error(
+                  stderr.trim().length > 0
+                    ? stderr.trim()
+                    : `whisper.cpp exited ${String(code ?? 'null')} without text`
+                )
+              );
+            });
           })
           .catch(() => {
             const parsed = parseWhisperText(stdout);
             if (parsed.length > 0) {
-              resolve(parsed);
+              finish(() => {
+                resolve(parsed);
+              });
               return;
             }
-            reject(
-              new Error(
-                stderr.trim().length > 0
-                  ? stderr.trim()
-                  : `whisper.cpp exited ${String(code ?? 'null')} without text`
-              )
-            );
+            finish(() => {
+              reject(
+                new Error(
+                  stderr.trim().length > 0
+                    ? stderr.trim()
+                    : `whisper.cpp exited ${String(code ?? 'null')} without text`
+                )
+              );
+            });
           });
       });
     });
@@ -199,19 +258,61 @@ export function createWhisperEngine(options: {
   const language = options.language ?? 'fr';
   const timeoutMs = options.timeoutMs ?? 8_000;
   const open = new Map<string, Utterance>();
+  const controllers = new Map<string, AbortController>();
+  const jobs = new Set<WhisperJob>();
 
-  const transcribe = async (pcm: Buffer): Promise<string> => {
+  const killJobs = (utteranceId?: string): void => {
+    for (const job of [...jobs]) {
+      if (utteranceId !== undefined && job.utteranceId !== utteranceId) {
+        continue;
+      }
+      try {
+        if (job.child.pid !== undefined) {
+          process.kill(-job.child.pid, 'SIGKILL');
+        }
+      } catch {
+        job.child.kill('SIGKILL');
+      }
+      jobs.delete(job);
+    }
+    if (utteranceId !== undefined) {
+      controllers.get(utteranceId)?.abort();
+      controllers.delete(utteranceId);
+      return;
+    }
+    for (const controller of controllers.values()) {
+      controller.abort();
+    }
+    controllers.clear();
+  };
+
+  const transcribe = async (utteranceId: string, pcm: Buffer): Promise<string> => {
     if (pcm.length < 3200) {
       return '';
     }
+    killJobs();
+    const controller = new AbortController();
+    controllers.set(utteranceId, controller);
     const wav = pcm16ToWav(pcm, STT_SAMPLE_RATE);
-    return await runWhisperCli({
-      bin: options.bin,
-      model: options.model,
-      wav,
-      language,
-      timeoutMs
-    });
+    try {
+      return await runWhisperCli({
+        bin: options.bin,
+        model: options.model,
+        wav,
+        language,
+        timeoutMs,
+        signal: controller.signal,
+        onSpawn: (child) => {
+          const job: WhisperJob = { utteranceId, child };
+          jobs.add(job);
+          child.on('exit', () => {
+            jobs.delete(job);
+          });
+        }
+      });
+    } finally {
+      controllers.delete(utteranceId);
+    }
   };
 
   return {
@@ -232,7 +333,7 @@ export function createWhisperEngine(options: {
       }
       state.lastPartialAt = now;
       const snapshot = Buffer.concat(state.chunks);
-      void transcribe(snapshot)
+      void transcribe(utteranceId, snapshot)
         .then((text) => {
           if (text.length > 0 && text !== state.lastPartial) {
             state.lastPartial = text;
@@ -245,11 +346,12 @@ export function createWhisperEngine(options: {
       const state = open.get(utteranceId);
       open.delete(utteranceId);
       if (state === undefined) {
+        killJobs(utteranceId);
         return '';
       }
       const pcm = Buffer.concat(state.chunks);
       try {
-        const text = await transcribe(pcm);
+        const text = await transcribe(utteranceId, pcm);
         return text.length > 0 ? text : state.lastPartial;
       } catch {
         return state.lastPartial;
@@ -257,6 +359,11 @@ export function createWhisperEngine(options: {
     },
     abort(utteranceId: string): void {
       open.delete(utteranceId);
+      killJobs(utteranceId);
+    },
+    dispose(): void {
+      open.clear();
+      killJobs();
     }
   };
 }

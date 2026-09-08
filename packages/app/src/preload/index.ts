@@ -163,6 +163,8 @@ const spyglass = {
       ipcRenderer.invoke(IPC.voiceStart, { mode }) as Promise<VoiceStartResponse>,
     stop: async () => ipcRenderer.invoke(IPC.voiceStop, {}) as Promise<{ ok: boolean }>,
     abort: async () => ipcRenderer.invoke(IPC.voiceAbort, {}) as Promise<{ ok: boolean }>,
+    setMode: async (mode: 'hold' | 'continuous') =>
+      ipcRenderer.invoke(IPC.voiceSetMode, { mode }) as Promise<{ ok: boolean }>,
     frame: (pcm: ArrayBuffer): void => {
       ipcRenderer.send(IPC.voiceFrame, pcm);
     },

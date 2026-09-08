@@ -34,6 +34,7 @@ export const IPC = {
   voiceStart: 'spyglass:voice:start',
   voiceStop: 'spyglass:voice:stop',
   voiceAbort: 'spyglass:voice:abort',
+  voiceSetMode: 'spyglass:voice:mode',
   voiceFrame: 'spyglass:voice:frame',
   voicePartial: 'spyglass:voice:partial',
   voiceFinal: 'spyglass:voice:final',

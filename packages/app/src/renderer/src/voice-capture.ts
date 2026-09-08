@@ -12,6 +12,7 @@ type VoiceApi = {
     }>;
     stop: () => Promise<{ ok: boolean }>;
     abort: () => Promise<{ ok: boolean }>;
+    setMode: (mode: 'hold' | 'continuous') => Promise<{ ok: boolean }>;
     frame: (pcm: ArrayBuffer) => void;
     onPartial: (callback: (payload: { text: string }) => void) => () => void;
     onFinal: (callback: (payload: { text: string }) => void) => () => void;
@@ -22,6 +23,7 @@ type VoiceApi = {
 export type VoiceController = {
   mode: () => 'hold' | 'continuous';
   setMode: (mode: 'hold' | 'continuous') => void;
+  setArmed: (armed: boolean) => void;
   holding: () => boolean;
   startHold: () => Promise<void>;
   endHold: () => Promise<void>;
@@ -181,10 +183,21 @@ export function attachVoiceCapture(
       options.modeButton.dataset.mode = next;
       options.modeButton.textContent = next === 'hold' ? 'Hold' : 'VAD';
       options.micButton.title = next === 'hold' ? 'Hold to talk' : 'Click for continuous VAD';
+      void api.voice.setMode(next);
+    },
+    setArmed: (armed) => {
+      options.micButton.disabled = !armed;
+      if (armed) {
+        return;
+      }
+      holding = false;
+      setMicState('idle');
+      stopGraph();
+      void api.voice.abort();
     },
     holding: () => holding,
     startHold: async () => {
-      if (holding) {
+      if (holding || options.micButton.disabled) {
         return;
       }
       holding = true;
@@ -209,7 +222,7 @@ export function attachVoiceCapture(
       await end();
     },
     toggleContinuous: async () => {
-      if (mode !== 'continuous') {
+      if (mode !== 'continuous' || options.micButton.disabled) {
         return;
       }
       if (holding) {

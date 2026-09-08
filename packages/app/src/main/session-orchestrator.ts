@@ -51,6 +51,8 @@ export type SessionOrchestratorHandlers = {
   onEvent: (event: RawEvent) => void;
   onState: (state: { state: RecorderState; since: number; sessionId?: string }) => void;
   onBeforeSeal?: () => Promise<void>;
+  /** Runs before the stop write (still `recording`) so voice.final can journal. */
+  onBeforeStop?: () => Promise<void>;
 };
 
 type PendingClick = {
@@ -184,6 +186,9 @@ export class SessionOrchestrator {
     }
     if (this.state !== 'recording' || this.sessionId === undefined || this.journal === undefined) {
       throw new Error('Not recording');
+    }
+    if (this.handlers.onBeforeStop !== undefined) {
+      await this.handlers.onBeforeStop();
     }
     const sessionId = this.sessionId;
     const journal = this.journal;

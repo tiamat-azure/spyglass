@@ -143,6 +143,75 @@ describe('VoiceBridge', () => {
       await bridge.dispose();
     }
   });
+
+  it('setCaptureMode switches gating without restarting capture', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: (payload) => {
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'switched'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.setCaptureMode('continuous');
+      const quiet = pcmFilled(0);
+      const loud = pcmFilled(4000);
+      for (let i = 0; i < 4; i += 1) {
+        bridge.sendFrame(quiet);
+      }
+      expect(finals).toEqual([]);
+      for (let i = 0; i < 4; i += 1) {
+        bridge.sendFrame(loud);
+      }
+      for (let i = 0; i < 8; i += 1) {
+        bridge.sendFrame(quiet);
+      }
+      await expect.poll(() => finals.at(0)).toBe('switched');
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('stopCapture waits for the in-flight final', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: (payload) => {
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'flush'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await bridge.stopCapture();
+      expect(finals).toEqual(['flush']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
 });
 
 function pcmFilled(sample: number, samples = 1600): Buffer {

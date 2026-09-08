@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (211 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (214 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**11 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
@@ -133,6 +133,15 @@ Applied on tip `906c075`. V1a energy VAD and C2b `before`-on-overlap are unchang
 4. **medium — real-mic PCM.** Renderer resamples ScriptProcessor floats to 16 kHz mono (`resampleToSttPcm` / `STT_SAMPLE_RATE`) before IPC; AudioContext rate is not assumed.
 5. **medium — overlapping utterances.** VoiceBridge snapshots PCM in `pcmByUtterance` per id until that id’s `final`. Sidecar keeps a session map; a new `start` does not abort a prior utterance still awaiting `end`/`final`.
 6. **low — ws Host allowlist.** `isLoopbackWsHost` is exact `127.0.0.1` / `localhost` or those names with a port — not `startsWith`.
+
+### Adversarial pass 3 (auto-fixes)
+
+Applied on tip `b6867f8`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **N1 high — session Stop disarms voice.** `sessionStop` and `onBeforeSeal` `await voiceBridge.stopCapture()` so the current utterance is ended and `voice.final` is journaled while the session is still `recording`. Renderer `onState` leaving recording calls `setArmed(false)`: `stopGraph`, idle mic, disable mic/VAD, abort in-flight capture. Mic stays off until the next Record.
+2. **N2 medium — sidecar reconnect.** `releaseSidecarTransport` closes a half-open socket and `SIGKILL`s the previous `stt-sidecar` child before spawn/reconnect.
+3. **N3 medium — whisper-cli overlap.** At most one in-flight `whisper-cli`; a new transcribe cancels the previous. `abort` / `dispose` `SIGKILL` children, not only Map entries.
+4. **N4 low — Hold↔VAD mid-capture.** `spyglass:voice:mode` updates main `captureMode` (and resets VAD) without requiring a capture restart.
 
 ## Screenshots (committed)
 

@@ -20,6 +20,7 @@ export type InProcessStt = {
   pushPcm: (pcm: Buffer, onPartial: (text: string) => void) => void;
   end: (endTs: number) => Promise<InProcessFinal | undefined>;
   abort: () => void;
+  dispose: () => void;
 };
 
 /**
@@ -60,11 +61,17 @@ export function createInProcessStt(
       };
     },
     abort(): void {
-      if (live === undefined) {
-        return;
+      if (live !== undefined) {
+        engine.abort(live.utteranceId);
+        live = undefined;
       }
-      engine.abort(live.utteranceId);
-      live = undefined;
+    },
+    dispose(): void {
+      if (live !== undefined) {
+        engine.abort(live.utteranceId);
+        live = undefined;
+      }
+      engine.dispose?.();
     }
   };
 }

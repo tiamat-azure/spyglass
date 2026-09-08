@@ -326,6 +326,41 @@ printf 'transcription locale\\n' > "\${out}.txt"
     expect(direct).toBe('transcription locale');
   });
 
+  it('abort and dispose kill in-flight whisper-cli children', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-abort-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    await writeFile(
+      bin,
+      `#!/bin/sh
+exec sleep 30
+`
+    );
+    await chmod(bin, 0o755);
+    const engine = createWhisperEngine({ bin, model, timeoutMs: 40_000 });
+    engine.begin('slow');
+    const started = Date.now();
+    engine.pushPcm('slow', Buffer.alloc(6400, 1), () => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    engine.abort('slow');
+    engine.dispose?.();
+    expect(Date.now() - started).toBeLessThan(3_000);
+    const ac = new AbortController();
+    const pending = runWhisperCli({
+      bin,
+      model,
+      wav: pcm16ToWav(Buffer.alloc(3200, 2)),
+      language: 'fr',
+      timeoutMs: 40_000,
+      signal: ac.signal
+    });
+    ac.abort();
+    await expect(pending).resolves.toBe('');
+    expect(Date.now() - started).toBeLessThan(4_000);
+  });
+
   it('rejects invalid client frames', () => {
     expect(parseClientMessage({ type: 'start' })).toBeUndefined();
     expect(parseClientMessage({ type: 'hello', sampleRate: 16000 })?.type).toBe('hello');

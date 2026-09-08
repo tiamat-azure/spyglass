@@ -408,6 +408,7 @@ if (api !== undefined) {
           ? 'Seal failed — retry Stop to write meta.json'
           : 'Recording idle';
     browserSlot.dataset.recording = busy ? 'true' : 'false';
+    voice?.setArmed(recording);
   });
 
   api.session.onEvent((event) => {

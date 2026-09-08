@@ -68,6 +68,7 @@ export type SpyglassPreloadApi = {
     start: (mode: 'hold' | 'continuous') => Promise<VoiceStartResponse>;
     stop: () => Promise<{ ok: boolean }>;
     abort: () => Promise<{ ok: boolean }>;
+    setMode: (mode: 'hold' | 'continuous') => Promise<{ ok: boolean }>;
     frame: (pcm: ArrayBuffer) => void;
     edit: (eventId: string, text: string) => Promise<{ ok: boolean }>;
     onPartial: (callback: (payload: VoicePartialPayload) => void) => () => void;
