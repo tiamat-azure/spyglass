@@ -14,6 +14,14 @@
   <body data-theme="dark">
     <div class="app" id="app">
       <header class="toolbar" id="toolbar">
+        <div class="chrome-tabs" aria-label="Chrome views" role="tablist">
+          <button type="button" class="chrome-tab" id="tab-browser" role="tab" aria-selected="true">
+            Browser
+          </button>
+          <button type="button" class="chrome-tab" id="tab-settings" role="tab" aria-selected="false">
+            Settings
+          </button>
+        </div>
         <nav class="nav-controls" aria-label="Navigation">
           <button type="button" class="icon-btn" id="back" aria-label="Back" title="Back" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -49,14 +57,118 @@
         </div>
       </header>
       <div class="workspace" id="workspace">
-        <div class="browser-slot" id="browser-slot"></div>
+        <div class="browser-slot" id="browser-slot">
+          <section class="settings-panel" id="settings-panel" hidden>
+            <header class="settings-header">
+              <h2>LLM profiles</h2>
+              <p class="settings-copy">
+                Keys are encrypted with Electron <code>safeStorage</code> and never written in
+                plaintext. Precedence: interface &gt; env &gt; default.
+              </p>
+              <p class="settings-copy">
+                Saving an API key switches that profile to the <strong>live</strong> provider.
+                <strong>Test connection</strong> always contacts the real endpoint and fails closed
+                if the key is invalid or the host is unreachable. Without a key — or with
+                <code>SPYGLASS_LLM_TRANSPORT=mock</code> — narration stays on the local mock (CI).
+              </p>
+              <p class="settings-copy" id="encryption-status"></p>
+            </header>
+            <div class="settings-grid">
+              <fieldset class="profile-card" id="profile-fast">
+                <legend>fast — live narration</legend>
+                <label>
+                  Provider
+                  <span class="source-pill" data-source-for="fast-provider">défaut</span>
+                  <input id="fast-provider" name="fast-provider" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  Model
+                  <span class="source-pill" data-source-for="fast-model">défaut</span>
+                  <input id="fast-model" name="fast-model" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  Endpoint
+                  <span class="source-pill" data-source-for="fast-baseUrl">défaut</span>
+                  <input id="fast-baseUrl" name="fast-baseUrl" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  API key
+                  <span class="source-pill" data-source-for="fast-apiKey">défaut</span>
+                  <input
+                    id="fast-apiKey"
+                    name="fast-apiKey"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <button type="button" class="observe-btn" id="fast-test">Test connection</button>
+                <p class="test-status" id="fast-test-status"></p>
+              </fieldset>
+              <fieldset class="profile-card" id="profile-smart">
+                <legend>smart — refine / recover</legend>
+                <label>
+                  Provider
+                  <span class="source-pill" data-source-for="smart-provider">défaut</span>
+                  <input id="smart-provider" name="smart-provider" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  Model
+                  <span class="source-pill" data-source-for="smart-model">défaut</span>
+                  <input id="smart-model" name="smart-model" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  Endpoint
+                  <span class="source-pill" data-source-for="smart-baseUrl">défaut</span>
+                  <input id="smart-baseUrl" name="smart-baseUrl" type="text" spellcheck="false" />
+                </label>
+                <label>
+                  API key
+                  <span class="source-pill" data-source-for="smart-apiKey">défaut</span>
+                  <input
+                    id="smart-apiKey"
+                    name="smart-apiKey"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+                <button type="button" class="observe-btn" id="smart-test">Test connection</button>
+                <p class="test-status" id="smart-test-status"></p>
+              </fieldset>
+            </div>
+            <fieldset class="profile-card ceilings">
+              <legend>Token ceilings (never currency)</legend>
+              <label>
+                Fast session ceiling
+                <input id="session-token-limit" name="session-token-limit" type="number" min="1" />
+              </label>
+              <label>
+                Warn ratio
+                <input id="token-warn-ratio" name="token-warn-ratio" type="number" min="0.01" max="0.99" step="0.05" />
+              </label>
+              <label>
+                Calls / minute
+                <input id="rate-limit" name="rate-limit" type="number" min="1" />
+              </label>
+              <label class="toggle">
+                <input id="enrichment-enabled" name="enrichment-enabled" type="checkbox" />
+                Enable remote enrichment
+              </label>
+              <div class="settings-actions">
+                <button type="button" class="observe-btn" id="settings-save">Save</button>
+                <p class="test-status" id="settings-save-status"></p>
+              </div>
+            </fieldset>
+          </section>
+        </div>
         <button
           type="button"
           class="gutter"
           id="gutter"
           aria-label="Resize browser and chat"
         ></button>
-        <aside class="chat" id="chat" aria-label="Chat placeholder">
+        <aside class="chat" id="chat" aria-label="Observer chat">
           <header class="chat-header">
             <div class="mark" aria-hidden="true">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
@@ -72,13 +184,19 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 1 — capture</p>
+              <p class="tagline">Lot 2 — observer</p>
             </div>
           </header>
-          <p class="chat-copy">
-            Record a path in the guest page. Each capture step is appended to
-            <code>raw.jsonl</code>. Replay uses Stagehand <code>act()</code> with no LLM.
-          </p>
+          <div class="token-meter" id="token-meter" data-level="ok">
+            <div class="token-meter-head">
+              <span>fast tokens</span>
+              <span id="token-counts">0 / 500000</span>
+            </div>
+            <div class="token-track" aria-hidden="true">
+              <div class="token-fill" id="token-fill"></div>
+            </div>
+            <p class="token-hint" id="token-hint">Enrichment idle</p>
+          </div>
           <p class="meta" id="versions">Loading…</p>
           <p class="cdp" id="cdp-status">CDP: waiting…</p>
           <button type="button" class="observe-btn" id="observe">

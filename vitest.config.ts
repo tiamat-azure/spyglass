@@ -7,6 +7,7 @@ export default defineConfig({
       'packages/runner/vitest.config.ts',
       'packages/probe/vitest.config.ts',
       'packages/stt/vitest.config.ts',
+      'packages/llm/vitest.config.ts',
       'packages/app/vitest.config.ts'
     ]
   }

@@ -2,7 +2,7 @@
   "name": "spyglass",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass monorepo — Lot 1 capture + Electron shell + Stagehand CDP",
+  "description": "Spyglass monorepo — Lot 2 observer + capture + Electron shell",
   "type": "module",
   "packageManager": "pnpm@10.33.3",
   "engines": {
@@ -17,7 +17,7 @@
     "format": "biome check --write .",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
-    "test:coverage": "pnpm --filter @spyglass/contracts test:coverage",
+    "test:coverage": "pnpm --filter @spyglass/contracts test:coverage && pnpm --filter @spyglass/llm test:coverage",
     "test:schemas": "pnpm --filter @spyglass/contracts test:schemas",
     "test:e2e": "pnpm --filter @spyglass/app test:e2e",
     "test:packaged-observe": "pnpm --filter @spyglass/app test:packaged-observe",

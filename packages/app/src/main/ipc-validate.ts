@@ -1,6 +1,10 @@
 import type {
   BrowserBounds,
+  ConfigSetRequest,
+  ConfigTestRequest,
+  GuestVisiblePayload,
   NavGotoRequest,
+  RaiseCeilingRequest,
   SessionRetractRequest,
   SessionStartRequest,
   StagehandObserveRequest
@@ -91,4 +95,76 @@ export function parseRetractPayload(input: unknown): SessionRetractRequest | und
     return undefined;
   }
   return { eventId };
+}
+
+export function parseConfigSetPayload(input: unknown): ConfigSetRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const record = input as Record<string, unknown>;
+  const result: ConfigSetRequest = {};
+  if (record.profile === 'fast' || record.profile === 'smart') {
+    result.profile = record.profile;
+  }
+  if (typeof record.provider === 'string') {
+    result.provider = record.provider;
+  }
+  if (typeof record.model === 'string') {
+    result.model = record.model;
+  }
+  if (typeof record.baseUrl === 'string') {
+    result.baseUrl = record.baseUrl;
+  }
+  if (typeof record.apiKey === 'string') {
+    result.apiKey = record.apiKey;
+  }
+  if (typeof record.enrichmentEnabled === 'boolean') {
+    result.enrichmentEnabled = record.enrichmentEnabled;
+  }
+  if (typeof record.sessionTokenLimitFast === 'number') {
+    result.sessionTokenLimitFast = record.sessionTokenLimitFast;
+  }
+  if (typeof record.tokenWarnRatio === 'number') {
+    result.tokenWarnRatio = record.tokenWarnRatio;
+  }
+  if (typeof record.rateLimitCallsPerMin === 'number') {
+    result.rateLimitCallsPerMin = record.rateLimitCallsPerMin;
+  }
+  if (typeof record.smartTokenConfirm === 'number') {
+    result.smartTokenConfirm = record.smartTokenConfirm;
+  }
+  return result;
+}
+
+export function parseConfigTestPayload(input: unknown): ConfigTestRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const profile = (input as { profile?: unknown }).profile;
+  if (profile !== 'fast' && profile !== 'smart') {
+    return undefined;
+  }
+  return { profile };
+}
+
+export function parseGuestVisiblePayload(input: unknown): GuestVisiblePayload | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const visible = (input as { visible?: unknown }).visible;
+  if (typeof visible !== 'boolean') {
+    return undefined;
+  }
+  return { visible };
+}
+
+export function parseRaiseCeilingPayload(input: unknown): RaiseCeilingRequest {
+  if (typeof input !== 'object' || input === null) {
+    return {};
+  }
+  const tokens = (input as { tokens?: unknown }).tokens;
+  if (typeof tokens === 'number' && Number.isFinite(tokens) && tokens > 0) {
+    return { tokens };
+  }
+  return {};
 }

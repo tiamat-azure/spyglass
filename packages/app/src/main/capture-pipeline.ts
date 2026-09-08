@@ -4,6 +4,7 @@ import type {
   RawEvent,
   ReplayDescriptor
 } from '@spyglass/contracts';
+import { gabaritText } from '@spyglass/llm';
 import {
   buildReplayDescriptor,
   checkedStateArgument,
@@ -121,11 +122,7 @@ function capturedValue(wire: ProbeWireEvent): CapturedValue | undefined {
     }
     return undefined;
   }
-  const field = {
-    type: wire.type,
-    autocomplete: wire.autocomplete,
-    name: wire.name ?? wire.target?.name
-  };
+  const field = maskableFieldFromWire(wire);
   if (
     wire.masked === true &&
     typeof wire.secretRef === 'string' &&
@@ -143,11 +140,33 @@ function capturedValue(wire: ProbeWireEvent): CapturedValue | undefined {
   return maskCapturedValue(text, field);
 }
 
+function maskableFieldFromWire(wire: ProbeWireEvent): {
+  type?: string;
+  autocomplete?: string;
+  name?: string;
+} {
+  const field: { type?: string; autocomplete?: string; name?: string } = {};
+  if (wire.type !== undefined) {
+    field.type = wire.type;
+  }
+  if (wire.autocomplete !== undefined) {
+    field.autocomplete = wire.autocomplete;
+  }
+  const name = wire.name ?? wire.target?.name;
+  if (name !== undefined) {
+    field.name = name;
+  }
+  return field;
+}
+
 function actionArgs(wire: ProbeWireEvent, value: CapturedValue | undefined): string[] | undefined {
   if (wire.kind === 'dom.scroll' && wire.scrollDelta !== undefined) {
     return ['0', String(Math.round(wire.scrollDelta))];
   }
   if (wire.kind === 'dom.key' && wire.key !== undefined) {
+    if (value?.masked === true) {
+      return [value.secretRef];
+    }
     return [wire.key];
   }
   if (wire.kind === 'dom.select' && wire.selectedValue !== undefined) {
@@ -216,9 +235,22 @@ export function buildRawEvent(options: {
       event.action = action as ReplayDescriptor;
     }
   }
+  const gabarit: Parameters<typeof gabaritText>[0] = { kind: wire.kind };
+  if (wire.target !== undefined) {
+    gabarit.target = wire.target;
+  }
+  if (value !== undefined) {
+    gabarit.value = value;
+  }
+  if (event.page !== undefined) {
+    gabarit.page = event.page;
+  }
+  if (wire.key !== undefined && !shouldMaskField(maskableFieldFromWire(wire))) {
+    gabarit.key = wire.key;
+  }
   event.narration = {
     mode: 'template',
-    text: templateNarration(wire.kind, wire.target)
+    text: gabaritText(gabarit)
   };
   if (options.snapshotRef !== undefined) {
     event.snapshotRef = options.snapshotRef;
@@ -251,6 +283,13 @@ export function buildControlEvent(options: {
   if (options.retracts !== undefined) {
     event.retracts = options.retracts;
   }
-  event.narration = { mode: 'template', text: templateNarration(options.kind) };
+  const gabarit: Parameters<typeof gabaritText>[0] = { kind: options.kind };
+  if (options.page !== undefined) {
+    gabarit.page = options.page;
+  }
+  event.narration = {
+    mode: 'template',
+    text: gabaritText(gabarit)
+  };
   return event;
 }

@@ -2,8 +2,9 @@
 
 AI-assisted web scenario recorder (Stagehand). This repository is a **pnpm
 monorepo**. Lot **-1** froze the toolchain. Lot **0** shipped the two-zone
-Electron shell and Stagehand CDP. Lot **1** adds **DOM capture** (probe,
-`raw.jsonl`, Record/Stop, local `act()` replay without an LLM).
+Electron shell and Stagehand CDP. Lot **1** adds **DOM capture**. Lot **2**
+adds the **observer agent** (deterministic gabarits, two-profile LLM
+enrichment, expurgation, token ceilings, F-29 settings).
 
 French product specs stay in [`PRD.md`](PRD.md) and [`webdesign.md`](webdesign.md).
 Implementation and CI comments are English.
@@ -20,7 +21,7 @@ mid-v1.
 | Electron | **44.2.0** (stable current at Lot -1 start; Chromium 152 / Node 24.20.0) | `packages/app` |
 | pnpm | **10.33.3** | `packageManager`, `engines.pnpm` |
 | TypeScript | **5.9.3**, `strict`, `noImplicitAny` | `tsconfig.base.json` |
-| Lint/format | **Biome 2.5.12** (single tool, all five packages) | `biome.json` |
+| Lint/format | **Biome 2.5.12** (single tool, all workspace packages) | `biome.json` |
 | Unit tests | **vitest 5** | workspace |
 | E2E | **@playwright/test** on the Electron app | `packages/app/e2e` |
 | Schemas | **ajv** 2020-12 over `docs/contracts/examples` | `@spyglass/contracts` |
@@ -38,7 +39,8 @@ publishing to the public registry is not part of Lot 0. Register the
 
 | Package | Role |
 | --- | --- |
-| `@spyglass/app` | Two-zone Electron shell, capture session, Record/Stop, Stagehand `observe`/`act` |
+| `@spyglass/app` | Two-zone Electron shell, capture session, observer chat, F-29 settings, Stagehand `observe`/`act` |
+| `@spyglass/llm` | Two-profile LLM gateway, gabarits, expurgation filter, token budget (Lot 2) |
 | `@spyglass/runner` | Library scaffold only — `runScenario` is Lot 5 |
 | `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |

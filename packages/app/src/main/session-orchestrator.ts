@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RawEvent } from '@spyglass/contracts';
@@ -40,6 +41,7 @@ export type SessionMeta = {
 export type SessionOrchestratorHandlers = {
   onEvent: (event: RawEvent) => void;
   onState: (state: { state: RecorderState; since: number; sessionId?: string }) => void;
+  onBeforeSeal?: () => Promise<void>;
 };
 
 type PendingClick = {
@@ -47,6 +49,8 @@ type PendingClick = {
   target: ProbeElementDescriptor;
   ts: number;
 };
+
+const writeScope = new AsyncLocalStorage<true>();
 
 export class SessionOrchestrator {
   private state: RecorderState = 'idle';
@@ -201,6 +205,9 @@ export class SessionOrchestrator {
           }
           await this.flushPendingClick();
         }
+        if (this.handlers.onBeforeSeal !== undefined) {
+          await this.handlers.onBeforeSeal();
+        }
         this.state = 'stopping';
         this.emitState();
         if (existingStops > 1) {
@@ -346,8 +353,53 @@ export class SessionOrchestrator {
     });
   }
 
+  async appendAgentEvent(partial: {
+    kind: RawEvent['kind'];
+    narration?: RawEvent['narration'];
+    retracts?: string;
+  }): Promise<RawEvent | undefined> {
+    if (writeScope.getStore() === true) {
+      return await this.appendAgentEventUnlocked(partial);
+    }
+    return await this.enqueueWrite(async () => this.appendAgentEventUnlocked(partial));
+  }
+
+  private async appendAgentEventUnlocked(partial: {
+    kind: RawEvent['kind'];
+    narration?: RawEvent['narration'];
+    retracts?: string;
+  }): Promise<RawEvent | undefined> {
+    if ((this.state !== 'recording' && this.state !== 'stopping') || this.sessionId === undefined) {
+      return undefined;
+    }
+    const built: {
+      id: string;
+      sessionId: string;
+      kind: RawEvent['kind'];
+      ts: number;
+      page: { url: string; title: string };
+      retracts?: string;
+    } = {
+      id: this.nextId(),
+      sessionId: this.sessionId,
+      kind: partial.kind,
+      ts: Date.now(),
+      page: this.pageSnapshot()
+    };
+    if (partial.retracts !== undefined) {
+      built.retracts = partial.retracts;
+    }
+    const event = buildControlEvent(built);
+    if (partial.narration !== undefined) {
+      event.narration = partial.narration;
+    }
+    await this.append(event);
+    return event;
+  }
+
   private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.writeChain.then(task, task);
+    const wrapped = (): Promise<T> => writeScope.run(true, task);
+    const run = this.writeChain.then(wrapped, wrapped);
     this.writeChain = run.then(
       () => undefined,
       () => undefined

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseConfigSetPayload,
+  parseConfigTestPayload,
   parseEmptyPayload,
   parseGotoPayload,
+  parseGuestVisiblePayload,
   parseObservePayload,
+  parseRaiseCeilingPayload,
   parseRetractPayload,
   parseSessionStartPayload
 } from './ipc-validate.ts';
@@ -46,6 +50,14 @@ describe('session payload validation', () => {
     });
     expect(parseRetractPayload({ eventId: 'evt_000001' })).toEqual({ eventId: 'evt_000001' });
     expect(parseRetractPayload({})).toBeUndefined();
+  });
+
+  it('parses config and guest-visibility payloads', () => {
+    expect(parseConfigTestPayload({ profile: 'fast' })).toEqual({ profile: 'fast' });
+    expect(parseConfigTestPayload({ profile: 'nope' })).toBeUndefined();
+    expect(parseGuestVisiblePayload({ visible: false })).toEqual({ visible: false });
+    expect(parseRaiseCeilingPayload({ tokens: 8000 })).toEqual({ tokens: 8000 });
+    expect(parseConfigSetPayload({ profile: 'fast', apiKey: 'sk-x' })?.apiKey).toBe('sk-x');
   });
 });
 

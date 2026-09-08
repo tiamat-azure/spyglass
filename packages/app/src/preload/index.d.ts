@@ -1,15 +1,22 @@
 import type {
   BrowserBounds,
+  ChatEnrichedPayload,
+  ChatMessagePayload,
+  ConfigGetResponse,
+  ConfigSetRequest,
+  ConfigSetResponse,
+  ConfigTestResponse,
   NavState,
   PopupRedirectedPayload,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
-  StagehandObserveResponse
+  StagehandObserveResponse,
+  UsagePayload
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '1';
+  lot: '2';
   versions: {
     electron: string;
     chrome: string;
@@ -25,6 +32,7 @@ export type SpyglassPreloadApi = {
   };
   layout: {
     setBrowserBounds: (bounds: BrowserBounds) => void;
+    setGuestVisible: (visible: boolean) => void;
   };
   session: {
     start: (startUrl?: string) => Promise<{ sessionId: string }>;
@@ -32,6 +40,19 @@ export type SpyglassPreloadApi = {
     retract: (eventId: string) => Promise<{ retractedEventId: string }>;
     onState: (callback: (state: SessionStatePayload) => void) => () => void;
     onEvent: (callback: (event: Record<string, unknown>) => void) => () => void;
+  };
+  chat: {
+    onMessage: (callback: (message: ChatMessagePayload) => void) => () => void;
+    onEnriched: (callback: (payload: ChatEnrichedPayload) => void) => () => void;
+  };
+  usage: {
+    onUpdate: (callback: (usage: UsagePayload) => void) => () => void;
+    raiseCeiling: (tokens?: number) => Promise<{ ok: boolean }>;
+  };
+  config: {
+    get: () => Promise<ConfigGetResponse>;
+    set: (patch: ConfigSetRequest) => Promise<ConfigSetResponse>;
+    test: (profile: 'fast' | 'smart') => Promise<ConfigTestResponse>;
   };
   stagehand: {
     observe: (instruction?: string) => Promise<StagehandObserveResponse>;

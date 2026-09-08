@@ -72,6 +72,8 @@ describe('packaged Observe', () => {
       stopFn.indexOf("this.state = 'stopping'")
     );
     expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(stopFn.indexOf('onBeforeSeal')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(orch).toContain('AsyncLocalStorage');
     expect(stopFn.indexOf("this.state = 'stopping'")).toBeLessThan(
       stopFn.indexOf("kind: 'record.stop'")
     );
@@ -90,6 +92,13 @@ describe('packaged Observe', () => {
     expect(matcher).not.toContain("mapped.startsWith('7f')");
     const main = readFileSync(join(appRoot, 'src/main/index.ts'), 'utf8');
     expect(main).toContain('getOrCreateDevToolsTargetId');
+    const raise = main.slice(
+      main.indexOf('IPC.usageRaiseCeiling'),
+      main.indexOf('IPC.layoutGuestVisible')
+    );
+    expect(raise).toContain('observerRuntime === undefined');
+    expect(raise).toContain('return { ok: false }');
+    expect(raise).not.toContain('observerRuntime?.observer.raiseCeiling');
   });
 
   it('asarUnpacks Stagehand runtime node_modules for packaged Observe', () => {
