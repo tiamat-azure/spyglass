@@ -182,7 +182,7 @@ Applied on tip `a12c0f9`. V1a energy VAD and C2b `before`-on-overlap are unchang
 
 ### CI: Windows whisper stub spawn
 
-Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+Applied on tip `dce8975`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 Windows `spawn()` cannot execute a shebang `#!/bin/sh` file named `whisper-cli` (not a PE; PATHEXT does not apply to an existing extensionless path). Tests write a portable Node `.cjs` stub that parses `-of`/`-f`, writes `{out}.txt`, and also prints the transcript on stdout. `runWhisperCli` launches JS CLIs with `process.execPath` (and `.cmd`/`.bat` with `shell: true` + `windowsHide`). Native `whisper-cli.exe` spawn is unchanged. `finalize` still fail-softs to `lastPartial` (`''`) if the child never runs — the stub now actually runs on win32.
 
