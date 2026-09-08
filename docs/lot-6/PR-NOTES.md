@@ -470,6 +470,9 @@ Applied on tip `b5098c5497a31aa906eafc1a041aa3666f1b01da`. Product decisions
   (`CI` and/or `SPYGLASS_NO_SANDBOX=1`). Do not require
   `SPYGLASS_NO_SANDBOX`-only.
 
+Unit tests after this pass: **401 passed, 1 skipped**, 53 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
