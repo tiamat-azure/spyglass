@@ -151,6 +151,10 @@
                 Calls / minute
                 <input id="rate-limit" name="rate-limit" type="number" min="1" />
               </label>
+              <label>
+                Smart confirm threshold (tokens / operation)
+                <input id="smart-token-confirm" name="smart-token-confirm" type="number" min="1" />
+              </label>
               <label class="toggle">
                 <input id="enrichment-enabled" name="enrichment-enabled" type="checkbox" />
                 Enable remote enrichment
@@ -184,7 +188,7 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 3 — voix</p>
+              <p class="tagline">Lot 4 — raffinement</p>
             </div>
           </header>
           <div class="token-meter" id="token-meter" data-level="ok">
@@ -197,6 +201,45 @@
             </div>
             <p class="token-hint" id="token-hint">Enrichment idle</p>
           </div>
+          <section class="refine-panel" id="refine-panel" hidden data-phase="idle">
+            <header class="refine-header">
+              <h2>Raffinement</h2>
+              <p class="refine-copy" id="refine-status">Enregistrez puis Stop pour raffiner.</p>
+            </header>
+            <label class="refine-field">
+              Agressivité
+              <select id="refine-aggressiveness">
+                <option value="conservative">conservative</option>
+                <option value="balanced" selected>balanced</option>
+                <option value="aggressive">aggressive</option>
+              </select>
+            </label>
+            <p class="refine-estimate" id="refine-estimate" data-requires-confirm="false">
+              Estimation smart : —
+            </p>
+            <label class="toggle" id="refine-confirm-row" hidden>
+              <input id="refine-confirm" name="refine-confirm" type="checkbox" />
+              Confirmer l'opération smart (seuil dépassé)
+            </label>
+            <div class="refine-actions">
+              <button type="button" class="observe-btn" id="refine-run">Raffiner</button>
+              <button type="button" class="observe-btn" id="refine-finalize" disabled>
+                Finaliser
+              </button>
+            </div>
+            <p class="refine-block" id="refine-block" hidden>
+              Finalisation bloquée : vérifications weak non confirmées
+            </p>
+            <ol class="refine-steps" id="refine-steps"></ol>
+            <section class="refine-weaks" id="refine-weaks" hidden>
+              <h3>Vérifications weak</h3>
+              <p class="refine-copy">Liste complète avant tout geste groupé (F-44b).</p>
+              <ol id="refine-weak-list"></ol>
+              <button type="button" class="observe-btn" id="refine-confirm-routine">
+                Confirmer les routinières
+              </button>
+            </section>
+          </section>
           <p class="meta" id="versions">Loading…</p>
           <p class="cdp" id="cdp-status">CDP: waiting…</p>
           <button type="button" class="observe-btn" id="observe">

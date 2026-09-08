@@ -8,6 +8,10 @@ import {
   parseGuestVisiblePayload,
   parseObservePayload,
   parseRaiseCeilingPayload,
+  parseRefineConfirmPayload,
+  parseRefineEditPayload,
+  parseRefineEstimatePayload,
+  parseRefineRunPayload,
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
@@ -74,6 +78,25 @@ describe('session payload validation', () => {
     const frame = asPcmFrame(new Int16Array([1, 2, 3]).buffer);
     expect(frame?.length).toBe(6);
     expect(asPcmFrame('nope')).toBeUndefined();
+  });
+
+  it('parses refine estimate/run/confirm/edit payloads', () => {
+    expect(parseRefineEstimatePayload({ aggressiveness: 'aggressive' })).toEqual({
+      aggressiveness: 'aggressive'
+    });
+    expect(parseRefineEstimatePayload(null)).toEqual({});
+    expect(parseRefineRunPayload({ aggressiveness: 'balanced', confirm: true })).toEqual({
+      aggressiveness: 'balanced',
+      confirm: true
+    });
+    expect(parseRefineRunPayload('nope')).toBeUndefined();
+    expect(parseRefineConfirmPayload({ routine: true })).toEqual({ routine: true });
+    expect(parseRefineConfirmPayload({ index: 2 })).toEqual({ index: 2 });
+    expect(parseRefineConfirmPayload({})).toBeUndefined();
+    expect(parseRefineEditPayload({ index: 0, intent: 'Je valide' })).toEqual({
+      index: 0,
+      intent: 'Je valide'
+    });
   });
 });
 

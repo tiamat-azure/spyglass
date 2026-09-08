@@ -127,7 +127,7 @@ export class SessionOrchestrator {
       }
       return { sessionId: this.sessionId };
     }
-    if (this.state !== 'idle' && this.state !== 'sealed') {
+    if (!canStartRecording(this.state)) {
       throw new Error(`Cannot start recording from ${this.state}`);
     }
     const sessionId = newSessionId();
@@ -361,6 +361,46 @@ export class SessionOrchestrator {
 
   currentSessionId(): string | undefined {
     return this.sessionId;
+  }
+
+  canRefine(): boolean {
+    return this.state === 'sealed' || this.state === 'reviewing';
+  }
+
+  beginRefine(): void {
+    if (!this.canRefine()) {
+      throw new Error(`Cannot refine from ${this.state}`);
+    }
+    this.state = 'refining';
+    this.since = Date.now();
+    this.emitState();
+  }
+
+  finishRefineReview(): void {
+    if (this.state !== 'refining') {
+      throw new Error(`Cannot enter review from ${this.state}`);
+    }
+    this.state = 'reviewing';
+    this.since = Date.now();
+    this.emitState();
+  }
+
+  abortRefine(hadRevision: boolean): void {
+    if (this.state !== 'refining') {
+      return;
+    }
+    this.state = hadRevision ? 'reviewing' : 'sealed';
+    this.since = Date.now();
+    this.emitState();
+  }
+
+  finalizeScenario(): void {
+    if (this.state !== 'reviewing') {
+      throw new Error(`Cannot finalize from ${this.state}`);
+    }
+    this.state = 'finalized';
+    this.since = Date.now();
+    this.emitState();
   }
 
   async readRawEvents(): Promise<RawEvent[]> {
@@ -690,7 +730,7 @@ export class SessionOrchestrator {
     if (this.journal === undefined) {
       return;
     }
-    if (this.state === 'sealed' || this.state === 'sealed-failed') {
+    if (this.state === 'sealed' || this.state === 'sealed-failed' || isRefinePhase(this.state)) {
       return;
     }
     await this.journal.append(event);
@@ -837,6 +877,20 @@ function wrapSealFailure(error: unknown): Error {
   return new Error(
     `Stop failed: record.stop is in the journal but meta.json could not be sealed (${detail}). Retry Stop to repair meta.`
   );
+}
+
+function canStartRecording(state: RecorderState): boolean {
+  return (
+    state === 'idle' ||
+    state === 'sealed' ||
+    state === 'refining' ||
+    state === 'reviewing' ||
+    state === 'finalized'
+  );
+}
+
+function isRefinePhase(state: RecorderState): boolean {
+  return state === 'refining' || state === 'reviewing' || state === 'finalized';
 }
 
 export function screenshotLimitFromEnv(env: NodeJS.ProcessEnv = process.env): number {

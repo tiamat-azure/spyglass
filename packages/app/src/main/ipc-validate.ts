@@ -5,6 +5,10 @@ import type {
   GuestVisiblePayload,
   NavGotoRequest,
   RaiseCeilingRequest,
+  RefineConfirmRequest,
+  RefineEditRequest,
+  RefineEstimateRequest,
+  RefineRunRequest,
   SessionRetractRequest,
   SessionStartRequest,
   StagehandObserveRequest,
@@ -194,6 +198,76 @@ export function parseVoiceEditPayload(input: unknown): VoiceEditRequest | undefi
     return undefined;
   }
   return { eventId: record.eventId, text: record.text };
+}
+
+export function parseRefineEstimatePayload(input: unknown): RefineEstimateRequest {
+  if (typeof input !== 'object' || input === null) {
+    return {};
+  }
+  const aggressiveness = (input as { aggressiveness?: unknown }).aggressiveness;
+  if (
+    aggressiveness === 'conservative' ||
+    aggressiveness === 'balanced' ||
+    aggressiveness === 'aggressive'
+  ) {
+    return { aggressiveness };
+  }
+  return {};
+}
+
+export function parseRefineRunPayload(input: unknown): RefineRunRequest | undefined {
+  if (input === undefined || input === null) {
+    return {};
+  }
+  if (typeof input !== 'object') {
+    return undefined;
+  }
+  const record = input as { aggressiveness?: unknown; confirm?: unknown };
+  const result: RefineRunRequest = {};
+  if (
+    record.aggressiveness === 'conservative' ||
+    record.aggressiveness === 'balanced' ||
+    record.aggressiveness === 'aggressive'
+  ) {
+    result.aggressiveness = record.aggressiveness;
+  }
+  if (typeof record.confirm === 'boolean') {
+    result.confirm = record.confirm;
+  }
+  return result;
+}
+
+export function parseRefineConfirmPayload(input: unknown): RefineConfirmRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const record = input as { routine?: unknown; index?: unknown };
+  const result: RefineConfirmRequest = {};
+  if (record.routine === true) {
+    result.routine = true;
+  }
+  if (typeof record.index === 'number' && Number.isInteger(record.index) && record.index >= 0) {
+    result.index = record.index;
+  }
+  if (result.routine !== true && result.index === undefined) {
+    return undefined;
+  }
+  return result;
+}
+
+export function parseRefineEditPayload(input: unknown): RefineEditRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const record = input as { index?: unknown; intent?: unknown };
+  if (typeof record.index !== 'number' || !Number.isInteger(record.index) || record.index < 0) {
+    return undefined;
+  }
+  const result: RefineEditRequest = { index: record.index };
+  if (typeof record.intent === 'string') {
+    result.intent = record.intent;
+  }
+  return result;
 }
 
 export function asPcmFrame(input: unknown, maxBytes = 65_536): Buffer | undefined {

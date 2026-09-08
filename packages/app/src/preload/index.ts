@@ -9,6 +9,13 @@ import type {
   ConfigTestResponse,
   NavState,
   PopupRedirectedPayload,
+  RefineConfirmRequest,
+  RefineEditRequest,
+  RefineEstimateResponse,
+  RefineFinalizeResponse,
+  RefineRevisionView,
+  RefineRunResponse,
+  RefineStatePayload,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -23,7 +30,7 @@ import type {
 import { IPC } from '../shared/ipc.ts';
 
 const spyglass = {
-  lot: '3' as const,
+  lot: '4' as const,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -195,6 +202,47 @@ const spyglass = {
       ipcRenderer.on(IPC.voiceLevel, listener);
       return () => {
         ipcRenderer.removeListener(IPC.voiceLevel, listener);
+      };
+    }
+  },
+  refine: {
+    estimate: async (aggressiveness?: 'conservative' | 'balanced' | 'aggressive') =>
+      ipcRenderer.invoke(
+        IPC.refineEstimate,
+        aggressiveness === undefined ? {} : { aggressiveness }
+      ) as Promise<RefineEstimateResponse>,
+    run: async (aggressiveness?: 'conservative' | 'balanced' | 'aggressive', confirm?: boolean) => {
+      const payload: {
+        aggressiveness?: 'conservative' | 'balanced' | 'aggressive';
+        confirm?: boolean;
+      } = {};
+      if (aggressiveness !== undefined) {
+        payload.aggressiveness = aggressiveness;
+      }
+      if (confirm !== undefined) {
+        payload.confirm = confirm;
+      }
+      return ipcRenderer.invoke(IPC.refineRun, payload) as Promise<RefineRunResponse>;
+    },
+    confirm: async (payload: RefineConfirmRequest) =>
+      ipcRenderer.invoke(IPC.refineConfirm, payload) as Promise<
+        { ok: true; revision: RefineRevisionView } | { ok: false; error: string }
+      >,
+    edit: async (payload: RefineEditRequest) =>
+      ipcRenderer.invoke(IPC.refineEdit, payload) as Promise<
+        { ok: true; revision: RefineRevisionView } | { ok: false; error: string }
+      >,
+    finalize: async () =>
+      ipcRenderer.invoke(IPC.refineFinalize, {}) as Promise<RefineFinalizeResponse>,
+    get: async () =>
+      ipcRenderer.invoke(IPC.refineGet, {}) as Promise<RefineRevisionView | undefined>,
+    onState: (callback: (payload: RefineStatePayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: RefineStatePayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.refineState, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.refineState, listener);
       };
     }
   }

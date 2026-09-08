@@ -716,6 +716,122 @@ h1 {
   cursor: wait;
 }
 
+.refine-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-4);
+  margin: 0 var(--sg-space-5) var(--sg-space-4);
+  padding: var(--sg-space-5);
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-md);
+  background: var(--sg-surface);
+}
+
+.refine-panel[hidden] {
+  display: none;
+}
+
+.refine-header h2,
+.refine-weaks h3 {
+  margin: 0;
+  font-size: var(--sg-text-sm);
+  letter-spacing: var(--sg-tracking-caps);
+  text-transform: uppercase;
+}
+
+.refine-copy,
+.refine-estimate,
+.refine-block {
+  margin: 0;
+  font-size: var(--sg-text-xs);
+  color: var(--sg-text-muted);
+}
+
+.refine-estimate[data-requires-confirm="true"] {
+  color: var(--sg-warning);
+}
+
+.refine-block {
+  color: var(--sg-danger);
+}
+
+.refine-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-2);
+  font-size: var(--sg-text-sm);
+}
+
+.refine-field select {
+  height: 28px;
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-sm);
+  background: var(--sg-bg);
+  color: var(--sg-text);
+}
+
+.refine-actions {
+  display: flex;
+  gap: var(--sg-space-3);
+}
+
+.chat:has(#refine-panel:not([hidden])) .log {
+  max-height: 72px;
+}
+
+.refine-steps,
+.refine-weaks ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-3);
+  max-height: 36vh;
+  overflow: auto;
+}
+
+.refine-step,
+.refine-weak-item {
+  padding: var(--sg-space-4);
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-sm);
+  background: var(--sg-surface-2);
+  font-size: var(--sg-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.strength-badge {
+  display: inline-block;
+  margin-right: var(--sg-space-2);
+  padding: 0 var(--sg-space-3);
+  border-radius: var(--sg-radius-pill);
+  font-size: var(--sg-text-2xs);
+  letter-spacing: var(--sg-tracking-caps);
+  text-transform: uppercase;
+}
+
+.strength-badge[data-strength="strong"] {
+  color: var(--sg-accent-ink);
+  background: var(--sg-success);
+}
+
+.strength-badge[data-strength="weak"] {
+  color: var(--sg-accent-ink);
+  background: var(--sg-warning);
+}
+
+.source-ids {
+  font-family: var(--sg-font-mono);
+  font-size: var(--sg-text-2xs);
+  color: var(--sg-text-muted);
+}
+
+.refine-step button,
+.refine-weak-item button {
+  margin-top: var(--sg-space-3);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

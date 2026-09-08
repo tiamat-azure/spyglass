@@ -1,7 +1,12 @@
 /** I-03: dated Anthropic snapshot for the fast (narration) profile. */
 export const LLM_FAST_MODEL_DEFAULT = 'claude-haiku-4-5-20251001';
 
-/** Default only — exact smart pin is I-05 (Lot 4). */
+/**
+ * I-05: dated Anthropic snapshot for the smart (refine / recover) profile.
+ * Last YYYYMMDD Sonnet 4.x id, same pin style as Lot 2 Haiku. Alias
+ * `claude-sonnet-4-5` is accepted. Residual: live bake-off not run here;
+ * later `claude-sonnet-4-6` is a dateless-but-pinned 4.6 id, not adopted.
+ */
 export const LLM_SMART_MODEL_DEFAULT = 'claude-sonnet-4-5-20250929';
 
 export const LLM_FAST_PROVIDER_DEFAULT = 'anthropic';
@@ -15,6 +20,8 @@ export const SESSION_TOKEN_LIMIT_FAST_DEFAULT = 500_000;
 export const TOKEN_WARN_RATIO_DEFAULT = 0.5;
 export const RATE_LIMIT_CALLS_PER_MIN_DEFAULT = 60;
 export const SMART_TOKEN_CONFIRM_DEFAULT = 100_000;
+/** Smart refine completions need more room than narration (ADR-0014). */
+export const LLM_SMART_MAX_TOKENS_DEFAULT = 8192;
 
 /** Visible label / text sent to a remote profile (6.9). */
 export const EXPURGATE_TEXT_MAX = 80;
@@ -31,4 +38,13 @@ export const NARRATION_SYSTEM_PROMPT = [
   "Jamais de valeur de champ, jamais d'URL complète, jamais de secret.",
   'Réponds uniquement par un JSON objet { "narrations": [ { "id": string, "text": string } ] }.',
   "Chaque id d'entrée doit apparaître une fois, aucun id inconnu."
+].join(' ');
+
+export const REFINE_SYSTEM_PROMPT = [
+  'Tu raffines un enregistrement Spyglass en scénario structuré.',
+  'Réponds uniquement par un JSON objet { "steps": [ ... ] }.',
+  'Chaque étape: intent (français, première personne), actionType, sourceEvents (ids evt_ existants).',
+  'Ne fournis pas verification.expected: type, expected et strength sont calculés localement.',
+  'Ordre canonique: intention, action, vérification. Fusionne les répétitions, ignore le bruit et les étapes rétractées.',
+  "Jamais de valeur de champ, jamais d'URL brute, jamais de secret, jamais d'id inconnu."
 ].join(' ');

@@ -21,9 +21,10 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:session:retract` | invoke | `{ eventId: string }` | `{ retractedEventId: string }` (F-19) |
 | `spyglass:session:state` | emit | — | `{ state: RecorderState, since: number, sessionId? }` |
 
-`RecorderState` is `idle` | `recording` | `stopping` | `sealed` | `sealed-failed`.
+`RecorderState` is `idle` | `recording` | `stopping` | `sealed` | `sealed-failed` | `refining` | `reviewing` | `finalized`.
 `sealed-failed` is terminal for that session after a durable `record.stop` when
 `meta.json` could not be sealed; retry Stop repairs meta only (no second stop event).
+`refining` / `reviewing` / `finalized` never write `raw.jsonl` (F-42).
 
 ## Événements et chat
 
@@ -71,8 +72,13 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 
 | Canal | Direction | Charge utile |
 |---|---|---|
-| `spyglass:refine:run` | invoke | `{ sessionId, aggressiveness }` → `{ revision: number }` |
-| `spyglass:refine:estimate` | invoke | `{ sessionId }` → `{ estimatedTokens }` (F-74) |
+| `spyglass:refine:run` | invoke | `{ aggressiveness?, confirm? }` → `{ ok, revision }` (F-41, F-43, F-74) |
+| `spyglass:refine:estimate` | invoke | `{ aggressiveness? }` → `{ estimatedTokens, requiresConfirm, threshold }` (F-74) |
+| `spyglass:refine:confirm` | invoke | `{ routine?: true, index?: number }` → `{ ok, revision }` (F-44b) |
+| `spyglass:refine:edit` | invoke | `{ index, intent }` → `{ ok, revision }` (F-43) |
+| `spyglass:refine:finalize` | invoke | `{}` → `{ ok }` or blocked on unconfirmed weak (F-44) |
+| `spyglass:refine:get` | invoke | `{}` → révision courante |
+| `spyglass:refine:state` | emit | `{ phase, revision? }` |
 | `spyglass:generate:script` | invoke | `{ sessionId, revision }` → `{ paths: string[] }` |
 | `spyglass:replay:start` | invoke | `{ sessionId }` → `{ runId }` (F-59) |
 | `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt }` |

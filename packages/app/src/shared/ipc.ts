@@ -1,4 +1,4 @@
-export const SHELL_LOT = '3' as const;
+export const SHELL_LOT = '4' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -39,7 +39,14 @@ export const IPC = {
   voicePartial: 'spyglass:voice:partial',
   voiceFinal: 'spyglass:voice:final',
   voiceEdit: 'spyglass:voice:edit',
-  voiceLevel: 'spyglass:voice:level'
+  voiceLevel: 'spyglass:voice:level',
+  refineEstimate: 'spyglass:refine:estimate',
+  refineRun: 'spyglass:refine:run',
+  refineConfirm: 'spyglass:refine:confirm',
+  refineEdit: 'spyglass:refine:edit',
+  refineFinalize: 'spyglass:refine:finalize',
+  refineGet: 'spyglass:refine:get',
+  refineState: 'spyglass:refine:state'
 } as const;
 
 export type NavState = {
@@ -112,7 +119,15 @@ export type CdpTarget = {
   webSocketDebuggerUrl?: string;
 };
 
-export type RecorderState = 'idle' | 'recording' | 'stopping' | 'sealed' | 'sealed-failed';
+export type RecorderState =
+  | 'idle'
+  | 'recording'
+  | 'stopping'
+  | 'sealed'
+  | 'sealed-failed'
+  | 'refining'
+  | 'reviewing'
+  | 'finalized';
 
 export type SessionStartRequest = {
   startUrl?: string;
@@ -295,4 +310,80 @@ export type VoiceEditRequest = {
 
 export type VoiceLevelPayload = {
   rms: number;
+};
+
+export type RefineAggressiveness = 'conservative' | 'balanced' | 'aggressive';
+
+export type RefineEstimateRequest = {
+  aggressiveness?: RefineAggressiveness;
+};
+
+export type RefineEstimateResponse = {
+  ok: boolean;
+  sessionId?: string;
+  estimatedTokens: number;
+  threshold: number;
+  requiresConfirm: boolean;
+  model: string;
+  eventCount: number;
+  error?: string;
+};
+
+export type RefineRunRequest = {
+  aggressiveness?: RefineAggressiveness;
+  confirm?: boolean;
+};
+
+export type RefinedStepView = {
+  index: number;
+  intent: string;
+  actionType: string;
+  selector: string;
+  verificationType: string;
+  expected: string;
+  strength: 'strong' | 'weak';
+  weakReason?: string;
+  weakGroup?: 'routine' | 'doubtful';
+  confirmedByUser: boolean;
+  sourceEvents: string[];
+};
+
+export type RefineRevisionView = {
+  sessionId: string;
+  revision: number;
+  status: 'reviewing' | 'finalized';
+  aggressiveness: RefineAggressiveness;
+  model: string;
+  observeEnrichment: boolean;
+  estimatedTokens: number;
+  actualTokens: number;
+  source: 'smart' | 'fallback';
+  steps: RefinedStepView[];
+  unconfirmedWeak: number;
+  routineUnconfirmed: number;
+  doubtfulUnconfirmed: number;
+  canFinalize: boolean;
+};
+
+export type RefineRunResponse =
+  | { ok: true; revision: RefineRevisionView }
+  | { ok: false; error: string; needsConfirm?: boolean; estimatedTokens?: number };
+
+export type RefineConfirmRequest = {
+  routine?: boolean;
+  index?: number;
+};
+
+export type RefineEditRequest = {
+  index: number;
+  intent?: string;
+};
+
+export type RefineFinalizeResponse =
+  | { ok: true; revision: RefineRevisionView }
+  | { ok: false; error: string; unconfirmedWeak?: number };
+
+export type RefineStatePayload = {
+  phase: RecorderState;
+  revision?: RefineRevisionView;
 };

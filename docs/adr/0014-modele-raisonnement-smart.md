@@ -39,4 +39,10 @@ mise en conformité de souveraineté (ADR-0015).
 
 - Le client LLM détecte la capacité multimodale et émet un avertissement non bloquant.
 - Le script généré ne requiert aucune clé d'API en CI.
-- Version exacte du modèle à figer au lot 4, après évaluation (I-05).
+- **I-05 (lot 4).** Le défaut `LLM_SMART_MODEL` est figé sur le snapshot daté
+  `claude-sonnet-4-5-20250929` (famille Claude Sonnet, ADR-0014), même style de pin
+  que Haiku `claude-haiku-4-5-20251001` (I-03). L'alias `claude-sonnet-4-5` est
+  accepté. Résiduel : aucune évaluation live (raffinement / diagnostic visuel) n'a
+  été exécutée ici (pas de clé). `claude-sonnet-4-6` existe comme identifiant 4.6
+  dateless mais toujours piné ; il n'est pas le défaut, I-05 demandant un snapshot
+  daté.

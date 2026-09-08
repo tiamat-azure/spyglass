@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { LLM_FAST_MODEL_DEFAULT, LLM_PACKAGE, llmPackageName } from './index.ts';
+import {
+  LLM_FAST_MODEL_DEFAULT,
+  LLM_PACKAGE,
+  LLM_SMART_MODEL_DEFAULT,
+  llmPackageName
+} from './index.ts';
 
 describe('@spyglass/llm public API', () => {
   it('exposes the reserved package name and the pinned fast model (I-03)', () => {
     expect(llmPackageName()).toBe(LLM_PACKAGE);
     expect(LLM_FAST_MODEL_DEFAULT).toBe('claude-haiku-4-5-20251001');
+  });
+
+  it('pins the smart model to a dated Sonnet snapshot (I-05)', () => {
+    expect(LLM_SMART_MODEL_DEFAULT).toBe('claude-sonnet-4-5-20250929');
   });
 });

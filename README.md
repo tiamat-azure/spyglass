@@ -211,5 +211,13 @@ whisper.cpp sidecar over **main-only** localhost WebSocket (ADR-0004/0005/0013),
 whisper binaries/models are absent (`SPYGLASS_STT_ENGINE=mock`). Fetch weights
 with `node scripts/fetch-whisper.mjs` for the real packaged/dev path.
 
-**Not** implemented: Lot 4+ refinement, runner execution, generated scripts.
+Implemented (Lot 4): refine sealed `raw.jsonl` into `refined/rev-N.json` (F-41,
+F-46) without mutating the journal (F-42). Each step is intent → action →
+verification with `sourceEvents`. Weak verifications block finalize (F-44);
+routine weaks confirm in one gesture, doubtful one-by-one (F-44b). Smart
+profile (`LLM_SMART_MODEL=claude-sonnet-4-5-20250929`, I-05) with per-operation
+token estimate + confirm (F-71, F-74). `observe()` enrichment only when local
+F-22 descriptors are insufficient (I-07), one smart-time call per scenario.
+
+**Not** implemented: Lot 5+ runner execution, generated scripts.
 Closed shadow DOM remains out of scope (ADR-0009).
