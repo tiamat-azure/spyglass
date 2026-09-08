@@ -11,7 +11,7 @@ export async function runGenerateCli(
   }
   const sessionDir = argv.find((arg) => !arg.startsWith('-'));
   if (sessionDir === undefined) {
-    process.stdout.write('Usage: spyglass-generate <sessionDir>\n');
+    process.stderr.write('Usage: spyglass-generate <sessionDir>\n');
     return 2;
   }
   try {

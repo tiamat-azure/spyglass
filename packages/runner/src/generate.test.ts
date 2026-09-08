@@ -109,6 +109,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(spec).toContain('tmpdir()');
     expect(spec).toContain('headedSafe');
     expect(spec).toContain('process.env.DISPLAY');
+    expect(spec).toContain('ci.length > 0');
+    expect(spec).toContain('rm(sessionDir');
     expect(spec).not.toContain("join(appDir, '../../docs/lot-6/screenshots')");
   });
 
@@ -219,6 +221,29 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
       expect(chunks.join('')).toMatch(/process\.cwd\(\)/);
     } finally {
       process.stdout.write = write;
+    }
+  });
+
+  it('spyglass-generate missing session dir writes usage to stderr (L6-051)', async () => {
+    const err: string[] = [];
+    const out: string[] = [];
+    const writeErr = process.stderr.write.bind(process.stderr);
+    const writeOut = process.stdout.write.bind(process.stdout);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      err.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      out.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      expect(await runGenerateCli([])).toBe(2);
+      expect(err.join('')).toMatch(/Usage: spyglass-generate/);
+      expect(out.join('')).toBe('');
+    } finally {
+      process.stderr.write = writeErr;
+      process.stdout.write = writeOut;
     }
   });
 

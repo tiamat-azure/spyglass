@@ -112,6 +112,9 @@ export function corpusWaveMode(
   if (steps.length === 0) {
     return 'none';
   }
+  if (steps.some((step) => step.mode !== 'script' && step.mode !== 'AI')) {
+    return 'none';
+  }
   return steps.every((step) => step.mode === 'script') ? 'script' : 'AI';
 }
 

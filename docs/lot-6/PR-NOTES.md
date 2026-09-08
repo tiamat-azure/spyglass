@@ -429,6 +429,28 @@ Unit tests after this pass: **395 passed, 1 skipped**, 53 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lot 6 e2e spec passed
 (headed+headless with `DISPLAY=:1`; shots in temp, not tracked evidence).
 
+## Adversarial pass 16 (Copilot auto-fix)
+
+Applied on tip `b50083d15eed9fafd81a095c2b7c889b34eae63d`. Product decisions
+1–11, J1c, J8c, A19a, H29a, D35b, O34a, C36a, F37a, R33a, R42a, E43a, and
+S44b are unchanged. Chromium `--no-sandbox` / CI coupling is unchanged
+(ask-user pending).
+
+- **L6-045** `resolveCorpusOutPath` runs inside `runCorpusCli`'s try so O34a
+  jail errors are stderr + exit 1 (L6-014), not a raw throw.
+- **L6-046** Unparsable `--base-url` throws (`invalid --base-url`); do not
+  silently keep production `startUrl`.
+- **L6-047** O34a jail `realpath`s the deepest existing ancestor so a
+  symlink inside the repo that points outside cannot bypass `isInsideDir`.
+- **L6-048** `corpusWaveMode`: undefined/absent step modes are `'none'`, not
+  `'AI'`.
+- **L6-049** `--out` as last token or missing value exits 2 (`--out requires a
+  path`); does not fall back to the default measured-rates file.
+- **L6-050** Lot 6 e2e `rm`s mkdtemp session/screenshot dirs in `finally`;
+  `headedSafe` treats any non-empty `CI` as CI.
+- **L6-051** `spyglass-generate` missing-arg usage writes stderr (not stdout)
+  on exit 2. `--help` still uses stdout.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

@@ -11,6 +11,7 @@
  *   is not `/`, prefix it onto the start path. Query and hash come from start.
  * - `file:` (or any non-http start) vs an http(s) base: leave `startUrl`
  *   unchanged so a staging origin cannot coerce a local file.
+ * - Unparsable `--base-url` throws (L6-046); do not keep production startUrl.
  */
 export function applyBaseUrl(baseUrl: string | undefined, startUrl: string): string {
   if (baseUrl === undefined || baseUrl.length === 0) {
@@ -20,7 +21,7 @@ export function applyBaseUrl(baseUrl: string | undefined, startUrl: string): str
   try {
     base = new URL(baseUrl);
   } catch {
-    return startUrl;
+    throw new Error(`invalid --base-url: ${baseUrl}`);
   }
   if (!base.pathname.endsWith('/')) {
     base.pathname = `${base.pathname}/`;

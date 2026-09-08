@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -13,11 +13,14 @@ async function e2eShotDir(): Promise<string> {
   );
 }
 
-/** E43a: headed only with a display and not in CI. */
+/** E43a: headed only with a display and not in CI (any non-empty CI). */
 function headedSafe(): boolean {
-  const ci = process.env.CI === 'true' || process.env.CI === '1';
+  const ci = process.env.CI;
+  if (typeof ci === 'string' && ci.length > 0) {
+    return false;
+  }
   const display = typeof process.env.DISPLAY === 'string' && process.env.DISPLAY.length > 0;
-  return !ci && display;
+  return display;
 }
 
 function lot6Scenario(startUrl: string): Scenario {
@@ -54,9 +57,12 @@ test.describe('Lot 6 generated script outside Electron', () => {
   test('same script headed (when display) and --headless with --no-ai (no API keys)', async () => {
     test.setTimeout(120_000);
     const server = await startFixtureServer();
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-e2e-'));
-    const shotDir = await e2eShotDir();
+    const shotOverride = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
+    let sessionDir: string | undefined;
+    let shotDir: string | undefined;
     try {
+      sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-e2e-'));
+      shotDir = await e2eShotDir();
       const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
       const paths = await writeGeneratedPackage({ sessionDir, scenario });
       await mkdir(shotDir, { recursive: true });
@@ -90,7 +96,17 @@ test.describe('Lot 6 generated script outside Electron', () => {
       );
       expect(headless).toBe(0);
     } finally {
-      await server.close();
+      try {
+        await server.close();
+      } catch {
+        // still remove temp dirs
+      }
+      if (sessionDir !== undefined) {
+        await rm(sessionDir, { recursive: true, force: true });
+      }
+      if (shotDir !== undefined && shotOverride === undefined) {
+        await rm(shotDir, { recursive: true, force: true });
+      }
     }
   });
 });

@@ -46,6 +46,13 @@ describe('applyBaseUrl (L6-002)', () => {
     expect(applyBaseUrl('', '/relative')).toBe('/relative');
   });
 
+  it('throws on an unparsable --base-url instead of keeping startUrl (L6-046)', () => {
+    expect(() => applyBaseUrl('not-a-url', 'https://prod.test/login')).toThrow(
+      /invalid --base-url/
+    );
+    expect(() => applyBaseUrl('://bad', 'https://prod.test/login')).toThrow(/invalid --base-url/);
+  });
+
   it('does not append slash onto query or hash of --base-url (L6-032)', () => {
     expect(applyBaseUrl('https://staging.test/preview?x=1', 'login')).toBe(
       'https://staging.test/preview/login'

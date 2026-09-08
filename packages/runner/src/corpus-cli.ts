@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import type { MeasuredRates } from './corpus.ts';
@@ -13,7 +13,46 @@ function isInsideDir(dir: string, targetPath: string): boolean {
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
-export function resolveCorpusOutPath(argv: readonly string[], wave: MeasuredRates['wave']): string {
+/** Realpath the deepest existing ancestor so a symlink cannot jailbreak O34a. */
+async function realpathExistingPrefix(targetPath: string): Promise<string> {
+  const resolved = resolve(targetPath);
+  const missing: string[] = [];
+  let current = resolved;
+  for (;;) {
+    try {
+      const real = await realpath(current);
+      return missing.length === 0 ? real : resolve(real, ...missing);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+      const parent = dirname(current);
+      if (parent === current) {
+        throw error;
+      }
+      missing.unshift(basename(current));
+      current = parent;
+    }
+  }
+}
+
+export function corpusOutFlagMissing(argv: readonly string[]): boolean {
+  const outIndex = argv.indexOf('--out');
+  if (outIndex < 0) {
+    return false;
+  }
+  const outArg = argv[outIndex + 1];
+  return outArg === undefined || outArg.length === 0 || outArg.startsWith('-');
+}
+
+export async function resolveCorpusOutPath(
+  argv: readonly string[],
+  wave: MeasuredRates['wave']
+): Promise<string> {
+  if (corpusOutFlagMissing(argv)) {
+    throw new Error('--out requires a path');
+  }
   const outIndex = argv.indexOf('--out');
   const outArg = outIndex >= 0 ? argv[outIndex + 1] : undefined;
   const resolved =
@@ -28,8 +67,9 @@ export function resolveCorpusOutPath(argv: readonly string[], wave: MeasuredRate
               ? 'measured-rates.local.json'
               : 'measured-rates.json'
         );
-  const root = resolve(repoRoot());
-  if (!isInsideDir(root, resolved)) {
+  const rootReal = await realpath(resolve(repoRoot()));
+  const realTarget = await realpathExistingPrefix(resolved);
+  if (!isInsideDir(rootReal, realTarget)) {
     throw new Error(`--out path escapes the repo: ${resolved}`);
   }
   return resolved;
@@ -45,10 +85,14 @@ export async function runCorpusCli(
     process.stderr.write('--j1 requires --public (J+1 is the public corpus wave)\n');
     return 2;
   }
+  if (corpusOutFlagMissing(argv)) {
+    process.stderr.write('--out requires a path\n');
+    return 2;
+  }
   const wave = publicLive ? (wantsJ1 ? 'J+1' : 'J+0') : 'local-immutable';
-  const out = resolveCorpusOutPath(argv, wave);
   let close: (() => Promise<void>) | undefined;
   try {
+    const out = await resolveCorpusOutPath(argv, wave);
     let sites = [...PUBLIC_CORPUS];
     if (!publicLive) {
       const server = await startFixtureServer();

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,9 @@ describe('Lot 6 measurement protocol corpus', () => {
     expect(corpusWaveMode([{ mode: 'script' }, { mode: 'script' }])).toBe('script');
     expect(corpusWaveMode([{ mode: 'script' }, { mode: 'AI' }])).toBe('AI');
     expect(corpusWaveMode([{ mode: 'AI' }, { mode: 'script' }])).toBe('AI');
-    expect(corpusWaveMode([{ mode: 'script' }, {}])).toBe('AI');
+    expect(corpusWaveMode([{ mode: 'script' }, {}])).toBe('none');
+    expect(corpusWaveMode([{ mode: 'AI' }, {}])).toBe('none');
+    expect(corpusWaveMode([{}])).toBe('none');
   });
 
   it('defines 10 public sites and 10 local protocol pages', () => {
@@ -52,28 +54,75 @@ describe('Lot 6 measurement protocol corpus', () => {
     }
   }, 120_000);
 
-  it('defaults local --out to measured-rates.local.json and does not clobber J+0 (L6-006 / L6-013)', () => {
-    expect(resolveCorpusOutPath([], 'J+1')).toBe(
+  it('defaults local --out to measured-rates.local.json and does not clobber J+0 (L6-006 / L6-013)', async () => {
+    expect(await resolveCorpusOutPath([], 'J+1')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.j1.json')
     );
-    expect(resolveCorpusOutPath(['--public', '--j1'], 'J+1')).toBe(
+    expect(await resolveCorpusOutPath(['--public', '--j1'], 'J+1')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.j1.json')
     );
-    expect(resolveCorpusOutPath(['--public'], 'J+0')).toBe(
+    expect(await resolveCorpusOutPath(['--public'], 'J+0')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.json')
     );
-    expect(resolveCorpusOutPath([], 'local-immutable')).toBe(
+    expect(await resolveCorpusOutPath([], 'local-immutable')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.local.json')
     );
-    expect(resolveCorpusOutPath(['--out', 'docs/lot-6/custom-j1.json'], 'J+1')).toBe(
+    expect(await resolveCorpusOutPath(['--out', 'docs/lot-6/custom-j1.json'], 'J+1')).toBe(
       resolve(repoRoot(), 'docs/lot-6/custom-j1.json')
     );
-    expect(() => resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).toThrow(
+    await expect(resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).rejects.toThrow(
       /escapes the repo/
     );
-    expect(() =>
+    await expect(
       resolveCorpusOutPath(['--out', resolve(repoRoot(), '..', 'spyglass-out-escape.json')], 'J+0')
-    ).toThrow(/escapes the repo/);
+    ).rejects.toThrow(/escapes the repo/);
+  });
+
+  it('O34a jail realpaths symlink parents that point outside the repo (L6-047)', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'spyglass-out-escape-'));
+    const link = join(repoRoot(), 'docs/lot-6/corpus-runs', 'l6-047-symlink');
+    await mkdir(dirname(link), { recursive: true });
+    await rm(link, { recursive: true, force: true });
+    await symlink(outside, link);
+    try {
+      await expect(
+        resolveCorpusOutPath(['--out', join(link, 'rates.json')], 'J+0')
+      ).rejects.toThrow(/escapes the repo/);
+    } finally {
+      await rm(link, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('O34a jail errors are stderr+exit 1 for programmatic callers (L6-045)', async () => {
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(await runCorpusCli(['--out', '/tmp/custom-j1.json'])).toBe(1);
+      expect(chunks.join('')).toMatch(/escapes the repo/);
+    } finally {
+      process.stderr.write = write;
+    }
+  });
+
+  it('refuses --out without a path instead of defaulting (L6-049)', async () => {
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(await runCorpusCli(['--out'])).toBe(2);
+      expect(await runCorpusCli(['--out', '--public'])).toBe(2);
+      expect(chunks.join('')).toMatch(/--out requires a path/);
+    } finally {
+      process.stderr.write = write;
+    }
   });
 
   it('corpus-cli mkdir parent dirs before writeFile (L6-040)', async () => {
