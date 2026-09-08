@@ -135,6 +135,12 @@ export class ElectronPageDriver implements PageDriver {
   }
 
   private async eval(script: string): Promise<unknown> {
-    return await this.contents.executeJavaScript(script, true);
+    try {
+      return await this.contents.executeJavaScript(script, true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const nested = /Error: ([^\n]+)/u.exec(message);
+      throw new Error(nested?.[1] ?? message);
+    }
   }
 }
