@@ -33,7 +33,9 @@ Measurement protocol for PRD §2.2 non-contractual goals: corpus of 10
 public sites + 10 local CI pages, J+1 replay, rates published under
 `docs/lot-6/`. First numbers: local 10/10 and public J+0 10/10 `--no-ai`.
 **J+1 public is N/A / pending** (due 2026-09-09; `--public --j1`). Not
-claimed measured — do not invent a J+1 percentage.
+claimed measured — do not invent a J+1 percentage. When `--j1` runs, Lot 6
+**rebuilds from static `PUBLIC_CORPUS`**; it does not replay a persisted J+0
+`scenario.json` (same-artifact replay is a residual).
 
 ### Exit criteria (PRD §11 Lot 6)
 
@@ -42,6 +44,9 @@ claimed measured — do not invent a J+1 percentage.
       **Caveat (J1c):** published rates are local 10/10 and public **J+0**
       10/10 `--no-ai`. **J+1 public is N/A / pending** (due 2026-09-09).
       Wall-clock ≥24 h numbers are deferred, **not claimed measured**.
+      **Caveat (J8c):** Lot 6 `--j1` rebuilds from static `PUBLIC_CORPUS`;
+      it does **not** replay a persisted J+0 `scenario.json`. Same-artifact
+      replay is a residual.
       Run: `pnpm --filter @spyglass/runner exec node --experimental-transform-types src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json`
 
 ### How the exit demos were proven
@@ -64,6 +69,8 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 3. **Corpus / protocol.** `docs/lot-6/protocol.md`, `corpus.json`,
    `MEASURED-RATES.md`. Local fixture 10/10; public J+0 10/10.
    **J+1 public: N/A / pending** (deferred wall-clock, not a measured rate).
+   `--j1` rebuilds from static `PUBLIC_CORPUS`; it does not replay the J+0
+   on-disk `scenario.json`.
 
 ### Screenshots
 
@@ -151,9 +158,23 @@ persist/replay semantics are unchanged (ask-user pending).
 Unit tests after this pass: **360 passed, 1 skipped**, 49 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 3 follow-up (J8c)
+
+Applied on tip `0fca1ff2358a9bd51e9afda1b22c7c936382196f`. Product decisions
+1–5 and J1c (J+1 public **N/A / pending**) are unchanged. L6-005, L6-006,
+L6-007, and L6-009 were already on that tip.
+
+- **L6-008 J8c** Defer persist/reload of J+0 `scenario.json` for J+1.
+  `protocol.md` / `MEASURED-RATES.md` / this file no longer claim that J+1
+  replays the same on-disk artifact. Lot 6 `--j1` (when run) rebuilds from
+  static `PUBLIC_CORPUS`. Same-artifact replay is a residual for later. No
+  invented J+1 percentage.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
 - `@spyglass/runner` is not published to npm yet; outside the monorepo the
   generated README uses `file:` / future registry.
 - No live smart bake-off; I-05 remains `claude-sonnet-4-5-20250929`.
+- J+1 same-artifact persist/reload of the J+0 on-disk `scenario.json` (J8c
+  residual; Lot 6 `--j1` rebuilds from static `PUBLIC_CORPUS`).

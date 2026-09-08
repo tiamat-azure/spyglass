@@ -9,7 +9,7 @@ first in-repo numbers. Protocol: [`protocol.md`](protocol.md). Corpus:
 | --- | --- | --- | --- | --- |
 | local-immutable | 2026-09-08T14:17:00Z | 10 fixture pages | **10/10 (100 %)** | CI, no keys, no egress |
 | J+0 public | 2026-09-08T14:18:21Z | 10 public sites | **10/10 (100 %)** | `--headless --no-ai` |
-| J+1 public | **N/A / pending** (due 2026-09-09) | same `scenario.json` | **N/A / pending** | ≥24 h after J+0; **not measured** in this lot. Do not copy J+0 10/10. Run `--public --j1` (below). |
+| J+1 public | **N/A / pending** (due 2026-09-09) | static `PUBLIC_CORPUS` (rebuilt, not the J+0 on-disk `scenario.json`) | **N/A / pending** | ≥24 h after J+0; **not measured** in this lot. Do not copy J+0 10/10. Run `--public --j1` (below). Same-artifact replay is a residual. |
 | modified + AI | Lot 5 | local broken selector | n/a here | recovery + `applied: false` (F-57) |
 
 Raw JSON: [`measured-rates.local.json`](measured-rates.local.json),
@@ -21,8 +21,9 @@ yet — J+1 public is **N/A / pending**, not a claimed percentage.
 
 This lot’s wall-clock did **not** wait ≥24 h after J+0 (2026-09-08T14:18:21Z).
 The J+1 public row is **N/A / pending** (due **2026-09-09**). It is **not**
-a measured rate. Parent (or CI after the due date) replays the **same**
-`scenario.json` without regenerating selectors:
+a measured rate. Lot 6 `--public --j1` **rebuilds** scenarios from static
+`PUBLIC_CORPUS` (same hosts/steps as J+0). It does **not** persist or reload
+the J+0 on-disk `scenario.json`. Same-artifact replay is a residual for later.
 
 ```bash
 pnpm --filter @spyglass/runner exec node --experimental-transform-types src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json

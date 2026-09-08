@@ -30,9 +30,15 @@ seulement). Pour cet hôte, l'étape 1 est `elementVisible` sur `body`
 
 ## Vague J+1
 
-Rejouer **le même** `scenario.json` au plus tôt 24 h après J+0, mêmes flags,
-sans régénérer les sélecteurs. Le taux « site inchangé sans IA » est
-`passed / 10` sur cette vague.
+Lot 6 **ne persiste pas** et **ne recharge pas** le `scenario.json` de J+0.
+`--public --j1` **reconstruit** les scénarios depuis le `PUBLIC_CORPUS`
+statique (mêmes hôtes et étapes que J+0, pas le même artefact disque).
+Le rejeu du **même fichier** `scenario.json` est un **résiduel** pour plus
+tard — ne pas le traiter comme fait dans ce lot.
+
+Quand la vague tourne (au plus tôt 24 h après J+0), le taux « site inchangé
+sans IA » est `passed / 10`. Ce lot **n'invente pas** de pourcentage J+1
+(voir `MEASURED-RATES.md` : **N/A / pending**).
 
 Commande :
 
@@ -56,3 +62,5 @@ Cette vague n'est pas un taux sur le corpus public.
 - Latence d'interaction embarquée < 50 ms (mesure UX, pas ce protocole).
 - Application automatique de patchs (Lot 7 / F-62–F-65).
 - Clés d'API en CI pour le chemin `--no-ai`.
+- Rejeu J+1 du **même** `scenario.json` disque (persist / reload de l'artefact
+  J+0) — résiduel, hors Lot 6.
