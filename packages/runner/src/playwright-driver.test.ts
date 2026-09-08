@@ -1,6 +1,10 @@
 import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
-import { chromiumLaunchArgs, PlaywrightPageDriver } from './playwright-driver.ts';
+import {
+  chromiumLaunchArgs,
+  PlaywrightPageDriver,
+  screenshotFormatForPath
+} from './playwright-driver.ts';
 
 describe('PlaywrightPageDriver.goto (L5-ADV-06)', () => {
   function driverWith(): { driver: PlaywrightPageDriver; loaded: string[] } {
@@ -30,6 +34,34 @@ describe('PlaywrightPageDriver.goto (L5-ADV-06)', () => {
     await driver.goto('file:///tmp/page.html');
     expect(loaded[0]).toBe('https://exemple.test/next');
     expect(loaded[1]).toMatch(/^file:/);
+  });
+});
+
+describe('screenshotFormatForPath (L6-018)', () => {
+  it('uses PNG for .png paths and JPEG+quality for .jpg failure shots', () => {
+    expect(screenshotFormatForPath('/tmp/headed-run.png')).toEqual({ type: 'png' });
+    expect(screenshotFormatForPath('docs/lot-6/screenshots/TREE.PNG')).toEqual({ type: 'png' });
+    expect(screenshotFormatForPath('step-1-fail.jpg')).toEqual({ type: 'jpeg', quality: 80 });
+  });
+
+  it('PlaywrightPageDriver.screenshot forwards type png without jpeg quality', async () => {
+    const calls: unknown[] = [];
+    const page = {
+      screenshot: async (opts: unknown) => {
+        calls.push(opts);
+      }
+    };
+    const driver = new PlaywrightPageDriver(page as unknown as Page, undefined);
+    await driver.screenshot('/tmp/evidence.png');
+    await driver.screenshot('/tmp/step-1-fail.jpg');
+    expect(calls[0]).toMatchObject({ path: '/tmp/evidence.png', type: 'png', fullPage: false });
+    expect(calls[0]).not.toHaveProperty('quality');
+    expect(calls[1]).toMatchObject({
+      path: '/tmp/step-1-fail.jpg',
+      type: 'jpeg',
+      quality: 80,
+      fullPage: false
+    });
   });
 });
 

@@ -229,6 +229,19 @@ Applied on tip `0b482c9446e862df94f4a546d75463ed9c09fdff`. Product decisions
 Unit tests after this pass: **365 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 8 (auto-fix)
+
+Applied on tip `3af1695cf6fedcb8bc049fab2f54a609f7e8e235`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-018** `PlaywrightPageDriver.screenshot` uses Playwright `type: 'png'`
+  when the output path ends in `.png` (JPEG + quality 80 remains for `.jpg`
+  failure shots). Regenerated `docs/lot-6/screenshots/*.png` so magic bytes
+  match the extension (was JFIF written as `.png`).
+
+Unit tests after this pass: **368 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

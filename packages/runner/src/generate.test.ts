@@ -105,6 +105,25 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(gitignore).toContain('docs/lot-6/screenshots/*.html');
   });
 
+  it('Lot 6 evidence files named .png are actual PNGs (L6-018)', async () => {
+    const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    const names = [
+      'generated-script-tree.png',
+      'headed-run.png',
+      'headless-run.png',
+      'corpus-protocol-snippet.png'
+    ];
+    for (const name of names) {
+      const buf = await readFile(join(repoRoot(), 'docs/lot-6/screenshots', name));
+      expect(buf.subarray(0, 4).equals(pngMagic), `${name} must start with PNG magic`).toBe(true);
+    }
+    const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
+    expect(capture).toContain("join(shotDir, 'generated-script-tree.png')");
+    expect(capture).toContain("join(shotDir, 'headed-run.png')");
+    expect(capture).toContain("join(shotDir, 'headless-run.png')");
+    expect(capture).toContain("join(shotDir, 'corpus-protocol-snippet.png')");
+  });
+
   it('is visible by default and wires F-58 flags; CI does not force headless', () => {
     const headed = parseGeneratedArgv(['--no-ai', '--timeout', '5000'], { CI: '1' });
     expect(headed.headless).toBe(false);

@@ -112,8 +112,7 @@ export class PlaywrightPageDriver implements PageDriver {
   async screenshot(filePath: string, options?: { fullPage?: boolean }): Promise<void> {
     await this.page.screenshot({
       path: filePath,
-      type: 'jpeg',
-      quality: 80,
+      ...screenshotFormatForPath(filePath),
       fullPage: options?.fullPage === true
     });
   }
@@ -126,6 +125,17 @@ export class PlaywrightPageDriver implements PageDriver {
     await this.owned.context.close().catch(() => undefined);
     await this.owned.browser.close().catch(() => undefined);
   }
+}
+
+/** Match Playwright `type` to the output extension (L6-018). `.png` → PNG; otherwise JPEG. */
+export function screenshotFormatForPath(filePath: string): {
+  type: 'png' | 'jpeg';
+  quality?: number;
+} {
+  if (filePath.toLowerCase().endsWith('.png')) {
+    return { type: 'png' };
+  }
+  return { type: 'jpeg', quality: 80 };
 }
 
 export function chromiumLaunchArgs(env: NodeJS.ProcessEnv = process.env): string[] {
