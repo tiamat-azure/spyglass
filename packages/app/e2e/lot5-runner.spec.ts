@@ -165,7 +165,7 @@ test.describe('Lot 5 runner', () => {
       };
       expect(revision.status).toBe('finalized');
       const generatedTs = await readFile(join(sessionDir, 'generated', 'scenario.ts'), 'utf8');
-      expect(generatedTs).toContain('runGeneratedScript');
+      expect(generatedTs).toContain('runScenario');
       const last = revision.steps.at(-1);
       expect(last).toBeDefined();
       const originalSelector = last?.action.descriptor.selector;

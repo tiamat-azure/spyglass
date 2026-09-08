@@ -124,23 +124,26 @@ export async function readSessionStartUrl(sessionDir: string): Promise<string> {
 export function generatedScenarioTsSource(): string {
   return `#!/usr/bin/env node
 /**
- * Spyglass generated runner (ADR-0006 / F-45).
+ * Spyglass generated runner (ADR-0006 / F-45 / PRD §6.12).
  * scenario.json is the source of truth. This file is a thin executable that
- * imports @spyglass/runner and forwards F-58 flags. Visible by default;
- * pass --headless for CI. --no-ai needs no API key.
- *
- * Equivalent to:
- *   import { runScenario } from '${RUNNER_PACKAGE}'
- *   await runScenario(scenario, { headless: process.argv.includes('--headless') })
+ * imports runScenario from @spyglass/runner and forwards F-58 flags.
+ * Visible by default; pass --headless for CI. --no-ai needs no API key.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGeneratedScript } from '${RUNNER_PACKAGE}';
+import { runScenario } from '${RUNNER_PACKAGE}';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
-process.exit(await runGeneratedScript(scenario, process.argv.slice(2), process.env, here));
+const result = await runScenario(scenario, {
+  headless: process.argv.includes('--headless'),
+  argv: process.argv.slice(2),
+  env: process.env,
+  scriptDir: here
+});
+console.log(JSON.stringify({ exitCode: result.exitCode, runDir: result.runDir ?? '' }));
+process.exit(result.exitCode);
 `;
 }
 
@@ -172,7 +175,7 @@ Session \`${sessionId}\`. Artefact **hybride** (ADR-0006, PRD §6.12) :
 | Fichier | Rôle |
 | --- | --- |
 | \`scenario.json\` | source de vérité du scénario raffiné |
-| \`scenario.ts\` | script mince : importe \`${RUNNER_PACKAGE}\` \`runGeneratedScript\` |
+| \`scenario.ts\` | script mince : importe \`${RUNNER_PACKAGE}\` \`runScenario\` |
 | \`package.json\` | dépendance déclarée \`${RUNNER_PACKAGE}\` |
 | \`README.md\` | ce mode d'emploi |
 

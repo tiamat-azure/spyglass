@@ -224,7 +224,7 @@ on the happy path (F-50), post-step verification (F-51), bounded AI recovery
 (F-52–F-55), suggested patch never applied (F-57), CLI flags (F-58 / F-60).
 
 Implemented (Lot 6): finalize writes `generated/scenario.json` (source of
-truth), thin `scenario.ts` importing `runGeneratedScript` from
+truth), thin `scenario.ts` importing `runScenario` from
 `@spyglass/runner` (ADR-0006 / F-45), README mode d'emploi, F-58 flags with
 **visible by default** and `--headless`. The script runs outside Electron;
 `--no-ai` needs no API key. Measurement protocol for PRD §2.2 non-contractual

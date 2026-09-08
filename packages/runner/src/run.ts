@@ -13,9 +13,11 @@ import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
 import type { PageDriver } from './driver.ts';
 import {
+  parseGeneratedArgv,
   type RunScenarioOptions,
   type RunScenarioResult,
-  resolveRunnerOptions
+  resolveRunnerOptions,
+  SMART_MODEL_PIN
 } from './options.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
@@ -34,11 +36,15 @@ export type ReplayProgress = {
 };
 
 export type RunScenarioHooks = RunScenarioOptions & {
-  driver: PageDriver;
+  /** Omit to launch Playwright (generated script / ADR-0006). In-app replay always passes a driver. */
+  driver?: PageDriver;
   recoverer?: Recoverer;
   onProgress?: (event: ReplayProgress) => void;
   runId?: string;
   closeDriver?: boolean;
+  /** F-58 flags for the driver-less generated-script path. */
+  argv?: readonly string[];
+  scriptDir?: string;
 };
 
 const TEXT_ONLY_WARNING =
@@ -51,7 +57,94 @@ export function newRunId(now = new Date()): string {
 
 export async function runScenario(
   scenario: Scenario,
+  options: RunScenarioHooks = {}
+): Promise<RunScenarioResult> {
+  if (options.driver === undefined) {
+    return await runScenarioStandalone(scenario, options);
+  }
+  return await runScenarioOnDriver(scenario, { ...options, driver: options.driver });
+}
+
+async function runScenarioStandalone(
+  scenario: Scenario,
   options: RunScenarioHooks
+): Promise<RunScenarioResult> {
+  const env = options.env ?? process.env;
+  const argv = options.argv ?? process.argv.slice(2);
+  const parsed = parseGeneratedArgv(argv, env);
+  parsed.headless = options.headless ?? argv.includes('--headless');
+  if (options.timeoutMs !== undefined) {
+    parsed.timeoutMs = options.timeoutMs;
+  }
+  if (options.maxAiRetries !== undefined) {
+    parsed.maxAiRetries = options.maxAiRetries;
+  }
+  if (options.aiRecovery !== undefined) {
+    parsed.aiRecovery = options.aiRecovery;
+  }
+  if (options.trace === true) {
+    parsed.trace = true;
+  }
+  if (options.smartModel !== undefined) {
+    parsed.smartModel = options.smartModel;
+  }
+  if (options.baseUrl !== undefined) {
+    parsed.baseUrl = options.baseUrl;
+  }
+  if (options.reportDir !== undefined) {
+    parsed.reportDir = options.reportDir;
+  }
+  if (parsed.help) {
+    process.stdout.write(
+      `scenario.ts — Spyglass generated runner (visible by default)
+  --headless
+  --base-url <url>
+  --timeout <ms>
+  --max-ai-retries <n>
+  --no-ai
+  --ai
+  --report <dir>
+  --trace
+`
+    );
+    const runId = options.runId ?? newRunId();
+    return {
+      exitCode: 0,
+      report: {
+        schemaVersion: 1,
+        runId,
+        sessionId: scenario.sessionId,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        exitCode: 0,
+        headless: false,
+        aiRecovery: false,
+        maxAiRetries: parsed.maxAiRetries,
+        smartModel: SMART_MODEL_PIN,
+        multimodal: true,
+        warnings: [],
+        steps: []
+      }
+    };
+  }
+  const { launchPlaywrightRun, resolveReportDir } = await import('./launch.ts');
+  const runId = options.runId ?? newRunId();
+  const scriptDir = options.scriptDir ?? process.cwd();
+  const reportDir = resolveReportDir(parsed.reportDir, scriptDir, runId);
+  const proof = env.SPYGLASS_PROOF_SCREENSHOT;
+  return await launchPlaywrightRun({
+    scenario,
+    parsed,
+    env,
+    reportDir,
+    runId,
+    ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {})
+  });
+}
+
+async function runScenarioOnDriver(
+  scenario: Scenario,
+  options: RunScenarioHooks & { driver: PageDriver }
 ): Promise<RunScenarioResult> {
   const resolved = resolveRunnerOptions(options, options.env);
   const smartModel = pinSmartModel(resolved.smartModel);

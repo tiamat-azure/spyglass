@@ -1,12 +1,11 @@
 import type { Scenario } from '@spyglass/contracts';
-import { launchPlaywrightRun, resolveReportDir } from './launch.ts';
 import { parseGeneratedArgv } from './options.ts';
-import { newRunId } from './run.ts';
+import { runScenario } from './run.ts';
 import { asScenario } from './scenario.ts';
 
 /**
- * Entry used by generated scenario.ts (Lot 6 / F-45 / F-58).
- * Visible unless --headless. --no-ai constructs no LLM client.
+ * Convenience wrapper around driver-less `runScenario` (prints exit JSON).
+ * Generated scenario.ts calls `runScenario` directly (ADR-0006 / PRD §6.12).
  */
 export async function runGeneratedScript(
   scenarioInput: unknown,
@@ -20,19 +19,16 @@ export async function runGeneratedScript(
     return 0;
   }
   const scenario: Scenario = asScenario(scenarioInput, parsed.baseUrl);
-  const runId = newRunId();
-  const reportDir = resolveReportDir(parsed.reportDir, scriptDir, runId);
-  const proof = env.SPYGLASS_PROOF_SCREENSHOT;
   try {
-    const result = await launchPlaywrightRun({
-      scenario,
-      parsed,
+    const result = await runScenario(scenario, {
+      headless: parsed.headless,
+      argv,
       env,
-      reportDir,
-      runId,
-      ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {})
+      scriptDir
     });
-    process.stdout.write(`${JSON.stringify({ exitCode: result.exitCode, runDir: reportDir })}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ exitCode: result.exitCode, runDir: result.runDir ?? '' })}\n`
+    );
     return result.exitCode;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

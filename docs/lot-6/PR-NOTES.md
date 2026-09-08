@@ -21,7 +21,7 @@ voice, refine, runner recovery) are unchanged. I-05 remains
 `claude-sonnet-4-5-20250929`. No Lot 7 patch auto-apply / PR (F-62–F-65).
 
 Finalize writes PRD §6.14 `generated/`: `scenario.json` (source of truth),
-thin `scenario.ts` importing `@spyglass/runner` `runGeneratedScript`
+thin `scenario.ts` importing `@spyglass/runner` `runScenario`
 (ADR-0006 / F-45), `README.md` mode d'emploi, `package.json` with a
 **declared** `@spyglass/runner` dependency. The script runs **outside**
 Electron. Visible by default; `--headless` and the rest of F-58
@@ -41,13 +41,13 @@ J+1 public is due 2026-09-09.
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (**345 passed, 1 skipped**, 48
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (**346 passed, 1 skipped**, 48
 files), `pnpm test:schemas` (2 passed), and `pnpm test:e2e` (**16 passed**,
 Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 `--no-ai`.
 
 1. **Thin hybrid script.** Unit `writeGeneratedPackage` asserts
-   `scenario.json` + `scenario.ts` importing `runGeneratedScript` + README
+   `scenario.json` + `scenario.ts` importing `runScenario` + README
    flags + `package.json` dependency. Finalize (`RefineEngine`) writes
    `generated/`. In-app replay prefers `generated/scenario.json`.
 2. **Headed + headless outside Electron.**

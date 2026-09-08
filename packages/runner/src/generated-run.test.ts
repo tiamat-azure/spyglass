@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -107,12 +107,13 @@ describe('Lot 6 generated script outside Electron (CA-10 / CA-11)', () => {
     }
   }, 60_000);
 
-  it('executes generated scenario.ts as a subprocess (declared @spyglass/runner)', async () => {
+  it('executes generated scenario.ts as a subprocess that imports runScenario', async () => {
     const server = await startFixtureServer();
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-spawn-'));
     try {
       const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
       const paths = await writeGeneratedPackage({ sessionDir, scenario });
+      expect(await readFile(paths.scenarioTs, 'utf8')).toContain('runScenario');
       await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
       await symlink(
         join(repoRoot(), 'packages/runner'),

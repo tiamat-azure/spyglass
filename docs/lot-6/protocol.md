@@ -24,7 +24,7 @@ seulement). Pour cet hôte, l'étape 1 est `elementVisible` sur `body`
 
 1. Pour chaque site, scénario smoke : `startUrl` → `wait` body/h1 →
    `textPresent` (marqueur) → `urlMatches` (URL exacte, pas un glob universel).
-2. Exécuter le **script généré** (ou `runGeneratedScript`) en `--headless --no-ai`.
+2. Exécuter le **script généré** (ou `runScenario` sans driver) en `--headless --no-ai`.
 3. Succès = code 0, toutes les étapes `mode=script`.
 4. Enregistrer `docs/lot-6/measured-rates.json` (vague `J+0` ou `local-immutable`).
 

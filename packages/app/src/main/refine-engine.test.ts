@@ -288,7 +288,7 @@ describe('RefineEngine', () => {
     }
     expect(session.state).toBe('finalized');
     const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
-    expect(generated).toContain('runGeneratedScript');
+    expect(generated).toContain('runScenario');
     const scenarioJson = JSON.parse(
       await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
     ) as { sessionId: string };

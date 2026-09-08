@@ -14,6 +14,7 @@ import { runGenerateCli } from './generate-cli.ts';
 import { parseGeneratedArgv, parseRunnerArgv } from './options.ts';
 import { RUNNER_PACKAGE } from './package-name.ts';
 import { screenshotFileName, traceFileName } from './paths.ts';
+import { runScenario } from './run.ts';
 
 function clickStep(): RefinedStep {
   return {
@@ -57,7 +58,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(json.steps).toHaveLength(1);
     const ts = await readFile(paths.scenarioTs, 'utf8');
     expect(ts).toContain("from '@spyglass/runner'");
-    expect(ts).toContain('runGeneratedScript');
+    expect(ts).toContain('runScenario');
+    expect(ts).toMatch(/import \{ runScenario \} from '@spyglass\/runner'/);
+    expect(ts).not.toContain('runGeneratedScript');
     expect(ts).toContain('scenario.json');
     expect(ts).not.toMatch(/[\\]/);
     const readme = await readFile(paths.readme, 'utf8');
@@ -111,6 +114,26 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(traceFileName()).toBe('trace.zip');
     expect(generatedScenarioTsSource()).toContain("join(here, 'scenario.json')");
     expect(generatedReadme('ses_x')).toMatch(/Windows/);
+  });
+
+  it('runScenario without a driver prints F-58 help and needs no API keys', async () => {
+    const chunks: string[] = [];
+    const write = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      const result = await runScenario(scenario(), {
+        argv: ['--help'],
+        env: { CI: '1' }
+      });
+      expect(result.exitCode).toBe(0);
+      expect(chunks.join('')).toMatch(/--headless/);
+      expect(chunks.join('')).toMatch(/--no-ai/);
+    } finally {
+      process.stdout.write = write;
+    }
   });
 
   it('spyglass-generate prints usage without a session dir', async () => {
