@@ -184,7 +184,7 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 2 — observer</p>
+              <p class="tagline">Lot 3 — voix</p>
             </div>
           </header>
           <div class="token-meter" id="token-meter" data-level="ok">
@@ -207,7 +207,29 @@
             Observe page
           </button>
           <ol class="log" id="log" aria-live="polite"></ol>
+          <p class="voice-live" id="voice-live" hidden data-kind="voice.partial"></p>
           <div class="composer">
+            <div class="composer-voice">
+              <button
+                type="button"
+                class="mic-btn"
+                id="mic-btn"
+                data-state="idle"
+                data-mode="hold"
+                aria-label="Hold to talk"
+                title="Hold to talk"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="2.5" width="6" height="11" rx="3" />
+                  <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" />
+                </svg>
+                Mic
+              </button>
+              <button type="button" class="voice-mode" id="voice-mode" data-mode="hold">Hold</button>
+              <div class="mic-level" id="mic-level" aria-hidden="true" data-active="false">
+                <i></i><i></i><i></i><i></i><i></i>
+              </div>
+            </div>
             <button type="button" class="record-btn" id="record-btn" data-state="idle">
               Record
             </button>

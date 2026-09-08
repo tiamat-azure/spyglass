@@ -1,4 +1,4 @@
-export const SHELL_LOT = '2' as const;
+export const SHELL_LOT = '3' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -30,7 +30,14 @@ export const IPC = {
   configGet: 'spyglass:config:get',
   configSet: 'spyglass:config:set',
   configTest: 'spyglass:config:test',
-  layoutGuestVisible: 'spyglass:layout:guestVisible'
+  layoutGuestVisible: 'spyglass:layout:guestVisible',
+  voiceStart: 'spyglass:voice:start',
+  voiceStop: 'spyglass:voice:stop',
+  voiceFrame: 'spyglass:voice:frame',
+  voicePartial: 'spyglass:voice:partial',
+  voiceFinal: 'spyglass:voice:final',
+  voiceEdit: 'spyglass:voice:edit',
+  voiceLevel: 'spyglass:voice:level'
 } as const;
 
 export type NavState = {
@@ -239,4 +246,49 @@ export type GuestVisiblePayload = {
 
 export type RaiseCeilingRequest = {
   tokens?: number;
+};
+
+export type VoiceMode = 'hold' | 'continuous';
+
+export type VoiceStartRequest = {
+  mode: VoiceMode;
+};
+
+export type VoiceStartResponse = {
+  ok: boolean;
+  mode: VoiceMode;
+  engine: 'mock' | 'whisper';
+  model: string;
+  fakeCapture: boolean;
+  error?: string;
+};
+
+export type VoiceStopResponse = {
+  ok: boolean;
+};
+
+export type VoicePartialPayload = {
+  utteranceId: string;
+  text: string;
+  startTs: number;
+};
+
+export type VoiceFinalPayload = {
+  eventId: string;
+  utteranceId: string;
+  text: string;
+  startTs: number;
+  endTs: number;
+  relation?: 'before' | 'after' | 'unanchored';
+  correlatedEventId?: string;
+  correlatedStepIndex?: number;
+};
+
+export type VoiceEditRequest = {
+  eventId: string;
+  text: string;
+};
+
+export type VoiceLevelPayload = {
+  rms: number;
 };

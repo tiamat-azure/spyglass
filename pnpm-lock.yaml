@@ -35,6 +35,9 @@ importers:
       '@spyglass/probe':
         specifier: workspace:*
         version: link:../probe
+      '@spyglass/stt':
+        specifier: workspace:*
+        version: link:../stt
       playwright-core:
         specifier: 1.63.0
         version: 1.63.0

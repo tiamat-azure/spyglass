@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowPermission,
   denyPermissionCheck,
   denyPermissionRequest,
-  denyWindowOpenHandler
+  denyWindowOpenHandler,
+  isMediaPermission
 } from './web-security.ts';
 
 describe('web-security C1 defaults', () => {
@@ -10,7 +12,7 @@ describe('web-security C1 defaults', () => {
     expect(denyWindowOpenHandler()).toEqual({ action: 'deny' });
   });
 
-  it('denies session permission checks', () => {
+  it('denies session permission checks by default', () => {
     expect(denyPermissionCheck()).toBe(false);
   });
 
@@ -20,5 +22,12 @@ describe('web-security C1 defaults', () => {
       granted = value;
     });
     expect(granted).toBe(false);
+  });
+
+  it('allows microphone only on the chrome renderer, never the guest', () => {
+    expect(isMediaPermission('media')).toBe(true);
+    expect(allowPermission({ isChrome: true, permission: 'media' })).toBe(true);
+    expect(allowPermission({ isChrome: false, permission: 'media' })).toBe(false);
+    expect(allowPermission({ isChrome: true, permission: 'notifications' })).toBe(false);
   });
 });

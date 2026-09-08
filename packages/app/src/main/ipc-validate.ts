@@ -7,7 +7,9 @@ import type {
   RaiseCeilingRequest,
   SessionRetractRequest,
   SessionStartRequest,
-  StagehandObserveRequest
+  StagehandObserveRequest,
+  VoiceEditRequest,
+  VoiceStartRequest
 } from '../shared/ipc.ts';
 
 export function parseGotoPayload(input: unknown): NavGotoRequest | undefined {
@@ -167,4 +169,52 @@ export function parseRaiseCeilingPayload(input: unknown): RaiseCeilingRequest {
     return { tokens };
   }
   return {};
+}
+
+export function parseVoiceStartPayload(input: unknown): VoiceStartRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const mode = (input as { mode?: unknown }).mode;
+  if (mode !== 'hold' && mode !== 'continuous') {
+    return undefined;
+  }
+  return { mode };
+}
+
+export function parseVoiceEditPayload(input: unknown): VoiceEditRequest | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const record = input as { eventId?: unknown; text?: unknown };
+  if (typeof record.eventId !== 'string' || record.eventId.length === 0) {
+    return undefined;
+  }
+  if (typeof record.text !== 'string') {
+    return undefined;
+  }
+  return { eventId: record.eventId, text: record.text };
+}
+
+export function asPcmFrame(input: unknown, maxBytes = 65_536): Buffer | undefined {
+  if (input instanceof ArrayBuffer) {
+    if (input.byteLength === 0 || input.byteLength > maxBytes) {
+      return undefined;
+    }
+    return Buffer.from(input);
+  }
+  if (ArrayBuffer.isView(input)) {
+    const view = input as ArrayBufferView;
+    if (view.byteLength === 0 || view.byteLength > maxBytes) {
+      return undefined;
+    }
+    return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+  }
+  if (Buffer.isBuffer(input)) {
+    if (input.length === 0 || input.length > maxBytes) {
+      return undefined;
+    }
+    return input;
+  }
+  return undefined;
 }

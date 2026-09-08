@@ -111,6 +111,8 @@ body {
 .icon-btn:focus-visible,
 .observe-btn:focus-visible,
 .record-btn:focus-visible,
+.mic-btn:focus-visible,
+.voice-mode:focus-visible,
 .chrome-tab:focus-visible,
 .gutter:focus-visible,
 .url-form input:focus-visible,
@@ -601,6 +603,85 @@ h1 {
   flex-direction: column;
   gap: var(--sg-space-3);
   margin-top: auto;
+}
+
+.composer-voice {
+  display: flex;
+  align-items: center;
+  gap: var(--sg-space-3);
+}
+
+.mic-btn,
+.voice-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sg-space-2);
+  height: 32px;
+  padding: 0 var(--sg-space-4);
+  border: 1px solid var(--sg-border-strong);
+  border-radius: var(--sg-radius-sm);
+  background: var(--sg-surface-2);
+  color: var(--sg-text);
+  font-size: var(--sg-text-sm);
+  cursor: pointer;
+}
+
+.mic-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mic-btn[data-state="holding"],
+.mic-btn[data-state="listening"] {
+  border-color: var(--sg-accent);
+  color: var(--sg-accent);
+  box-shadow: var(--sg-glow-accent);
+}
+
+.mic-level {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 12px;
+}
+
+.mic-level i {
+  width: 2px;
+  height: 4px;
+  background: var(--sg-accent);
+  border-radius: 2px;
+  display: block;
+}
+
+.mic-level[data-active="true"] i {
+  box-shadow: var(--sg-glow-accent);
+}
+
+.voice-live {
+  margin: 0;
+  padding: var(--sg-space-3) var(--sg-space-5);
+  border: 1px dashed var(--sg-accent);
+  border-radius: var(--sg-radius-md);
+  color: var(--sg-text);
+  font-size: var(--sg-text-sm);
+  background: var(--sg-surface);
+}
+
+.voice-relation {
+  letter-spacing: var(--sg-tracking-caps);
+  text-transform: uppercase;
+  color: var(--sg-accent);
+}
+
+.chat-msg[data-kind="voice.partial"] .chat-body,
+.chat-msg[data-kind="voice.final"] .chat-body {
+  font-style: italic;
 }
 
 .record-btn {

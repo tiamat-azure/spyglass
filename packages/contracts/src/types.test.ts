@@ -42,7 +42,10 @@ describe('schema-aligned contract types', () => {
         startTs: 1_757_200_000_000,
         endTs: 1_757_200_000_800,
         editedFrom: 'evt_000320',
-        audioRef: null
+        audioRef: null,
+        relation: 'after',
+        correlatedEventId: 'evt_000300',
+        correlatedStepIndex: 4
       },
       snapshotRef: 'snap_000321',
       screenshotRef: 'shot_000321'
@@ -53,5 +56,7 @@ describe('schema-aligned contract types', () => {
     expect(event.target?.ancestors).toEqual(['form', 'main']);
     expect(event.target?.boundingBox?.w).toBe(160);
     expect(event.voice?.audioRef).toBeNull();
+    expect(event.voice?.relation).toBe('after');
+    expect(event.voice?.correlatedEventId).toBe('evt_000300');
   });
 });

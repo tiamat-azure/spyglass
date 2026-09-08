@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000012",
+  "sessionId": "ses_20260908_voice",
+  "ts": 1757300002500,
+  "kind": "voice.final",
+  "pageId": "page_main",
+  "voice": {
+    "text": "J'ai validé l'étape",
+    "startTs": 1757300002100,
+    "endTs": 1757300002500,
+    "audioRef": null,
+    "relation": "after",
+    "correlatedEventId": "evt_000011",
+    "correlatedStepIndex": 1
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Tu as dicté : « J'ai validé l'étape » (après l'action)"
+  }
+}

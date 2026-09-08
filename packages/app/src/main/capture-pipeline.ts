@@ -261,6 +261,45 @@ export function buildRawEvent(options: {
   return event;
 }
 
+export function buildVoiceEvent(options: {
+  id: string;
+  sessionId: string;
+  kind: 'voice.final' | 'voice.edited';
+  ts: number;
+  page?: { url: string; title: string };
+  voice: NonNullable<RawEvent['voice']>;
+}): RawEvent {
+  const event: RawEvent = {
+    schemaVersion: 1,
+    id: options.id,
+    sessionId: options.sessionId,
+    ts: options.ts,
+    kind: options.kind,
+    pageId: PAGE_ID_MAIN,
+    voice: options.voice
+  };
+  if (options.page !== undefined) {
+    event.page = options.page;
+  }
+  const gabarit: Parameters<typeof gabaritText>[0] = { kind: options.kind };
+  if (options.page !== undefined) {
+    gabarit.page = options.page;
+  }
+  const voiceGabarit: { text?: string; relation?: NonNullable<RawEvent['voice']>['relation'] } = {};
+  if (options.voice.text !== undefined) {
+    voiceGabarit.text = options.voice.text;
+  }
+  if (options.voice.relation !== undefined) {
+    voiceGabarit.relation = options.voice.relation;
+  }
+  gabarit.voice = voiceGabarit;
+  event.narration = {
+    mode: 'template',
+    text: gabaritText(gabarit)
+  };
+  return event;
+}
+
 export function buildControlEvent(options: {
   id: string;
   sessionId: string;

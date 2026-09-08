@@ -67,12 +67,17 @@ export type ElementDescriptor = {
   boundingBox?: BoundingBox;
 };
 
+export type VoiceRelation = 'before' | 'after' | 'unanchored';
+
 export type VoiceCapture = {
   text?: string;
   startTs?: number;
   endTs?: number;
   editedFrom?: string;
   audioRef?: string | null;
+  relation?: VoiceRelation;
+  correlatedEventId?: string;
+  correlatedStepIndex?: number;
 };
 
 export type RawEvent = {

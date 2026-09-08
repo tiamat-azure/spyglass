@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RawEvent } from '@spyglass/contracts';
+import type { RawEvent, VoiceCapture } from '@spyglass/contracts';
 import {
   CLICK_CHANGE_WINDOW_MS,
   isDenoisedClickForChange,
@@ -11,12 +11,20 @@ import {
   SCREENSHOT_RETENTION,
   snapshotScript
 } from '@spyglass/probe';
+import {
+  type AudioRetention,
+  correlateVoiceSegment,
+  parseAudioRetention,
+  parseCorrelationMarginMs,
+  pcm16ToWav
+} from '@spyglass/stt';
 import type { NavState, RecorderState } from '../shared/ipc.ts';
 import type { BrowserPane } from './browser-pane.ts';
 import {
   asProbeWireEvent,
   buildControlEvent,
   buildRawEvent,
+  buildVoiceEvent,
   isCaptureStepKind,
   type ProbeWireEvent,
   redactNetRequestUrl
@@ -64,6 +72,7 @@ export class SessionOrchestrator {
   private sessionStartedAt = '';
   private sessionStartUrl = '';
   private lastDom: { kind: string; ts: number; target: ProbeElementDescriptor } | undefined;
+  private lastCapture: { eventId: string; stepIndex: number; ts: number } | undefined;
   private lastUserActionTs = 0;
   private readonly seenEventIds = new Set<string>();
   private probe: ProbeHost | undefined;
@@ -71,12 +80,19 @@ export class SessionOrchestrator {
   private writeChain: Promise<void> = Promise.resolve();
   private pendingClick: PendingClick | undefined;
   private pendingClickTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly audioRetention: AudioRetention;
+  private readonly voiceMarginMs: number;
+  private readonly voicePcm = new Map<string, Buffer>();
 
   constructor(
     private readonly sessionsRoot: () => string,
     private readonly pane: () => BrowserPane,
-    private readonly handlers: SessionOrchestratorHandlers
-  ) {}
+    private readonly handlers: SessionOrchestratorHandlers,
+    env: NodeJS.ProcessEnv = process.env
+  ) {
+    this.audioRetention = parseAudioRetention(env.AUDIO_RETENTION);
+    this.voiceMarginMs = parseCorrelationMarginMs(env.VOICE_CORRELATION_MS);
+  }
 
   snapshot(): { state: RecorderState; since: number; sessionId?: string } {
     const result: { state: RecorderState; since: number; sessionId?: string } = {
@@ -138,6 +154,8 @@ export class SessionOrchestrator {
     this.sessionStartUrl = startUrl;
     this.seenEventIds.clear();
     this.lastDom = undefined;
+    this.lastCapture = undefined;
+    this.voicePcm.clear();
     this.discardPendingClick();
     this.state = 'recording';
     this.since = Date.now();
@@ -397,6 +415,95 @@ export class SessionOrchestrator {
     return event;
   }
 
+  async recordVoiceFinal(input: {
+    text: string;
+    startTs: number;
+    endTs: number;
+    pcm?: Buffer;
+  }): Promise<RawEvent | undefined> {
+    return await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        return undefined;
+      }
+      await this.flushPendingClick();
+      const id = this.nextId();
+      const correlation = correlateVoiceSegment(
+        input.startTs,
+        input.endTs,
+        this.lastCapture,
+        this.stepIndex,
+        this.voiceMarginMs
+      );
+      const voice: VoiceCapture = {
+        text: input.text,
+        startTs: input.startTs,
+        endTs: input.endTs,
+        audioRef: null,
+        relation: correlation.relation
+      };
+      if (correlation.correlatedEventId !== undefined) {
+        voice.correlatedEventId = correlation.correlatedEventId;
+      }
+      if (correlation.correlatedStepIndex !== undefined) {
+        voice.correlatedStepIndex = correlation.correlatedStepIndex;
+      }
+      if (input.pcm !== undefined && input.pcm.length > 0) {
+        this.voicePcm.set(id, input.pcm);
+        if (this.audioRetention === 'all' && this.retention !== undefined) {
+          voice.audioRef = await this.retention.writeAudio(id, pcm16ToWav(input.pcm));
+        }
+      }
+      const event = buildVoiceEvent({
+        id,
+        sessionId: this.sessionId,
+        kind: 'voice.final',
+        ts: input.endTs,
+        page: this.pageSnapshot(),
+        voice
+      });
+      await this.append(event);
+      return event;
+    });
+  }
+
+  async recordVoiceEdited(eventId: string, text: string): Promise<RawEvent | undefined> {
+    return await this.enqueueWrite(async () => {
+      if (this.state !== 'recording' || this.sessionId === undefined) {
+        return undefined;
+      }
+      const events = await this.readRawEvents();
+      const source = events.find((event) => event.id === eventId && event.kind === 'voice.final');
+      if (source === undefined || source.voice === undefined) {
+        return undefined;
+      }
+      const id = this.nextId();
+      const voice: VoiceCapture = {
+        ...source.voice,
+        text,
+        editedFrom: eventId,
+        audioRef: source.voice.audioRef ?? null
+      };
+      const pcm = this.voicePcm.get(eventId);
+      if (
+        this.audioRetention === 'corrected' &&
+        pcm !== undefined &&
+        this.retention !== undefined
+      ) {
+        voice.audioRef = await this.retention.writeAudio(id, pcm16ToWav(pcm));
+      }
+      const event = buildVoiceEvent({
+        id,
+        sessionId: this.sessionId,
+        kind: 'voice.edited',
+        ts: Date.now(),
+        page: this.pageSnapshot(),
+        voice
+      });
+      await this.append(event);
+      return event;
+    });
+  }
+
   private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
     const wrapped = (): Promise<T> => writeScope.run(true, task);
     const run = this.writeChain.then(wrapped, wrapped);
@@ -533,6 +640,9 @@ export class SessionOrchestrator {
         pageFallback: this.pageSnapshot()
       })
     );
+    if (step !== undefined) {
+      this.lastCapture = { eventId: id, stepIndex: step, ts: wire.ts };
+    }
   }
 
   private async captureSnapshot(stepIndex: number): Promise<string | undefined> {
@@ -623,6 +733,7 @@ export class SessionOrchestrator {
     }
     this.state = 'sealed';
     this.since = Date.now();
+    this.voicePcm.clear();
     this.emitState();
     return { sessionId, eventCount, sizeBytes: Buffer.byteLength(raw) };
   }

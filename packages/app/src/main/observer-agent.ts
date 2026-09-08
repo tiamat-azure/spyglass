@@ -298,6 +298,16 @@ export function gabaritFor(event: RawEvent): string {
   if (typeof key === 'string' && event.value?.masked !== true) {
     input.key = key;
   }
+  if (event.voice !== undefined) {
+    const voice: { text?: string; relation?: NonNullable<RawEvent['voice']>['relation'] } = {};
+    if (event.voice.text !== undefined) {
+      voice.text = event.voice.text;
+    }
+    if (event.voice.relation !== undefined) {
+      voice.relation = event.voice.relation;
+    }
+    input.voice = voice;
+  }
   return gabaritText(input);
 }
 
@@ -313,7 +323,8 @@ export function technicalBlock(event: RawEvent): string | undefined {
       stepIndex: event.stepIndex,
       page,
       target,
-      action
+      action,
+      voice: event.voice
     },
     null,
     2

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asPcmFrame,
   parseConfigSetPayload,
   parseConfigTestPayload,
   parseEmptyPayload,
@@ -8,7 +9,9 @@ import {
   parseObservePayload,
   parseRaiseCeilingPayload,
   parseRetractPayload,
-  parseSessionStartPayload
+  parseSessionStartPayload,
+  parseVoiceEditPayload,
+  parseVoiceStartPayload
 } from './ipc-validate.ts';
 import {
   clampBrowserBoundsToChrome,
@@ -58,6 +61,19 @@ describe('session payload validation', () => {
     expect(parseGuestVisiblePayload({ visible: false })).toEqual({ visible: false });
     expect(parseRaiseCeilingPayload({ tokens: 8000 })).toEqual({ tokens: 8000 });
     expect(parseConfigSetPayload({ profile: 'fast', apiKey: 'sk-x' })?.apiKey).toBe('sk-x');
+  });
+
+  it('parses voice start/edit and PCM frames', () => {
+    expect(parseVoiceStartPayload({ mode: 'hold' })).toEqual({ mode: 'hold' });
+    expect(parseVoiceStartPayload({ mode: 'continuous' })).toEqual({ mode: 'continuous' });
+    expect(parseVoiceStartPayload({ mode: 'shout' })).toBeUndefined();
+    expect(parseVoiceEditPayload({ eventId: 'evt_000010', text: 'ok' })).toEqual({
+      eventId: 'evt_000010',
+      text: 'ok'
+    });
+    const frame = asPcmFrame(new Int16Array([1, 2, 3]).buffer);
+    expect(frame?.length).toBe(6);
+    expect(asPcmFrame('nope')).toBeUndefined();
   });
 });
 

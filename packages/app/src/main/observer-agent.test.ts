@@ -522,4 +522,68 @@ describe('observer agent', () => {
     expect(raised.ceiling).toBeGreaterThan(100);
     agent.dispose();
   });
+
+  it('paints voice.final locally with correlation and does not enqueue enrichment', () => {
+    const chat: ChatMessagePayload[] = [];
+    const enriched: ChatEnrichedPayload[] = [];
+    const agent = new ObserverAgent(
+      {
+        emitChat: (message) => {
+          chat.push(message);
+        },
+        emitEnriched: (payload) => {
+          enriched.push(payload);
+        },
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway: new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: {
+              provider: 'anthropic',
+              model: 'claude-haiku-4-5-20251001',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            },
+            smart: {
+              provider: 'anthropic',
+              model: 'x',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            }
+          })
+        }),
+        budget: new FastTokenBudget({ ceiling: 10_000 }),
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001'
+      }
+    );
+    agent.onRawEvent({
+      schemaVersion: 1,
+      id: 'evt_000010',
+      sessionId: 'ses_test',
+      ts: 10,
+      kind: 'voice.final',
+      narration: {
+        mode: 'template',
+        text: "Tu as dicté : « Je vais cliquer sur Démarrer » (avant l'action)"
+      },
+      voice: {
+        text: 'Je vais cliquer sur Démarrer',
+        relation: 'before',
+        correlatedStepIndex: 1,
+        audioRef: null
+      }
+    });
+    expect(chat[0]?.kind).toBe('voice.final');
+    expect(chat[0]?.text).toContain('Je vais cliquer sur Démarrer');
+    expect(chat[0]?.technical).toContain('"relation": "before"');
+    expect(enriched).toHaveLength(0);
+    agent.dispose();
+  });
 });

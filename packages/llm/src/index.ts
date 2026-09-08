@@ -52,7 +52,7 @@ export {
   secretLikeTokens,
   sensitiveQueryValues
 } from './expurgate.ts';
-export type { GabaritInput, GabaritTarget, GabaritValue } from './gabarits.ts';
+export type { GabaritInput, GabaritTarget, GabaritValue, GabaritVoice } from './gabarits.ts';
 export { elementLabel, gabaritText, isEnrichableKind, quotedLabel } from './gabarits.ts';
 export type { NarrationItem, NarrationResponse } from './narration.ts';
 export {

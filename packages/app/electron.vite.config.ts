@@ -20,10 +20,18 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@spyglass/probe', '@spyglass/contracts', '@spyglass/llm']
+        exclude: ['@spyglass/probe', '@spyglass/contracts', '@spyglass/llm', '@spyglass/stt']
       }),
       copyGuestResources()
-    ]
+    ],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          'stt-sidecar': resolve('src/main/stt-sidecar.ts')
+        }
+      }
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

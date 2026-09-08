@@ -10,6 +10,7 @@ import type {
   UsagePayload
 } from '../../shared/ipc.ts';
 import { DEFAULT_SPLIT_RATIO } from '../../shared/ipc.ts';
+import { attachVoiceCapture } from './voice-capture.ts';
 
 const CHAT_MIN_PX = 300;
 const GUTTER_PX = 8;
@@ -63,6 +64,20 @@ function formatObservations(result: StagehandObserveResponse): string {
   return `observe ok (${result.model ?? 'stub'})\n${lines.join('\n')}`;
 }
 
+function relationFromMessage(message: ChatMessagePayload): string | undefined {
+  if (!message.kind.startsWith('voice.')) {
+    return undefined;
+  }
+  const match = /\((avant l'action|après l'action)\)/u.exec(message.text);
+  if (match?.[1] === "avant l'action") {
+    return 'before';
+  }
+  if (match?.[1] === "après l'action") {
+    return 'after';
+  }
+  return undefined;
+}
+
 function clock(ts: number): string {
   const date = new Date(ts);
   return date.toLocaleTimeString('fr-FR', { hour12: false });
@@ -95,6 +110,15 @@ function renderChatMessage(
     const step = document.createElement('span');
     step.textContent = `étape ${String(message.stepIndex).padStart(2, '0')}`;
     meta.append(step);
+  }
+  const relation = relationFromMessage(message);
+  if (relation !== undefined) {
+    item.dataset.relation = relation;
+    const rel = document.createElement('span');
+    rel.className = 'voice-relation';
+    rel.textContent =
+      relation === 'before' ? 'avant' : relation === 'after' ? 'après' : 'hors fenêtre';
+    meta.append(rel);
   }
   const pill = document.createElement('span');
   pill.className = 'mode-pill';
@@ -136,6 +160,20 @@ function renderChatMessage(
       void api.session.retract(message.eventId);
     });
     item.append(retract);
+  }
+
+  if (message.kind === 'voice.final') {
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'retract';
+    edit.textContent = 'Edit';
+    edit.addEventListener('click', () => {
+      const next = window.prompt('Corriger la dictée', message.text);
+      if (next !== null && next.trim().length > 0) {
+        void api.voice.edit(message.eventId, next.trim());
+      }
+    });
+    item.append(edit);
   }
 
   if (message.actions !== undefined) {
@@ -272,6 +310,10 @@ const recordBtn = requireEl<HTMLButtonElement>('record-btn');
 const replayActBtn = requireEl<HTMLButtonElement>('replay-act');
 const recPill = requireEl<HTMLElement>('rec-pill');
 const log = requireEl<HTMLOListElement>('log');
+const micBtn = requireEl<HTMLButtonElement>('mic-btn');
+const voiceModeBtn = requireEl<HTMLButtonElement>('voice-mode');
+const voiceLive = requireEl<HTMLElement>('voice-live');
+const micLevel = requireEl<HTMLElement>('mic-level');
 const tabBrowser = requireEl<HTMLButtonElement>('tab-browser');
 const tabSettings = requireEl<HTMLButtonElement>('tab-settings');
 const settingsPanel = requireEl<HTMLElement>('settings-panel');
@@ -413,6 +455,57 @@ if (api !== undefined) {
 
   void loadSettings(api);
 }
+
+const voice =
+  api === undefined
+    ? undefined
+    : attachVoiceCapture(api, {
+        micButton: micBtn,
+        modeButton: voiceModeBtn,
+        liveEl: voiceLive,
+        levelEl: micLevel
+      });
+
+micBtn.addEventListener('pointerdown', (event) => {
+  if (voice === undefined) {
+    return;
+  }
+  if (voice.mode() === 'continuous') {
+    return;
+  }
+  event.preventDefault();
+  void voice.startHold();
+});
+
+micBtn.addEventListener('pointerup', () => {
+  if (voice === undefined || voice.mode() === 'continuous') {
+    return;
+  }
+  void voice.endHold();
+});
+
+micBtn.addEventListener('pointerleave', () => {
+  if (voice === undefined || voice.mode() === 'continuous') {
+    return;
+  }
+  void voice.endHold();
+});
+
+micBtn.addEventListener('click', () => {
+  if (voice === undefined || voice.mode() !== 'continuous') {
+    return;
+  }
+  void voice.toggleContinuous();
+});
+
+voiceModeBtn.addEventListener('click', () => {
+  if (voice === undefined) {
+    return;
+  }
+  const next = voice.mode() === 'hold' ? 'continuous' : 'hold';
+  voice.setMode(next);
+  micBtn.dataset.mode = next;
+});
 
 urlForm.addEventListener('submit', (event) => {
   event.preventDefault();

@@ -2,7 +2,7 @@
   "name": "@spyglass/stt",
   "version": "0.0.0",
   "private": true,
-  "description": "Local STT sidecar scaffold. whisper.cpp packaging lands in a later lot (ADR-0013).",
+  "description": "Local whisper.cpp STT sidecar over localhost WebSocket (ADR-0004/0005/0013). Mock engine for CI.",
   "type": "module",
   "exports": {
     ".": {
@@ -15,7 +15,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sidecar": "node --experimental-strip-types src/cli.ts"
   },
   "devDependencies": {
     "typescript": "5.9.3",

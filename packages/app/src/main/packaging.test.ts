@@ -13,6 +13,7 @@ describe('packaged Observe', () => {
     };
     expect(pkg.dependencies?.['@browserbasehq/stagehand']).toBe('3.7.3');
     expect(pkg.dependencies?.zod).toBe('3.25.76');
+    expect(pkg.dependencies?.['@spyglass/stt']).toBe('workspace:*');
     expect(pkg.dependencies?.['playwright-core']).toBe('1.63.0');
     expect(pkg.devDependencies?.['@browserbasehq/stagehand']).toBeUndefined();
   });
@@ -22,6 +23,7 @@ describe('packaged Observe', () => {
     expect(yml).toContain('scripts/stagehand-observe.mjs');
     expect(yml).toContain('scripts/stagehand-act.mjs');
     expect(yml).toContain('scripts/cdp-guest.mjs');
+    expect(yml).toContain('vendor/whisper');
   });
 
   it('observe worker imports the shared guest matcher and fails closed on page match', () => {
@@ -114,5 +116,22 @@ describe('packaged Observe', () => {
     expect(src).not.toContain("= '*'");
     expect(portSrc).toContain('CDP_REMOTE_ALLOW_ORIGINS');
     expect(portSrc).not.toMatch(/remote-allow-origins',\s*'\*'/);
+  });
+
+  it('keeps STT sockets in main and defaults AUDIO_RETENTION to none', () => {
+    const renderer = readFileSync(join(appRoot, 'src/renderer/src/main.ts'), 'utf8');
+    const voiceUi = readFileSync(join(appRoot, 'src/renderer/src/voice-capture.ts'), 'utf8');
+    const preload = readFileSync(join(appRoot, 'src/preload/index.ts'), 'utf8');
+    const combined = `${renderer}\n${voiceUi}\n${preload}`;
+    expect(combined).not.toMatch(/new WebSocket/);
+    expect(combined).not.toMatch(/ws:\/\//);
+    expect(preload).toContain('IPC.voiceFrame');
+    const vite = readFileSync(join(appRoot, 'electron.vite.config.ts'), 'utf8');
+    expect(vite).toContain('stt-sidecar');
+    const orch = readFileSync(join(appRoot, 'src/main/session-orchestrator.ts'), 'utf8');
+    expect(orch).toContain('parseAudioRetention');
+    expect(orch).toContain('audioRef: null');
+    const bridge = readFileSync(join(appRoot, 'src/main/voice-bridge.ts'), 'utf8');
+    expect(bridge).toContain('ws://127.0.0.1');
   });
 });

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateRawEvent } from '@spyglass/contracts';
@@ -506,5 +506,75 @@ describe('net request URL redaction', () => {
       'https://api.example.test/v1/me'
     );
     expect(redactNetRequestUrl('not a url?token=abc#x')).toBe('not a url');
+  });
+});
+
+describe('lot 3 voice journal', () => {
+  function stubPane() {
+    return {
+      snapshot: () => ({
+        url: 'https://example.test/',
+        title: 'fixture',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
+      }),
+      webContents: {
+        mainFrame: {
+          executeJavaScript: async () => ({ url: 'https://example.test/' })
+        },
+        capturePage: async () => ({ toJPEG: () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })
+      }
+    } as never;
+  }
+
+  it('correlates dictation before and after a committed click and keeps audioRef null', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const before = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: Date.now() - 50,
+      endTs: Date.now() - 10,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(before?.kind).toBe('voice.final');
+    expect(before?.voice?.relation).toBe('before');
+    expect(before?.voice?.audioRef).toBeNull();
+    expect(validateRawEvent(before).valid).toBe(true);
+    await (
+      orch as unknown as { commitProbeEvent: (wire: Record<string, unknown>) => Promise<void> }
+    ).commitProbeEvent({
+      kind: 'dom.click',
+      ts: Date.now(),
+      target: {
+        tag: 'button',
+        framePath: ['main'],
+        shadowPath: [],
+        accessibleName: 'Start',
+        testId: 'step-1'
+      }
+    });
+    const after = await orch.recordVoiceFinal({
+      text: "J'ai validé l'étape",
+      startTs: Date.now(),
+      endTs: Date.now() + 10,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(after?.voice?.relation).toBe('after');
+    expect(after?.voice?.correlatedEventId).toMatch(/^evt_/);
+    await orch.stop();
+    const sessions = await readdir(root);
+    const sessionDir = join(root, sessions[0] ?? '');
+    const names = await readdir(sessionDir);
+    expect(names).not.toContain('audio');
+    const raw = await readFile(join(sessionDir, 'raw.jsonl'), 'utf8');
+    expect(raw).toContain('"relation":"before"');
+    expect(raw).toContain('"relation":"after"');
   });
 });

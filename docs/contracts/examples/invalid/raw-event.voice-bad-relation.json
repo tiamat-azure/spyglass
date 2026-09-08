@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000010",
+  "sessionId": "ses_20260908_voice",
+  "ts": 1757300001000,
+  "kind": "voice.final",
+  "voice": {
+    "text": "nope",
+    "relation": "beside",
+    "audioRef": null
+  }
+}

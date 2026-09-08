@@ -53,7 +53,22 @@
         "startTs": { "type": "integer" },
         "endTs": { "type": "integer" },
         "editedFrom": { "type": "string" },
-        "audioRef": { "type": ["string", "null"], "description": "null si AUDIO_RETENTION=none (F-49)" }
+        "audioRef": { "type": ["string", "null"], "description": "null si AUDIO_RETENTION=none (F-49)" },
+        "relation": {
+          "type": "string",
+          "enum": ["before", "after", "unanchored"],
+          "description": "Intention avant action, commentaire après, ou hors fenêtre (F-32)"
+        },
+        "correlatedEventId": {
+          "type": "string",
+          "pattern": "^evt_[0-9]{6,}$",
+          "description": "Événement DOM le plus proche lorsque déjà journalisé"
+        },
+        "correlatedStepIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "stepIndex de l'action voisine (prédit si l'action n'est pas encore écrite)"
+        }
       }
     },
     "retracts": { "type": "string", "description": "id de l'événement rétracté, pour kind=step.retracted (F-19)" },

@@ -1,10 +1,18 @@
 /**
  * C1: deny-by-default window.open and session permissions.
- * Guest F-04 replaces the window-open handler after WebContentsView creation.
+ * Chrome renderer may capture the microphone (Lot 3). Guest stays denied.
  */
 
 export function denyWindowOpenHandler(): { action: 'deny' } {
   return { action: 'deny' };
+}
+
+export function isMediaPermission(permission: string): boolean {
+  return permission === 'media' || permission === 'audioCapture' || permission === 'microphone';
+}
+
+export function allowPermission(options: { isChrome: boolean; permission: string }): boolean {
+  return options.isChrome && isMediaPermission(options.permission);
 }
 
 export function denyPermissionCheck(): boolean {

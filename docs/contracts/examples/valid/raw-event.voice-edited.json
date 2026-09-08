@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000013",
+  "sessionId": "ses_20260908_voice",
+  "ts": 1757300003000,
+  "kind": "voice.edited",
+  "pageId": "page_main",
+  "voice": {
+    "text": "Je vais cliquer sur Démarrer le scénario",
+    "startTs": 1757300000500,
+    "endTs": 1757300001000,
+    "editedFrom": "evt_000010",
+    "audioRef": null,
+    "relation": "before",
+    "correlatedStepIndex": 1
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Tu as corrigé la dictée : « Je vais cliquer sur Démarrer le scénario »"
+  }
+}
