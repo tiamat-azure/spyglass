@@ -27,6 +27,7 @@ export { runPath, screenshotFileName, traceFileName } from './paths.ts';
 export { createPlaywrightDriver, PlaywrightPageDriver } from './playwright-driver.ts';
 export type { Recoverer, RecoveryAttempt, RecoveryContext } from './recover.ts';
 export { LlmRecoverer, StaticRecoverer } from './recover.ts';
+export { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
 export { writeRunArtifacts } from './report.ts';
 export type { ReplayProgress } from './run.ts';
 export { newRunId, runScenario } from './run.ts';

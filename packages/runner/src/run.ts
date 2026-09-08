@@ -19,6 +19,7 @@ import {
 } from './options.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
+import { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
 import { writeRunArtifacts } from './report.ts';
 import { cloneDescriptor } from './scenario.ts';
 import { verifyStep } from './verify.ts';
@@ -313,7 +314,11 @@ async function recoverStep(input: {
       lastError = `recovery produced no patch (attempt ${String(attempt)})`;
       continue;
     }
-    const acted = await performAction(input.driver, recovered.descriptor);
+    const descriptor = sanitizeRecoveredDescriptor(
+      input.step.action.descriptor,
+      recovered.descriptor
+    );
+    const acted = await performAction(input.driver, descriptor);
     if (!acted.ok) {
       lastError = acted.error;
       continue;
@@ -322,7 +327,7 @@ async function recoverStep(input: {
     if (verify.ok) {
       return {
         ok: true,
-        descriptor: recovered.descriptor,
+        descriptor,
         diagnosis: recovered.diagnosis,
         confidence: recovered.confidence,
         attempts: attempt + 1

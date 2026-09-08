@@ -62,6 +62,7 @@ export {
 } from './expurgate.ts';
 export type { GabaritInput, GabaritTarget, GabaritValue, GabaritVoice } from './gabarits.ts';
 export { elementLabel, gabaritText, isEnrichableKind, quotedLabel } from './gabarits.ts';
+export { normalizeHttpOrHttpsUrl } from './http-url.ts';
 export type { NarrationItem, NarrationResponse } from './narration.ts';
 export {
   buildNarrationMessages,

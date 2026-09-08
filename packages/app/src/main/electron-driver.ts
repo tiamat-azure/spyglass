@@ -2,14 +2,22 @@ import { writeFile } from 'node:fs/promises';
 import type { PageDriver, PageSnapshot } from '@spyglass/runner';
 import type { WebContents } from 'electron';
 import { guestScript } from './electron-guest-script.ts';
+import { resolveDriverGotoUrl } from './nav-url.ts';
 
 export { guestScript } from './electron-guest-script.ts';
 
 export class ElectronPageDriver implements PageDriver {
-  constructor(private readonly contents: WebContents) {}
+  constructor(
+    private readonly contents: WebContents,
+    private readonly resourcesDir: string
+  ) {}
 
   async goto(url: string): Promise<void> {
-    await this.contents.loadURL(url);
+    const allowed = resolveDriverGotoUrl(this.contents.getURL(), url, this.resourcesDir);
+    if (allowed === undefined) {
+      throw new Error(`goto rejected disallowed URL`);
+    }
+    await this.contents.loadURL(allowed);
   }
 
   async url(): Promise<string> {

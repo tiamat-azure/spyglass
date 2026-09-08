@@ -112,4 +112,65 @@ describe('smart recovery prompt contract', () => {
     });
     expect(result.ok).toBe(true);
   });
+
+  it('strips LLM fill arguments and ungated navigate URLs (L5-ADV-01)', () => {
+    const fill = parseRecoverResponse(
+      JSON.stringify({
+        diagnosis: 'retry fill',
+        patch: {
+          scope: 'action.descriptor',
+          descriptor: {
+            type: 'fill',
+            selector: '#pw',
+            arguments: ['injected-password']
+          }
+        },
+        confidence: 1
+      })
+    );
+    expect('error' in fill).toBe(false);
+    if (!('error' in fill)) {
+      expect(fill.patch.descriptor.arguments).toBeUndefined();
+      expect(fill.patch.descriptor.selector).toBe('#pw');
+    }
+
+    const jsNav = parseRecoverResponse(
+      JSON.stringify({
+        diagnosis: 'go elsewhere',
+        patch: {
+          scope: 'action.descriptor',
+          descriptor: {
+            type: 'navigate',
+            selector: 'javascript:alert(1)',
+            arguments: ['javascript:alert(1)']
+          }
+        },
+        confidence: 1
+      })
+    );
+    expect('error' in jsNav).toBe(false);
+    if (!('error' in jsNav)) {
+      expect(jsNav.patch.descriptor.arguments).toBeUndefined();
+      expect(jsNav.patch.descriptor.selector).toBe('javascript:alert(1)');
+    }
+
+    const httpsNav = parseRecoverResponse(
+      JSON.stringify({
+        diagnosis: 'open next page',
+        patch: {
+          scope: 'action.descriptor',
+          descriptor: {
+            type: 'navigate',
+            selector: 'https://exemple.test/next',
+            arguments: ['https://exemple.test/next']
+          }
+        },
+        confidence: 1
+      })
+    );
+    expect('error' in httpsNav).toBe(false);
+    if (!('error' in httpsNav)) {
+      expect(httpsNav.patch.descriptor.arguments).toEqual(['https://exemple.test/next']);
+    }
+  });
 });

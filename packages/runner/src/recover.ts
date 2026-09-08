@@ -86,7 +86,8 @@ export class LlmRecoverer implements Recoverer {
       attempt: context.attempt,
       beforeDom: context.beforeDom,
       afterDom: context.afterDom,
-      screenshotIncluded: context.multimodal && context.screenshotPath !== undefined
+      // L5-ADV-02: text-DOM only — never claim a screenshot unless bytes are attached.
+      screenshotIncluded: false
     });
     if (!proposal.ok) {
       return observed;

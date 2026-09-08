@@ -4,6 +4,7 @@ import {
   LLM_PACKAGE,
   LLM_SMART_MODEL_DEFAULT,
   llmPackageName,
+  normalizeHttpOrHttpsUrl,
   pinSmartModel
 } from './index.ts';
 
@@ -17,5 +18,10 @@ describe('@spyglass/llm public API', () => {
     expect(LLM_SMART_MODEL_DEFAULT).toBe('claude-sonnet-4-5-20250929');
     expect(pinSmartModel('claude-sonnet-4-5')).toBe('claude-sonnet-4-5-20250929');
     expect(pinSmartModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
+  });
+
+  it('exports the chrome http(s) URL gate used by recovery sanitize', () => {
+    expect(normalizeHttpOrHttpsUrl('https://exemple.test')).toBe('https://exemple.test/');
+    expect(normalizeHttpOrHttpsUrl('javascript:alert(1)')).toBeUndefined();
   });
 });

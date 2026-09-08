@@ -914,7 +914,7 @@ void (async () => {
       });
       activeReplay = new ReplayEngine({
         session: () => requireSession(),
-        driver: () => new ElectronPageDriver(requirePane().webContents),
+        driver: () => new ElectronPageDriver(requirePane().webContents, requirePane().resourcesDir),
         gateway: () => runtime.gateway,
         model: () => runtime.settings.profileConfig('smart').model,
         observe: async () => {

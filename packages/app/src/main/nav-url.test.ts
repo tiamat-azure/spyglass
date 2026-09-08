@@ -7,7 +7,8 @@ import {
   isAllowedPopupRedirect,
   isAppResourceFileUrl,
   isInsideDir,
-  normalizeGotoUrl
+  normalizeGotoUrl,
+  resolveDriverGotoUrl
 } from './nav-url.ts';
 
 /** Platform-native guest resource dir + file: URLs (Windows drive letter, POSIX root). */
@@ -196,5 +197,41 @@ describe('isAllowedPopupRedirect', () => {
         resources
       )
     ).toBe(false);
+  });
+});
+
+describe('resolveDriverGotoUrl (L5-ADV-01 Electron goto)', () => {
+  it('allows http(s) with the same gate as nav.goto', () => {
+    expect(resolveDriverGotoUrl('', 'https://exemple.test/next', resources)).toBe(
+      'https://exemple.test/next'
+    );
+    expect(resolveDriverGotoUrl('https://exemple.test/', 'example.com/path', resources)).toBe(
+      'https://example.com/path'
+    );
+  });
+
+  it('rejects javascript:, credentials, and file: escapes', () => {
+    expect(
+      resolveDriverGotoUrl('https://exemple.test/', 'javascript:alert(1)', resources)
+    ).toBeUndefined();
+    expect(
+      resolveDriverGotoUrl('https://exemple.test/', 'https://user:pass@evil.example/', resources)
+    ).toBeUndefined();
+    expect(
+      resolveDriverGotoUrl(resourceFileUrl('start.html'), 'file:///tmp/secret.html', resources)
+    ).toBeUndefined();
+  });
+
+  it('allows in-app file: guest resources when the current guest already does', () => {
+    expect(
+      resolveDriverGotoUrl(
+        resourceFileUrl('start.html'),
+        resourceFileUrl('lot1-fixture.html'),
+        resources
+      )
+    ).toBe(resourceFileUrl('lot1-fixture.html'));
+    expect(
+      resolveDriverGotoUrl('https://exemple.test/', resourceFileUrl('lot1-fixture.html'), resources)
+    ).toBeUndefined();
   });
 });

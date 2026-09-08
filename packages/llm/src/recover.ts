@@ -7,6 +7,7 @@ import {
   secretLikeTokens,
   sensitiveQueryValues
 } from './expurgate.ts';
+import { normalizeHttpOrHttpsUrl } from './http-url.ts';
 
 export type RecoveryPromptInput = {
   scenario: Scenario;
@@ -194,11 +195,18 @@ function asReplayDescriptor(value: unknown): ReplayDescriptor | undefined {
   ) {
     descriptor.fallbackSelectors = record.fallbackSelectors;
   }
-  if (
-    Array.isArray(record.arguments) &&
-    record.arguments.every((item) => typeof item === 'string')
-  ) {
-    descriptor.arguments = record.arguments;
+  if (type === 'navigate') {
+    const candidate =
+      Array.isArray(record.arguments) &&
+      record.arguments.every((item) => typeof item === 'string') &&
+      typeof record.arguments[0] === 'string'
+        ? record.arguments[0]
+        : selector;
+    const gated = normalizeHttpOrHttpsUrl(candidate);
+    if (gated !== undefined) {
+      descriptor.arguments = [gated];
+      descriptor.selector = gated;
+    }
   }
   if (
     Array.isArray(record.framePath) &&

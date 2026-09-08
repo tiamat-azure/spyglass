@@ -410,7 +410,9 @@ export type ReplayStartRequest = {
   noAi?: boolean;
 };
 
-export type ReplayStartResponse = { ok: true; runId: string } | { ok: false; error: string };
+export type ReplayStartResponse =
+  | { ok: true; runId: string }
+  | { ok: false; error: string; runId?: string };
 
 export type ReplayProgressPayload = {
   runId: string;

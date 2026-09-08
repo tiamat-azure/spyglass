@@ -170,6 +170,30 @@ export function normalizeGotoUrl(input: string): string | undefined {
   }
 }
 
+/**
+ * Electron replay `goto`: same http(s) bar as chrome `nav.goto`, plus in-app
+ * `file:` guest resources when the current page already allows them (recorded
+ * startUrl fixtures). Never javascript:/data:/credentialed URLs.
+ */
+export function resolveDriverGotoUrl(
+  currentUrl: string,
+  requested: string,
+  resourcesDir: string
+): string | undefined {
+  const http = normalizeGotoUrl(requested);
+  if (http !== undefined) {
+    return http;
+  }
+  const trimmed = requested.trim();
+  if (!isFileUrl(trimmed)) {
+    return undefined;
+  }
+  if (isAllowedInViewNavigation(currentUrl, trimmed, resourcesDir)) {
+    return trimmed;
+  }
+  return undefined;
+}
+
 export function isAllowedGuestUrl(input: string): boolean {
   try {
     const url = new URL(input);

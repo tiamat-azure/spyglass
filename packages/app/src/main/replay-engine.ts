@@ -21,7 +21,9 @@ export type ReplayStartRequest = {
   noAi?: boolean;
 };
 
-export type ReplayStartResponse = { ok: true; runId: string } | { ok: false; error: string };
+export type ReplayStartResponse =
+  | { ok: true; runId: string }
+  | { ok: false; error: string; runId?: string };
 
 export type ReplayEngineDeps = {
   session: () => SessionOrchestrator;
@@ -88,6 +90,12 @@ export class ReplayEngine {
         ...(recoverer !== undefined ? { recoverer } : {}),
         onProgress: this.deps.onProgress
       });
+      if (result.exitCode !== 0) {
+        const failed = result.report.steps.find((step) => step.status === 'failed');
+        const error =
+          failed?.error?.trim() || `replay failed with exit code ${String(result.exitCode)}`;
+        return { ok: false, error, runId: result.report.runId };
+      }
       return { ok: true, runId: result.report.runId };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };

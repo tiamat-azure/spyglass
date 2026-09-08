@@ -56,7 +56,7 @@ F-59: in-app **Rejouer** in the embedded guest, step list + chat
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (**295 passed, 1 skipped**, 41
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (**319 passed, 1 skipped**, 44
 files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 (**15 passed**, Lots 0–5) on this branch. CI uses the mock LLM transport
 (no live keys).
@@ -103,7 +103,29 @@ files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 4. **Multimodal wire format.** F-61 detects `isMultimodal` and warns.
    Recovery context is still text-DOM JSON (`screenshotIncluded` flag).
    JPEG files are written under `runs/<id>/screenshots/` (F-56) but not
-   attached as binary image blocks on the smart request.
+   attached as binary image blocks on the smart request. `screenshotIncluded`
+   stays `false` unless those bytes are actually on the transport (L5-ADV-02).
+
+## Adversarial pass 1 (auto-fixes on `cfe8b33`)
+
+Applied on tip `cfe8b33`. I-05 and Lot 4 R3c remain locked. L5-ADV-05
+(observe vs LLM precedence) is **not** changed.
+
+- **L5-ADV-01.** Recovered actions are sanitized before `performAction`:
+  type is pinned to the failed step; fill/select/check/press/wait/scroll
+  arguments stay recorded values; navigate URLs must pass
+  `normalizeHttpOrHttpsUrl` (same http(s)-only gate as chrome `nav.goto`).
+  `parseRecoverResponse` no longer copies unconstrained LLM arguments.
+  `ElectronPageDriver.goto` uses `resolveDriverGotoUrl` — never raw
+  `loadURL`. Recorded in-app `file:` start pages still load when the
+  current guest already allows that resource.
+- **L5-ADV-02.** `LlmRecoverer` always sends `screenshotIncluded: false`.
+  Recovery stays text-DOM JSON; JPEGs remain on disk only.
+- **L5-ADV-03.** `urlMatches` is glob-only. Empty / `*` / `**` /
+  whitespace-only wildcards are rejected; substring `includes('')` is gone.
+- **L5-ADV-04.** In-app `ReplayEngine.start` returns `{ ok: false, error, runId }`
+  when `exitCode !== 0`, so the renderer cannot show a successful start for
+  a failed run.
 
 ## Residuals
 

@@ -9,6 +9,16 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${withSingles}$`);
 }
 
+/** `*`, `**`, empty, or any pattern that is only wildcards. */
+export function isDegenerateUrlPattern(expected: string): boolean {
+  const trimmed = expected.trim();
+  if (trimmed.length === 0) {
+    return true;
+  }
+  const stripped = trimmed.replaceAll('*', '').replaceAll(/\s/g, '');
+  return stripped.length === 0;
+}
+
 export async function verifyStep(
   driver: PageDriver,
   step: RefinedStep,
@@ -16,6 +26,9 @@ export async function verifyStep(
 ): Promise<VerifyResult> {
   const expected = step.verification.expected;
   const type = step.verification.type;
+  if (type === 'urlMatches' && isDegenerateUrlPattern(expected)) {
+    return { ok: false, error: `urlMatches rejected degenerate pattern: ${expected}` };
+  }
   const deadline = Date.now() + Math.max(1, timeoutMs);
   let lastError = 'verification failed';
   while (Date.now() <= deadline) {
@@ -37,7 +50,7 @@ async function checkOnce(
   switch (type) {
     case 'urlMatches': {
       const url = await driver.url();
-      if (globToRegExp(expected).test(url) || url.includes(expected.replaceAll('*', ''))) {
+      if (globToRegExp(expected).test(url)) {
         return { ok: true };
       }
       return { ok: false, error: `urlMatches expected ${expected}, got ${url}` };

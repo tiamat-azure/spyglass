@@ -58,6 +58,10 @@ export class BrowserPane {
     return this.view.webContents;
   }
 
+  get resourcesDir(): string {
+    return this.guestResourcesDir();
+  }
+
   setBounds(bounds: BrowserBounds): void {
     this.view.setBounds(bounds);
   }
