@@ -47,6 +47,31 @@ describe('@spyglass/stt', () => {
     expect(after.correlatedStepIndex).toBe(1);
   });
 
+  it('C2b: speech that starts before a capture is before, even if it ends after', () => {
+    const overlap = correlateVoiceSegment(
+      1000,
+      4000,
+      { eventId: 'evt_000011', stepIndex: 1, ts: 2500 },
+      1,
+      8000
+    );
+    expect(overlap.relation).toBe('before');
+    expect(overlap.correlatedEventId).toBe('evt_000011');
+    expect(overlap.correlatedStepIndex).toBe(1);
+  });
+
+  it('C2b: speech that starts after a capture within the margin is after', () => {
+    const after = correlateVoiceSegment(
+      3100,
+      4000,
+      { eventId: 'evt_000011', stepIndex: 1, ts: 3000 },
+      1,
+      8000
+    );
+    expect(after.relation).toBe('after');
+    expect(after.correlatedEventId).toBe('evt_000011');
+  });
+
   it('treats a distant previous action as a new before-next intention', () => {
     const next = correlateVoiceSegment(
       20_000,

@@ -96,6 +96,12 @@ async function closeElectron(
 }
 
 async function holdMic(chrome: Page, ms: number): Promise<void> {
+  await beginHoldMic(chrome);
+  await chrome.waitForTimeout(ms);
+  await endHoldMic(chrome);
+}
+
+async function beginHoldMic(chrome: Page): Promise<void> {
   const mic = chrome.locator('#mic-btn');
   await mic.scrollIntoViewIfNeeded();
   const box = await mic.boundingBox();
@@ -105,7 +111,9 @@ async function holdMic(chrome: Page, ms: number): Promise<void> {
   await chrome.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await chrome.mouse.down();
   await expect(chrome.locator('#voice-live')).toBeVisible({ timeout: 15_000 });
-  await chrome.waitForTimeout(ms);
+}
+
+async function endHoldMic(chrome: Page): Promise<void> {
   await chrome.mouse.up();
   await expect(chrome.locator('#voice-live')).toHaveAttribute('data-kind', 'voice.final', {
     timeout: 10_000
@@ -253,6 +261,53 @@ test.describe('Lot 3 voice', () => {
       await expect(chrome.locator('#mic-btn')).toHaveAttribute('aria-pressed', 'false');
       await chrome.locator('#record-btn').click();
       await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
+    } finally {
+      await closeElectron(electronApp);
+    }
+  });
+
+  test('C2b: utterance that starts before a click is before, not after', async () => {
+    test.setTimeout(120_000);
+    const env = await launchEnv();
+    const electronApp = await electron.launch({
+      cwd: appDir,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
+      timeout: 45_000,
+      env
+    });
+    try {
+      const chrome = await chromeWindow(electronApp);
+      const guest = await guestWindow(electronApp);
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i, { timeout: 15_000 });
+      await beginHoldMic(chrome);
+      await chrome.waitForTimeout(400);
+      await guest.locator('#step-1').evaluate((el) => {
+        (el as HTMLElement).click();
+      });
+      await endHoldMic(chrome);
+      await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(1, {
+        timeout: 10_000
+      });
+      await expect(
+        chrome.locator('#log li.chat-msg[data-kind="voice.final"]').first()
+      ).toHaveAttribute('data-relation', 'before');
+      await expect(chrome.locator('#log')).toContainText(/avant l'action/i);
+      await chrome.screenshot({ path: join(shotDir, 'c2b-before-overlap.png') });
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
+      const sessionsDir = env.SESSIONS_DIR;
+      if (sessionsDir === undefined) {
+        throw new Error('SESSIONS_DIR missing');
+      }
+      const sessionDir = await latestSessionDir(sessionsDir);
+      const raw = await readFile(join(sessionDir, 'raw.jsonl'), 'utf8');
+      const voiceLines = raw.split('\n').filter((line) => line.includes('"kind":"voice.final"'));
+      expect(voiceLines.length).toBe(1);
+      expect(voiceLines[0]).toContain('"relation":"before"');
+      expect(voiceLines[0]).toContain('"correlatedEventId"');
+      expect(voiceLines[0]).not.toContain('"relation":"after"');
     } finally {
       await closeElectron(electronApp);
     }

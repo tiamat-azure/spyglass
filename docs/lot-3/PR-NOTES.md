@@ -31,9 +31,10 @@ not open STT sockets.
 Streaming STT paints **partials** in a live strip, then consolidates a
 **final** segment in the chat. Each `voice.final` line in `raw.jsonl` carries
 timestamps plus `voice.relation` `before` | `after` | `unanchored` and, when
-known, `correlatedEventId` / `correlatedStepIndex` (F-32). Append-only: a
-dictation *before* an action predicts the next `stepIndex`; a dictation *after*
-points at the last committed DOM step.
+known, `correlatedEventId` / `correlatedStepIndex` (F-32, **C2b**). Append-only:
+an utterance that **starts before** the next stable capture is `before` (including
+overlap with a click). Commentary that **starts after** a capture within the
+margin is `after`. A distant previous capture becomes before-next.
 
 Local engine (ADR-0004 / ADR-0013): **whisper.cpp** `small` q5_1, invoked as a
 child process with **no network**. CI and this environment use the **mock**
@@ -60,8 +61,8 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (197 passed, 1 skipped),
-`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**10 passed**, Lots 0–3) on
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (200 passed, 1 skipped),
+`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**11 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
 stub binary** unit test that writes a `.txt` transcript with no HTTP.
@@ -86,7 +87,15 @@ stub binary** unit test that writes a `.txt` transcript with no HTTP.
 `gates continuous utterances` and `continuous energy VAD starts and ends
 utterances from RMS`; e2e `continuous energy VAD starts and ends utterances`
 listens in VAD mode and gets two `voice.final` rows from speech/silence
-energy cycles without hold-to-talk. **C2** correlation policy is unchanged.
+energy cycles without hold-to-talk.
+
+**C2b (captain):** `correlateVoiceSegment` prefers `before` when `startTs` is
+before the last stable capture (overlap is not `after`). `recordVoiceFinal`
+still flushes a pending click first so that capture is visible, then applies
+C2b. Unit tests cover overlap → before and start-after → after; e2e
+`C2b: utterance that starts before a click is before, not after` holds the
+mic, clicks `#step-1`, then releases. Sequential hold → click → hold still
+yields before then after.
 
 ### Residuals / not in this lot
 
@@ -96,8 +105,6 @@ energy cycles without hold-to-talk. **C2** correlation policy is unchanged.
 - F-36 reserved voice commands and F-38/F-39 model upgrade are Lot 3+ later
   (P2). Segment **edit** (F-33 P1) is wired (`spyglass:voice:edit` →
   `voice.edited`).
-- **C2** correlation policy (8s after-preferring / pending-click flush) is
-  still pending captain — not changed in V1a.
 - Live French quality of whisper `small` was not baked off here (no GPU, no
   weights). ADR-0017 remains the upgrade path.
 
@@ -123,7 +130,7 @@ energy cycles without hold-to-talk. **C2** correlation policy is unchanged.
 | [`screenshots/hold-vad-ui.png`](screenshots/hold-vad-ui.png) | Mic + Hold/VAD toggle in the composer |
 | [`screenshots/partial-to-final.png`](screenshots/partial-to-final.png) | Live transcript + chat gabarit after hold-to-talk |
 | [`screenshots/before-after-correlation.png`](screenshots/before-after-correlation.png) | Chat: dictation before, click, dictation after |
-| [`screenshots/continuous-vad.png`](screenshots/continuous-vad.png) | Continuous VAD: two energy-segmented finals without hold |
+| [`screenshots/c2b-before-overlap.png`](screenshots/c2b-before-overlap.png) | Hold overlapping a click → `before`, not `after` |
 
 Absolute paths in this checkout:
 
@@ -132,6 +139,7 @@ Absolute paths in this checkout:
 - `/workspace/docs/lot-3/screenshots/before-after-correlation.png`
 - `/workspace/docs/lot-3/screenshots/offline-dictation.png`
 - `/workspace/docs/lot-3/screenshots/continuous-vad.png`
+- `/workspace/docs/lot-3/screenshots/c2b-before-overlap.png`
 
 Parent remounts copies to
 `/home/box/agent-data/grok-ship/reports/spyglass-screenshots/FM-spyglass-lot-3-20260908/`

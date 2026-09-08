@@ -2,46 +2,42 @@ import type { DomAnchor, VoiceCorrelation } from './protocol.ts';
 import { VOICE_CORRELATION_MS_DEFAULT } from './protocol.ts';
 
 /**
- * Bind a finalized voice segment to the nearest DOM capture step (F-32).
- * raw.jsonl is append-only, so a "before" dictation predicts the next stepIndex
- * when the action has not been written yet.
+ * Bind a finalized voice segment to a neighbouring DOM capture step (F-32, C2b).
+ *
+ * raw.jsonl is append-only. Prefer **before** / before-next when the utterance
+ * *starts before* the next stable capture step. Overlap (speech continues past
+ * the click) is not classified as after — that was the 8s after-preferring
+ * residual.
+ *
+ * - No capture yet → before-next (predicted `correlatedStepIndex`).
+ * - `startTs < lastDom.ts` → speech began before this capture → before it.
+ * - `startTs >= lastDom.ts` within the margin → after (commentary).
+ * - `startTs >= lastDom.ts` beyond the margin → before-next (new intention).
  */
 export function correlateVoiceSegment(
   startTs: number,
-  endTs: number,
+  _endTs: number,
   lastDom: DomAnchor | undefined,
   lastStepIndex: number,
   marginMs: number = VOICE_CORRELATION_MS_DEFAULT
 ): VoiceCorrelation {
-  const nextStep = lastStepIndex + 1;
+  const nextStep = Math.max(1, lastStepIndex + 1);
   if (lastDom === undefined) {
-    return { relation: 'before', correlatedStepIndex: Math.max(1, nextStep) };
+    return { relation: 'before', correlatedStepIndex: nextStep };
   }
-  const afterDelta = startTs - lastDom.ts;
-  const beforeDelta = lastDom.ts - endTs;
-  if (afterDelta >= 0 && afterDelta <= marginMs) {
-    return {
-      relation: 'after',
-      correlatedEventId: lastDom.eventId,
-      correlatedStepIndex: lastDom.stepIndex
-    };
-  }
-  if (beforeDelta >= 0 && beforeDelta <= marginMs) {
+  if (startTs < lastDom.ts) {
     return {
       relation: 'before',
       correlatedEventId: lastDom.eventId,
       correlatedStepIndex: lastDom.stepIndex
     };
   }
-  if (startTs <= lastDom.ts && endTs >= lastDom.ts) {
+  if (startTs - lastDom.ts <= marginMs) {
     return {
       relation: 'after',
       correlatedEventId: lastDom.eventId,
       correlatedStepIndex: lastDom.stepIndex
     };
   }
-  if (afterDelta > marginMs) {
-    return { relation: 'before', correlatedStepIndex: Math.max(1, nextStep) };
-  }
-  return { relation: 'unanchored' };
+  return { relation: 'before', correlatedStepIndex: nextStep };
 }

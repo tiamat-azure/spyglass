@@ -131,6 +131,9 @@ describe('packaged Observe', () => {
     const orch = readFileSync(join(appRoot, 'src/main/session-orchestrator.ts'), 'utf8');
     expect(orch).toContain('parseAudioRetention');
     expect(orch).toContain('audioRef: null');
+    expect(orch).toContain('startTs < lastCapture.ts');
+    const correlate = readFileSync(join(appRoot, '../../packages/stt/src/correlate.ts'), 'utf8');
+    expect(correlate).toContain('startTs < lastDom.ts');
     const bridge = readFileSync(join(appRoot, 'src/main/voice-bridge.ts'), 'utf8');
     expect(bridge).toContain('ws://127.0.0.1');
     expect(bridge).toContain('gateVadUtterance');

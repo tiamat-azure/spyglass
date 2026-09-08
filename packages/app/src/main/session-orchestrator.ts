@@ -426,6 +426,9 @@ export class SessionOrchestrator {
         return undefined;
       }
       await this.flushPendingClick();
+      // C2b: flush first so a click that landed after speech start is the next
+      // stable capture. correlateVoiceSegment then prefers `before` when
+      // startTs < lastCapture.ts (not after-on-overlap).
       const id = this.nextId();
       const correlation = correlateVoiceSegment(
         input.startTs,

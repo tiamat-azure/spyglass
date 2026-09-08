@@ -579,4 +579,39 @@ describe('lot 3 voice journal', () => {
     expect(raw).toContain('"relation":"before"');
     expect(raw).toContain('"relation":"after"');
   });
+
+  it('C2b: voice that starts before a flushed click is before not after', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-c2b-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const tClick = Date.now();
+    await (
+      orch as unknown as { commitProbeEvent: (wire: Record<string, unknown>) => Promise<void> }
+    ).commitProbeEvent({
+      kind: 'dom.click',
+      ts: tClick,
+      target: {
+        tag: 'button',
+        framePath: ['main'],
+        shadowPath: [],
+        accessibleName: 'Start',
+        testId: 'step-1'
+      }
+    });
+    const overlapped = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: tClick - 80,
+      endTs: tClick + 40,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(overlapped?.voice?.relation).toBe('before');
+    expect(overlapped?.voice?.correlatedEventId).toMatch(/^evt_/);
+    expect(overlapped?.voice?.correlatedStepIndex).toBe(1);
+    await orch.stop();
+  });
 });
