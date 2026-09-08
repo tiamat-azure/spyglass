@@ -143,7 +143,7 @@ test.describe('Lot 5 runner', () => {
       await chrome.locator('#replay-panel').screenshot({
         path: join(shotDir, 'deterministic-replay-success.png')
       });
-      await chrome.locator('#log').screenshot({
+      await chrome.locator('#chat').screenshot({
         path: join(shotDir, 'replay-chat-follow.png')
       });
 
