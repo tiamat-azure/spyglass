@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { canFinalize, createMockTransport, LlmGateway, refineFromRaw } from '@spyglass/llm';
 import { describe, expect, it } from 'vitest';
-import { RefineEngine } from './refine-engine.ts';
+import { applyCorrelatedObserveEnrichment, RefineEngine } from './refine-engine.ts';
 import type { RecorderState, SessionOrchestrator } from './session-orchestrator.ts';
 
 type FakeSession = {
@@ -77,6 +77,42 @@ function fill(id: string, ts: number): RawEvent {
     },
     value: { masked: false, text: 'Ada' },
     page: { url: 'https://app.example.test/form', title: 'Form' }
+  };
+}
+
+function cssClick(id: string, ts: number, selector: string): RawEvent {
+  return {
+    schemaVersion: 1,
+    id,
+    sessionId: 'ses_lot4',
+    ts,
+    kind: 'dom.click',
+    target: { tag: 'div', framePath: ['main'], shadowPath: [] },
+    action: { type: 'click', selector, selectorStrategy: 'css' },
+    page: { url: 'https://app.example.test', title: 'X' }
+  };
+}
+
+function weakCssStep(index: number, selector: string, intent: string): RefinedStep {
+  return {
+    index,
+    intent,
+    action: {
+      type: 'click',
+      descriptor: {
+        type: 'click',
+        selector,
+        selectorStrategy: 'css'
+      }
+    },
+    verification: {
+      type: 'elementVisible',
+      expected: selector,
+      strength: 'weak',
+      weakReason: 'ambiguous-target',
+      confirmedByUser: false
+    },
+    sourceEvents: [`evt_${String(index + 1).padStart(6, '0')}`]
   };
 }
 
@@ -294,6 +330,9 @@ describe('RefineEngine', () => {
     if (result.ok) {
       expect(result.revision.observeEnrichment).toBe(true);
     }
+    expect(
+      observed.currentRevision()?.steps[0]?.action.descriptor.fallbackSelectors ?? []
+    ).not.toContain('#repaired');
 
     observeCalls = 0;
     const good = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
@@ -427,5 +466,82 @@ describe('RefineEngine', () => {
     }
     expect(engine.currentRevision()).toBeUndefined();
     expect(session.state).toBe('sealed');
+  });
+
+  it('correlates observe() by selector and does not poison a later insufficient step (LOT4-R3c)', async () => {
+    const first = weakCssStep(0, '#first-click', 'Je clique sur first');
+    const later = weakCssStep(1, '#later-weak', 'Je clique sur later');
+    const session = await makeSession([
+      cssClick('evt_000001', 1, '#first-click'),
+      cssClick('evt_000002', 2, '#later-weak')
+    ]);
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps: [first, later],
+        source: 'smart',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false,
+      observe: async () => ({
+        ok: true,
+        observations: [
+          { selector: '#poison-other', description: 'unrelated widget' },
+          { selector: '#later-weak', description: 'later control' },
+          { selector: '#first-click', description: 'first control' }
+        ]
+      })
+    });
+    const result = await engine.run('balanced', false);
+    expect(result.ok).toBe(true);
+    const file = engine.currentRevision();
+    expect(file).toBeDefined();
+    const disk = JSON.parse(await readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')) as {
+      steps: RefinedStep[];
+    };
+    expect(JSON.stringify(disk)).not.toContain('#poison-other');
+    expect(disk.steps[0]?.action.descriptor.selector).toBe('#first-click');
+    expect(disk.steps[0]?.action.descriptor.fallbackSelectors).toEqual(['#first-click']);
+    expect(disk.steps[1]?.action.descriptor.selector).toBe('#later-weak');
+    expect(disk.steps[1]?.action.descriptor.fallbackSelectors).toEqual(['#later-weak']);
+    expect(disk.steps[0]?.action.descriptor.fallbackSelectors).not.toEqual(
+      disk.steps[1]?.action.descriptor.fallbackSelectors
+    );
+  });
+});
+
+describe('applyCorrelatedObserveEnrichment (LOT4-R3c)', () => {
+  it('matches reverse-order observations and skips unmatched leftover selectors', () => {
+    const first = weakCssStep(0, '#first-click', 'Je clique sur first');
+    const later = weakCssStep(1, '#later-weak', 'Je clique sur later');
+    const applied = applyCorrelatedObserveEnrichment(
+      [first, later],
+      [
+        { selector: '#poison-other', description: 'noise' },
+        { selector: '#later-weak' },
+        { selector: '#first-click' }
+      ]
+    );
+    expect(applied).toBe(2);
+    expect(first.action.descriptor.fallbackSelectors).toEqual(['#first-click']);
+    expect(later.action.descriptor.fallbackSelectors).toEqual(['#later-weak']);
+    expect(JSON.stringify([first, later])).not.toContain('#poison-other');
+  });
+
+  it('leaves a step unenriched when no confident target match exists', () => {
+    const empty = weakCssStep(0, '', 'Je clique sur inconnu');
+    const later = weakCssStep(1, '#later-weak', 'Je clique sur later');
+    const applied = applyCorrelatedObserveEnrichment(
+      [empty, later],
+      [{ selector: '#poison-other', description: 'noise' }, { selector: '#later-weak' }]
+    );
+    expect(applied).toBe(1);
+    expect(empty.action.descriptor.fallbackSelectors).toBeUndefined();
+    expect(later.action.descriptor.fallbackSelectors).toEqual(['#later-weak']);
   });
 });

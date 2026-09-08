@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (258 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (261 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -111,6 +111,10 @@ on this branch. CI uses the mock LLM transport (no live keys).
   `this.current` for a foreign sessionId.
 - **LOT4-R4:** engine F-42 gate uses `allowedRefineIds` (F-19 retracted
   excluded), not every raw id.
+- **LOT4-R3c:** `observe()` enrichment is target-correlated (selector / stable
+  id / testid / description). No array-index assignment. Unmatched steps
+  stay unenriched; a wrong Stagehand selector is never written to
+  `fallbackSelectors` / `rev-N.json`.
 
 ## Screenshots (committed)
 
