@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (230 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (232 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**12 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
@@ -176,7 +176,7 @@ Applied on tip `84d5566`. V1a energy VAD and C2b `before`-on-overlap are unchang
 
 ### Adversarial pass 8 (auto-fixes)
 
-Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+Applied on tip `a12c0f9`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 1. **P8-N1 medium — Stop-failure unlocks capture.** If `session.stop` fails before a durable `record.stop` (`!durableStop` → state back to `recording` + emitState), `onStopRolledBack` / `onState(recording)` / IPC catch call `resumeCapture()` so the `beginStop()` latch does not stick. UI already re-arms via `setArmed(recording===true)`. Happy-path Stop-flush still refuses a fresh `voice.start` (`ok:false`) while `stopping` is set.
 
