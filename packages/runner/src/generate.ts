@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Scenario } from '@spyglass/contracts';
 import { RUNNER_PACKAGE } from './package-name.ts';
@@ -59,7 +59,11 @@ export async function writeGeneratedPackage(
       generatedAt: input.scenario.generatedAt ?? new Date().toISOString()
     };
     await writeFile(scenarioJson, `${JSON.stringify(scenario, null, 2)}\n`, 'utf8');
-    await writeFile(scenarioTs, generatedScenarioTsSource(), 'utf8');
+    await writeFile(scenarioTs, generatedScenarioTsSource(), {
+      encoding: 'utf8',
+      mode: 0o755
+    });
+    await chmod(scenarioTs, 0o755);
     await writeFile(readme, generatedReadme(scenario.sessionId), 'utf8');
     await writeFile(
       packageJson,
@@ -173,15 +177,23 @@ import { fileURLToPath } from 'node:url';
 import { runScenario } from '${RUNNER_PACKAGE}';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
-const result = await runScenario(scenario, {
-  headless: process.argv.includes('--headless'),
-  argv: process.argv.slice(2),
-  env: process.env,
-  scriptDir: here
-});
-console.log(JSON.stringify({ exitCode: result.exitCode, runDir: result.runDir ?? '' }));
-process.exit(result.exitCode);
+try {
+  const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
+  const result = await runScenario(scenario, {
+    headless: process.argv.includes('--headless'),
+    argv: process.argv.slice(2),
+    env: process.env,
+    scriptDir: here
+  });
+  process.stdout.write(
+    JSON.stringify({ exitCode: result.exitCode, runDir: result.runDir ?? '' }) + '\\n'
+  );
+  process.exit(result.exitCode);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(message + '\\n');
+  process.exit(1);
+}
 `;
 }
 
@@ -244,7 +256,8 @@ Windows : même commande. v1 exporte le runner en TypeScript ; Node 24.20.0
 requiert \`--experimental-transform-types\` (propriétés de constructeur).
 \`pnpm start\` / \`pnpm headless\` passent déjà ce flag. Le shebang de
 \`scenario.ts\` est \`#!/usr/bin/env -S node --experimental-transform-types\`
-pour \`./scenario.ts\` (même flag).
+pour \`./scenario.ts\` (même flag). Le fichier est écrit en mode \`0755\`
+(Unix) pour que le shebang soit exécutable.
 
 ## Exécution — visible par défaut (F-45)
 

@@ -1,9 +1,10 @@
-import { access, mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
 import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
+import { runCli } from './cli.ts';
 import {
   generatedReadme,
   generatedScenarioTsSource,
@@ -15,10 +16,12 @@ import {
   writeGeneratedPackage
 } from './generate.ts';
 import { runGenerateCli } from './generate-cli.ts';
+import { runGeneratedScript } from './generated-run.ts';
 import { parseGeneratedArgv, parseRunnerArgv } from './options.ts';
 import { RUNNER_PACKAGE } from './package-name.ts';
 import { screenshotFileName, traceFileName } from './paths.ts';
 import { runScenario } from './run.ts';
+import { asScenario, loadScenarioFile } from './scenario.ts';
 
 function clickStep(): RefinedStep {
   return {
@@ -68,7 +71,7 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(ts).toMatch(/import \{ runScenario \} from '@spyglass\/runner'/);
     expect(ts).not.toContain('runGeneratedScript');
     expect(ts).toContain('scenario.json');
-    expect(ts).not.toMatch(/[\\]/);
+    expect(ts.replaceAll('\\n', '')).not.toMatch(/[\\]/);
     const readme = await readFile(paths.readme, 'utf8');
     expect(readme).toMatch(/mode d'emploi|Script généré/i);
     expect(readme).toContain('--headless');
@@ -383,5 +386,58 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
     expect(json.startUrl).toBe('https://captured.test/app');
     expect(json.startUrl).not.toBe('https://exemple.test/start');
+  });
+
+  it('generated scenario.ts catches runScenario failures and exits 1 (L6-026)', () => {
+    const source = generatedScenarioTsSource();
+    expect(source).toContain('try {');
+    expect(source).toContain('process.stderr.write');
+    expect(source).toContain('process.exit(1)');
+    expect(source).toContain("from '@spyglass/runner'");
+    expect(source).not.toContain('runGeneratedScript');
+  });
+
+  it('writes scenario.ts executable on Unix (L6-027)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-mode-'));
+    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+    if (process.platform === 'win32') {
+      return;
+    }
+    expect((await stat(paths.scenarioTs)).mode & 0o111).toBeGreaterThan(0);
+  });
+
+  it('does not use --base-url as startUrl fallback (L6-028)', async () => {
+    expect(() => asScenario({ sessionId: 'ses_x', steps: scenario().steps })).toThrow(
+      /missing startUrl/
+    );
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-nostart-'));
+    const scenarioPath = join(sessionDir, 'scenario.json');
+    await writeFile(
+      scenarioPath,
+      JSON.stringify({ schemaVersion: 1, sessionId: 'ses_x', steps: scenario().steps }),
+      'utf8'
+    );
+    await expect(loadScenarioFile(scenarioPath)).rejects.toThrow(/missing startUrl/);
+    const cliSrc = await readFile(join(repoRoot(), 'packages/runner/src/cli.ts'), 'utf8');
+    expect(cliSrc).toContain('loadScenarioFile(scenarioPath)');
+    expect(cliSrc).not.toContain('loadScenarioFile(scenarioPath, parsed.baseUrl)');
+    const genSrc = await readFile(join(repoRoot(), 'packages/runner/src/generated-run.ts'), 'utf8');
+    expect(genSrc).toContain('asScenario(scenarioInput)');
+    expect(genSrc).not.toContain('asScenario(scenarioInput, parsed.baseUrl)');
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(
+        await runGeneratedScript({ sessionId: 'ses_x', steps: scenario().steps }, ['--no-ai'])
+      ).toBe(1);
+      expect(await runCli([scenarioPath, '--base-url', 'https://staging.test/preview/'])).toBe(1);
+      expect(chunks.join('')).toMatch(/missing startUrl/);
+    } finally {
+      process.stderr.write = write;
+    }
   });
 });

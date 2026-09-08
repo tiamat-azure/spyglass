@@ -9,17 +9,14 @@ export type ScenarioRevisionLike = {
   steps: RefinedStep[];
 };
 
-export function asScenario(value: unknown, fallbackStartUrl?: string): Scenario {
+export function asScenario(value: unknown): Scenario {
   if (typeof value !== 'object' || value === null) {
     throw new Error('scenario is not an object');
   }
   const record = value as Record<string, unknown>;
   if (Array.isArray(record.steps) && typeof record.sessionId === 'string') {
-    const startUrl =
-      typeof record.startUrl === 'string' && record.startUrl.length > 0
-        ? record.startUrl
-        : fallbackStartUrl;
-    if (startUrl === undefined || startUrl.length === 0) {
+    const startUrl = typeof record.startUrl === 'string' ? record.startUrl : '';
+    if (startUrl.length === 0) {
       throw new Error('scenario is missing startUrl');
     }
     const scenario: Scenario = {
@@ -61,12 +58,9 @@ export function scenarioFromRevision(revision: ScenarioRevisionLike, startUrl: s
   return scenario;
 }
 
-export async function loadScenarioFile(
-  filePath: string,
-  fallbackStartUrl?: string
-): Promise<Scenario> {
+export async function loadScenarioFile(filePath: string): Promise<Scenario> {
   const raw = await readFile(filePath, 'utf8');
-  return asScenario(JSON.parse(raw) as unknown, fallbackStartUrl);
+  return asScenario(JSON.parse(raw) as unknown);
 }
 
 export function cloneDescriptor(descriptor: ReplayDescriptor): ReplayDescriptor {

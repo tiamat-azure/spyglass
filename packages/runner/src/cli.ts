@@ -20,11 +20,11 @@ export async function runCli(
     return 2;
   }
   const scenarioPath = resolve(parsed.scenarioPath);
-  const scenario = await loadScenarioFile(scenarioPath, parsed.baseUrl);
-  const runId = newRunId();
-  const reportDir = resolveReportDir(parsed.reportDir, dirname(scenarioPath), runId);
-  await mkdir(reportDir, { recursive: true });
   try {
+    const scenario = await loadScenarioFile(scenarioPath);
+    const runId = newRunId();
+    const reportDir = resolveReportDir(parsed.reportDir, dirname(scenarioPath), runId);
+    await mkdir(reportDir, { recursive: true });
     const result = await launchPlaywrightRun({
       scenario,
       parsed,

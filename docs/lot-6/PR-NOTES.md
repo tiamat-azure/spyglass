@@ -309,6 +309,22 @@ Applied on tip `4d07de3ffd83e08d4b6181211b261a1d7292e8e0`. Product decisions
 Unit tests after this pass: **376 passed, 1 skipped**, 51 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 12 (auto-fix)
+
+Applied on tip `921cc099874d27980b737925f4a9e85c28fdddf3`. Product decisions
+1–5, J1c, J8c, and A19a are unchanged.
+
+- **L6-026** Generated `scenario.ts` wraps `runScenario` in try/catch: stderr
+  on throw, no exit JSON, `process.exit(1)` (no unhandled rejection).
+- **L6-027** `scenario.ts` is written mode `0o755` (chmod after write) so
+  `./scenario.ts` is executable on Unix.
+- **L6-028** `spyglass-run` / `runGeneratedScript` no longer pass `--base-url`
+  as `fallbackStartUrl`. Missing `startUrl` fails closed; staging rewrites
+  stay in `applyBaseUrl` only.
+
+Unit tests after this pass: **379 passed, 1 skipped**, 51 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

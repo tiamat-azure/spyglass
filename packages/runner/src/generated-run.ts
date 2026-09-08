@@ -18,8 +18,8 @@ export async function runGeneratedScript(
     process.stdout.write(generatedHelpText());
     return 0;
   }
-  const scenario: Scenario = asScenario(scenarioInput, parsed.baseUrl);
   try {
+    const scenario: Scenario = asScenario(scenarioInput);
     const result = await runScenario(scenario, {
       headless: parsed.headless,
       argv,
