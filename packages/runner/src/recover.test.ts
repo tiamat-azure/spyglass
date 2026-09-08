@@ -1,5 +1,10 @@
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
-import { createMockTransport, LlmGateway, type TransportRequest } from '@spyglass/llm';
+import {
+  createMockTransport,
+  LlmGateway,
+  observeMatchScore,
+  type TransportRequest
+} from '@spyglass/llm';
 import { describe, expect, it } from 'vitest';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { LlmRecoverer, StaticRecoverer } from './recover.ts';
@@ -75,6 +80,98 @@ describe('LlmRecoverer observe() R3c', () => {
     const result = await recoverer.recover({
       scenario: scenarioFor(step),
       step,
+      attempt: 1,
+      error: 'selector not found',
+      multimodal: false
+    });
+    expect(result?.descriptor.selector).toBe('#from-llm');
+    expect(result?.observeUsed).toBe(false);
+  });
+
+  it('prefers R3c observe over a successful LLM patch when score is ≥80 (L5-ADV-05 A5a)', async () => {
+    let llmCalls = 0;
+    const inner = createMockTransport({ delayMs: 1, recoverSelector: '#from-llm' });
+    const recoverer = new LlmRecoverer(
+      new LlmGateway({
+        transport: {
+          complete: async (request) => {
+            llmCalls += 1;
+            return inner.complete(request);
+          }
+        },
+        profiles: () => ({
+          fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+          smart: {
+            provider: 'x',
+            model: 'claude-sonnet-4-5-20250929',
+            baseUrl: '',
+            apiKey: 'mock',
+            timeoutMs: 10
+          }
+        })
+      }),
+      async () => ({
+        ok: true,
+        observations: [{ selector: '#poison-other' }, { selector: 'button[data-testid="step-1"]' }]
+      })
+    );
+    const step = clickStep('[data-testid="step-1"]');
+    expect(
+      observeMatchScore({ selector: 'button[data-testid="step-1"]' }, step)
+    ).toBeGreaterThanOrEqual(80);
+    const result = await recoverer.recover({
+      scenario: scenarioFor(step),
+      step,
+      attempt: 1,
+      error: 'selector not found',
+      multimodal: false
+    });
+    expect(result?.descriptor.selector).toBe('button[data-testid="step-1"]');
+    expect(result?.observeUsed).toBe(true);
+    expect(result?.diagnosis).toMatch(/R3c/);
+    expect(llmCalls).toBe(0);
+  });
+
+  it('applies the LLM patch and does not claim observeUsed when score is <80 (L5-ADV-05 A5a)', async () => {
+    const step: RefinedStep = {
+      ...clickStep('#broken'),
+      action: {
+        type: 'click',
+        descriptor: {
+          type: 'click',
+          selector: '#broken',
+          selectorStrategy: 'css',
+          description: 'lien vers accueil'
+        }
+      }
+    };
+    const recoverer = new LlmRecoverer(mockGateway(), async () => ({
+      ok: true,
+      observations: [{ selector: '#unrelated', description: 'accueil lien vers' }]
+    }));
+    expect(
+      observeMatchScore({ selector: '#unrelated', description: 'accueil lien vers' }, step)
+    ).toBeLessThan(80);
+    const result = await recoverer.recover({
+      scenario: scenarioFor(step),
+      step,
+      attempt: 1,
+      error: 'selector not found',
+      multimodal: false
+    });
+    expect(result?.descriptor.selector).toBe('#from-llm');
+    expect(result?.observeUsed).toBe(false);
+    expect(result?.diagnosis).not.toMatch(/R3c/);
+  });
+
+  it('does not claim observeUsed when observe() ok but LLM patch won (L5-ADV-05 A5a)', async () => {
+    const recoverer = new LlmRecoverer(mockGateway(), async () => ({
+      ok: true,
+      observations: [{ selector: '#unrelated' }, { selector: '#also-unrelated' }]
+    }));
+    const result = await recoverer.recover({
+      scenario: scenarioFor(clickStep('#broken')),
+      step: clickStep('#broken'),
       attempt: 1,
       error: 'selector not found',
       multimodal: false

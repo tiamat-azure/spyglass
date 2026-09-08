@@ -56,7 +56,7 @@ F-59: in-app **Rejouer** in the embedded guest, step list + chat
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (**319 passed, 1 skipped**, 44
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (**322 passed, 1 skipped**, 44
 files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 (**15 passed**, Lots 0–5) on this branch. CI uses the mock LLM transport
 (no live keys).
@@ -98,8 +98,9 @@ files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
    demonstrate fail-clean without relying on `CI=1`.
 3. **`observe()` in mock CI.** Stagehand observe is skipped when
    `SPYGLASS_LLM_TRANSPORT=mock` (90s timeout would blow the e2e budget).
-   Live recovery still observes, then R3c-correlates; observe throws are
-   swallowed so smart can still patch.
+   Live recovery still observes, then R3c-correlates. A5a: if the correlated
+   score is ≥80, that observe selector is applied and the LLM patch is not.
+   `observeUsed` is true only when that observe descriptor was applied.
 4. **Multimodal wire format.** F-61 detects `isMultimodal` and warns.
    Recovery context is still text-DOM JSON (`screenshotIncluded` flag).
    JPEG files are written under `runs/<id>/screenshots/` (F-56) but not
@@ -109,7 +110,7 @@ files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 ## Adversarial pass 1 (auto-fixes on `cfe8b33`)
 
 Applied on tip `cfe8b33`. I-05 and Lot 4 R3c remain locked. L5-ADV-05
-(observe vs LLM precedence) is **not** changed.
+locked **A5a** by captain.
 
 - **L5-ADV-01.** Recovered actions are sanitized before `performAction`:
   type is pinned to the failed step; fill/select/check/press/wait/scroll
@@ -126,6 +127,11 @@ Applied on tip `cfe8b33`. I-05 and Lot 4 R3c remain locked. L5-ADV-05
 - **L5-ADV-04.** In-app `ReplayEngine.start` returns `{ ok: false, error, runId }`
   when `exitCode !== 0`, so the renderer cannot show a successful start for
   a failed run.
+- **L5-ADV-05 A5a.** When the R3c target-correlated observe score is ≥80
+  (exact selector or stable id/testid), that observe selector is applied
+  instead of the LLM patch. `observeUsed` is true only in that case. Score
+  <80 (description-only or none) may use the LLM patch, still under ADV-01
+  gates, and must not claim `observeUsed`.
 
 ## Residuals
 
