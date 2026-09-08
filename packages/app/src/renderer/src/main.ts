@@ -6,6 +6,7 @@ import type {
   MaskedProfileConfig,
   NavState,
   RefineRevisionView,
+  ReplayProgressPayload,
   SessionStatePayload,
   StagehandObserveResponse,
   UsagePayload
@@ -242,9 +243,22 @@ function aggressivenessValue(): 'conservative' | 'balanced' | 'aggressive' {
 
 async function refreshRefinePanel(phase: string): Promise<void> {
   const show =
-    phase === 'sealed' || phase === 'refining' || phase === 'reviewing' || phase === 'finalized';
+    phase === 'sealed' ||
+    phase === 'refining' ||
+    phase === 'reviewing' ||
+    phase === 'finalized' ||
+    phase === 'replaying';
   refinePanel.hidden = !show;
   refinePanel.dataset.phase = phase;
+  replayPanel.hidden = phase !== 'finalized' && phase !== 'replaying';
+  replayRunBtn.disabled = phase === 'replaying';
+  replayPanel.dataset.running = phase === 'replaying' ? 'true' : 'false';
+  if (phase === 'replaying') {
+    replayStatus.textContent = 'Rejeu en cours — suivi étape par étape dans le chat.';
+  } else if (phase === 'finalized') {
+    replayStatus.textContent =
+      'Scénario finalisé — rejeu déterministe dans le navigateur embarqué.';
+  }
   if (!show || api === undefined) {
     return;
   }
@@ -477,6 +491,11 @@ const refineWeaks = requireEl<HTMLElement>('refine-weaks');
 const refineWeakList = requireEl<HTMLOListElement>('refine-weak-list');
 const refineConfirmRoutine = requireEl<HTMLButtonElement>('refine-confirm-routine');
 const refineSteps = requireEl<HTMLOListElement>('refine-steps');
+const replayPanel = requireEl<HTMLElement>('replay-panel');
+const replayStatus = requireEl<HTMLElement>('replay-status');
+const replayAi = requireEl<HTMLInputElement>('replay-ai');
+const replayRunBtn = requireEl<HTMLButtonElement>('replay-run');
+const replaySteps = requireEl<HTMLOListElement>('replay-steps');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -605,6 +624,17 @@ if (api !== undefined) {
   api.refine.onState((payload) => {
     renderRefineRevision(payload.revision);
     void refreshRefinePanel(payload.phase);
+  });
+
+  api.replay.onProgress((payload: ReplayProgressPayload) => {
+    const item = document.createElement('li');
+    item.className = 'replay-step';
+    item.dataset.status = payload.status;
+    item.dataset.mode = payload.mode;
+    item.dataset.index = String(payload.stepIndex);
+    item.textContent = `étape ${String(payload.stepIndex)} · ${payload.mode} · ${payload.status} · ${payload.message}`;
+    replaySteps.append(item);
+    replayStatus.textContent = payload.message;
   });
 
   void api.stagehand.cdp().then((info) => {
@@ -762,6 +792,29 @@ replayActBtn.addEventListener('click', () => {
     })
     .finally(() => {
       replayActBtn.disabled = false;
+    });
+});
+
+replayRunBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  replayRunBtn.disabled = true;
+  replaySteps.replaceChildren();
+  const forceAi = replayAi.checked;
+  void api.replay
+    .start(forceAi, !forceAi)
+    .then((result) => {
+      if (!result.ok) {
+        replayStatus.textContent = result.error;
+        appendLog(log, `replay failed: ${result.error}`);
+        return;
+      }
+      replayStatus.textContent = `run ${result.runId}`;
+      replayPanel.dataset.runId = result.runId;
+    })
+    .finally(() => {
+      replayRunBtn.disabled = false;
     });
 });
 

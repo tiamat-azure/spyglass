@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "run_20260908_abc123",
+  "sessionId": "ses_lot5_demo",
+  "applied": false,
+  "patches": [
+    {
+      "stepIndex": 0,
+      "scope": "action.descriptor",
+      "original": {
+        "type": "click",
+        "selector": "#does-not-exist"
+      },
+      "suggested": {
+        "type": "click",
+        "selector": "[data-testid='step-1']",
+        "selectorStrategy": "testId"
+      },
+      "diagnosis": "L'identifiant a changé, le testid est inchangé.",
+      "confidence": 0.9
+    }
+  ]
+}

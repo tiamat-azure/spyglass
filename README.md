@@ -41,7 +41,7 @@ publishing to the public registry is not part of Lot 0. Register the
 | --- | --- |
 | `@spyglass/app` | Two-zone Electron shell, capture session, observer chat, F-29 settings, Stagehand `observe`/`act` |
 | `@spyglass/llm` | Two-profile LLM gateway, gabarits, expurgation filter, token budget (Lot 2) |
-| `@spyglass/runner` | Library scaffold only — `runScenario` is Lot 5 |
+| `@spyglass/runner` | Deterministic replay library, verification, bounded AI recovery, CLI `spyglass-run` (Lot 5, ADR-0006) |
 | `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |
 | `@spyglass/stt` | Local STT sidecar — mock engine in CI, whisper.cpp for packaged/dev (ADR-0013) |

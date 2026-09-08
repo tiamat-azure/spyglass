@@ -9,6 +9,8 @@ import type {
   RefineFinalizeResponse,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayProgressPayload,
+  ReplayStartResponse,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -22,6 +24,7 @@ import { infoFromTarget, writeCdpInfoFile } from './cdp-info.ts';
 import { isRemoteDebuggingRequested } from './cdp-policy.ts';
 import { cdpHttpUrl, enableRemoteDebugging, resolveCdpPort } from './cdp-port.ts';
 import { parseCdpTargetList, pickGuestTarget, resolvePinnedChromeTargetId } from './cdp-targets.ts';
+import { ElectronPageDriver } from './electron-driver.ts';
 import { isChromeIpcSender } from './ipc-sender.ts';
 import {
   asPcmFrame,
@@ -37,6 +40,7 @@ import {
   parseRefineEditPayload,
   parseRefineEstimatePayload,
   parseRefineRunPayload,
+  parseReplayStartPayload,
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
@@ -47,6 +51,7 @@ import { isLlmOffline } from './llm-transport.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
 import { createObserverRuntime, type ObserverRuntime } from './observer-host.ts';
 import { RefineEngine } from './refine-engine.ts';
+import { ReplayEngine } from './replay-engine.ts';
 import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.ts';
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
@@ -76,6 +81,7 @@ let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
 let observerRuntime: ObserverRuntime | undefined;
 let activeRefine: RefineEngine | undefined;
+let activeReplay: ReplayEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
@@ -854,6 +860,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     return activeRefine?.view();
   });
+
+  ipcMain.handle(IPC.replayStart, async (event, raw: unknown): Promise<ReplayStartResponse> => {
+    if (rejectForeignIpc(event, winRef, IPC.replayStart)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    if (activeReplay === undefined) {
+      return { ok: false, error: 'replay engine missing' };
+    }
+    const payload = parseReplayStartPayload(raw);
+    return await activeReplay.start(payload);
+  });
 }
 
 void (async () => {
@@ -893,6 +910,39 @@ void (async () => {
             chromeTargetId: pinnedChromeTargetId
           });
           return { ok: result.ok, observations: result.observations };
+        }
+      });
+      activeReplay = new ReplayEngine({
+        session: () => requireSession(),
+        driver: () => new ElectronPageDriver(requirePane().webContents, requirePane().resourcesDir),
+        gateway: () => runtime.gateway,
+        model: () => runtime.settings.profileConfig('smart').model,
+        observe: async () => {
+          const snapshot = requirePane().snapshot();
+          if (cdpPort <= 0) {
+            return { ok: false, observations: [] };
+          }
+          const result = await runStagehandObserve({
+            cdpUrl: cdpHttpUrl(cdpPort),
+            guestUrl: snapshot.url,
+            instruction: 'Find the element for the failed step',
+            appPath: app.getAppPath(),
+            chromeTargetId: pinnedChromeTargetId
+          });
+          return { ok: result.ok, observations: result.observations };
+        },
+        onProgress: (event) => {
+          const payload: ReplayProgressPayload = event;
+          emitToChrome(win, IPC.replayProgress, payload);
+          emitToChrome(win, IPC.chatMessage, {
+            eventId: `replay_${event.runId}_${String(event.stepIndex)}_${event.status}_${String(event.attempt)}`,
+            stepIndex: event.stepIndex,
+            kind: 'replay.step',
+            mode: 'system',
+            text: `${event.mode} · ${event.status} · ${event.message}`,
+            issuedAt: Date.now(),
+            retractable: false
+          });
         }
       });
       return runtime;

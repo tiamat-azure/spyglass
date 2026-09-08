@@ -15,6 +15,7 @@ export type {
   MockTransportOptions,
   NarrateResult,
   ProfileConfig,
+  RecoverTransportResult,
   RefineTransportResult,
   TransportRequest,
   TransportResult
@@ -38,8 +39,10 @@ export {
   LLM_SMART_MODEL_DEFAULT,
   LLM_SMART_PROVIDER_DEFAULT,
   LLM_SMART_TIMEOUT_MS_DEFAULT,
+  MAX_AI_RETRIES_DEFAULT,
   pinSmartModel,
   RATE_LIMIT_CALLS_PER_MIN_DEFAULT,
+  RECOVER_SYSTEM_PROMPT,
   REFINE_SYSTEM_PROMPT,
   SESSION_TOKEN_LIMIT_FAST_DEFAULT,
   SMART_TOKEN_CONFIRM_DEFAULT,
@@ -59,13 +62,32 @@ export {
 } from './expurgate.ts';
 export type { GabaritInput, GabaritTarget, GabaritValue, GabaritVoice } from './gabarits.ts';
 export { elementLabel, gabaritText, isEnrichableKind, quotedLabel } from './gabarits.ts';
+export { looksLikeCssSelector, normalizeHttpOrHttpsUrl, resolveReplayGotoUrl } from './http-url.ts';
 export type { NarrationItem, NarrationResponse } from './narration.ts';
 export {
   buildNarrationMessages,
   buildNarrationUserPayload,
   parseNarrationResponse
 } from './narration.ts';
+export type { ObserveCandidate } from './observe-match.ts';
+export {
+  applyCorrelatedObserveEnrichment,
+  applyMatchedObservation,
+  bestCorrelatedObservation,
+  normalizeObserveSelector,
+  observeMatchScore,
+  stableObserveKeys
+} from './observe-match.ts';
 export { LLM_PACKAGE, llmPackageName } from './package-name.ts';
+export type { RecoveryPatchProposal, RecoveryPromptInput } from './recover.ts';
+export {
+  assertRecoverPayloadClean,
+  buildRecoverMessages,
+  buildRecoverUserPayload,
+  mockRecoverProposal,
+  parseRecoverResponse,
+  recoverForbiddenTokens
+} from './recover.ts';
 export type {
   ExpurgatedRefineEvent,
   LlmRefineProposal,

@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { looksLikeCssSelector } from '@spyglass/llm';
 
 const ALLOWED_USER_PROTOCOLS = new Set(['http:', 'https:']);
 const ALLOWED_GUEST_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
@@ -168,6 +169,33 @@ export function normalizeGotoUrl(input: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Electron replay `goto`: same http(s) bar as chrome `nav.goto`, plus in-app
+ * `file:` guest resources when the current page already allows them (recorded
+ * startUrl fixtures). Never javascript:/data:/credentialed URLs.
+ */
+export function resolveDriverGotoUrl(
+  currentUrl: string,
+  requested: string,
+  resourcesDir: string
+): string | undefined {
+  const trimmed = requested.trim();
+  if (looksLikeCssSelector(trimmed)) {
+    return undefined;
+  }
+  const http = normalizeGotoUrl(requested);
+  if (http !== undefined) {
+    return http;
+  }
+  if (!isFileUrl(trimmed)) {
+    return undefined;
+  }
+  if (isAllowedInViewNavigation(currentUrl, trimmed, resourcesDir)) {
+    return trimmed;
+  }
+  return undefined;
 }
 
 export function isAllowedGuestUrl(input: string): boolean {

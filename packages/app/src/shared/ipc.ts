@@ -1,4 +1,4 @@
-export const SHELL_LOT = '4' as const;
+export const SHELL_LOT = '5' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -46,7 +46,9 @@ export const IPC = {
   refineEdit: 'spyglass:refine:edit',
   refineFinalize: 'spyglass:refine:finalize',
   refineGet: 'spyglass:refine:get',
-  refineState: 'spyglass:refine:state'
+  refineState: 'spyglass:refine:state',
+  replayStart: 'spyglass:replay:start',
+  replayProgress: 'spyglass:replay:progress'
 } as const;
 
 export type NavState = {
@@ -127,7 +129,8 @@ export type RecorderState =
   | 'sealed-failed'
   | 'refining'
   | 'reviewing'
-  | 'finalized';
+  | 'finalized'
+  | 'replaying';
 
 export type SessionStartRequest = {
   startUrl?: string;
@@ -400,4 +403,22 @@ export type RefineFinalizeResponse =
 export type RefineStatePayload = {
   phase: RecorderState;
   revision?: RefineRevisionView;
+};
+
+export type ReplayStartRequest = {
+  forceAi?: boolean;
+  noAi?: boolean;
+};
+
+export type ReplayStartResponse =
+  | { ok: true; runId: string }
+  | { ok: false; error: string; runId?: string };
+
+export type ReplayProgressPayload = {
+  runId: string;
+  stepIndex: number;
+  status: 'running' | 'passed' | 'failed' | 'recovering';
+  mode: 'script' | 'AI';
+  attempt: number;
+  message: string;
 };

@@ -13,6 +13,7 @@ import {
   parseRefineEditPayload,
   parseRefineEstimatePayload,
   parseRefineRunPayload,
+  parseReplayStartPayload,
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
@@ -98,6 +99,9 @@ describe('session payload validation', () => {
       index: 0,
       intent: 'Je valide'
     });
+    expect(parseReplayStartPayload({ forceAi: true })).toEqual({ forceAi: true });
+    expect(parseReplayStartPayload({ noAi: true })).toEqual({ noAi: true });
+    expect(parseReplayStartPayload(null)).toEqual({});
   });
 });
 

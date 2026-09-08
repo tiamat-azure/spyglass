@@ -4,10 +4,17 @@ export type {
   BoundingBox,
   CapturedValue,
   ElementDescriptor,
+  ExecutionReport,
+  ExecutionStepMode,
+  ExecutionStepReport,
+  ExecutionStepStatus,
   RawEvent,
   RefinedStep,
   ReplayDescriptor,
+  Scenario,
   ScenarioHealth,
+  SuggestedPatch,
+  SuggestedPatchEntry,
   VoiceCapture,
   VoiceRelation
 } from './types.ts';
@@ -18,8 +25,11 @@ export {
   loadFixtureDir,
   runFixtureCorpus,
   schemaFromFixtureName,
+  validateExecutionReport,
   validateHealth,
   validateRawEvent,
   validateRefinedStep,
+  validateScenario,
+  validateSuggestedPatch,
   validateUnknown
 } from './validate.ts';

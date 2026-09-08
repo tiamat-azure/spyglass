@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "runId": "run_x",
+  "sessionId": "ses_x",
+  "startedAt": "2026-09-08T09:01:00.000Z",
+  "finishedAt": "2026-09-08T09:01:02.000Z",
+  "exitCode": 0,
+  "headless": true,
+  "aiRecovery": false,
+  "maxAiRetries": 3,
+  "smartModel": "claude-sonnet-4-5-20250929",
+  "multimodal": true,
+  "warnings": [],
+  "steps": [
+    {
+      "index": 0,
+      "intent": "x",
+      "status": "passed",
+      "durationMs": 1,
+      "mode": "agent",
+      "attempts": 1,
+      "verificationOk": true
+    }
+  ]
+}

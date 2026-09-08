@@ -36,13 +36,23 @@ export function createAjv(): Ajv2020 {
   const raw = readJson(join(dir, schemaFiles['raw-event']));
   const refined = readJson(join(dir, schemaFiles['refined-step']));
   const health = readJson(join(dir, schemaFiles.health));
+  const scenario = readJson(join(dir, schemaFiles.scenario));
+  const executionReport = readJson(join(dir, schemaFiles['execution-report']));
+  const suggestedPatch = readJson(join(dir, schemaFiles['suggested-patch']));
   // refined-step $ref's `raw-event.schema.json#/$defs/replayDescriptor`.
   // Ajv resolves that relative to the refined schema $id, so register aliases.
   ajv.addSchema(cloneSchema(raw));
   ajv.addSchema(cloneSchemaWithoutId(raw), schemaFiles['raw-event']);
   ajv.addSchema(cloneSchemaWithoutId(raw), 'https://spyglass.dev/schemas/raw-event.schema.json');
   ajv.addSchema(cloneSchema(refined), schemaFiles['refined-step']);
+  ajv.addSchema(
+    cloneSchemaWithoutId(refined),
+    'https://spyglass.dev/schemas/refined-step.schema.json'
+  );
   ajv.addSchema(cloneSchema(health), schemaFiles.health);
+  ajv.addSchema(cloneSchema(scenario), schemaFiles.scenario);
+  ajv.addSchema(cloneSchema(executionReport), schemaFiles['execution-report']);
+  ajv.addSchema(cloneSchema(suggestedPatch), schemaFiles['suggested-patch']);
   return ajv;
 }
 
@@ -90,14 +100,17 @@ export type FixtureCase = {
 const FILE_PREFIX: Array<{ prefix: string; schema: SchemaName }> = [
   { prefix: 'raw-event', schema: 'raw-event' },
   { prefix: 'refined-step', schema: 'refined-step' },
-  { prefix: 'health', schema: 'health' }
+  { prefix: 'health', schema: 'health' },
+  { prefix: 'scenario', schema: 'scenario' },
+  { prefix: 'execution-report', schema: 'execution-report' },
+  { prefix: 'suggested-patch', schema: 'suggested-patch' }
 ];
 
 export function schemaFromFixtureName(fileName: string): SchemaName {
   const match = FILE_PREFIX.find((entry) => fileName.startsWith(`${entry.prefix}.`));
   if (match === undefined) {
     throw new Error(
-      `Cannot infer schema from fixture name "${fileName}". Use raw-event.*, refined-step.*, or health.*`
+      `Cannot infer schema from fixture name "${fileName}". Use raw-event.*, refined-step.*, health.*, scenario.*, execution-report.*, or suggested-patch.*`
     );
   }
   return match.schema;
@@ -182,4 +195,16 @@ export function validateRefinedStep(data: unknown): ValidationResult {
 
 export function validateHealth(data: unknown): ValidationResult {
   return validateUnknown('health', data);
+}
+
+export function validateScenario(data: unknown): ValidationResult {
+  return validateUnknown('scenario', data);
+}
+
+export function validateExecutionReport(data: unknown): ValidationResult {
+  return validateUnknown('execution-report', data);
+}
+
+export function validateSuggestedPatch(data: unknown): ValidationResult {
+  return validateUnknown('suggested-patch', data);
 }

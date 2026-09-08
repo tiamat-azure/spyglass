@@ -1,6 +1,12 @@
 import type { RawEvent } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
-import { createMockTransport, LlmGateway, resolveProfile, toTransportRequest } from './client.ts';
+import {
+  createMockTransport,
+  isMultimodal,
+  LlmGateway,
+  resolveProfile,
+  toTransportRequest
+} from './client.ts';
 import {
   LLM_FAST_MODEL_DEFAULT,
   LLM_FAST_TIMEOUT_MS_DEFAULT,
@@ -250,6 +256,15 @@ describe('llm gateway', () => {
     );
     expect(request.url).toBe('https://example.test/v1/chat/completions');
     expect(request.headers.authorization).toBe('Bearer sk-test');
+  });
+});
+
+describe('isMultimodal (F-61)', () => {
+  it('detects the pinned Sonnet snapshot and warns-capable text-only ids', () => {
+    expect(isMultimodal('claude-sonnet-4-5-20250929')).toBe(true);
+    expect(isMultimodal('claude-haiku-4-5-20251001')).toBe(false);
+    expect(isMultimodal('local-text-llama')).toBe(false);
+    expect(isMultimodal('gpt-4o')).toBe(true);
   });
 });
 

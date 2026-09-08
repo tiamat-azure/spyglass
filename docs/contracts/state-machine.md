@@ -17,9 +17,10 @@ stateDiagram-v2
     Reviewing --> Refining : refine:run (relance, F-43)
     Reviewing --> Finalized : toutes vérifications confirmées (F-44)
     Reviewing --> Reviewing : vérification weak non confirmée -> blocage
-    Finalized --> Generated : generate:script
+    Finalized --> Replaying : replay:start (Lot 5, F-59)
+    Replaying --> Finalized : run terminé
+    Finalized --> Generated : generate:script (Lot 6)
     Generated --> Replaying : replay:start
-    Replaying --> Generated : run terminé
     Sealed --> [*]
     Generated --> [*]
 ```
@@ -32,7 +33,7 @@ stateDiagram-v2
 | S-2 | La transition `Reviewing → Finalized` est **refusée** tant qu'une vérification `weak` n'est pas confirmée (F-44, ADR-0007). |
 | S-3 | Une perte de réseau ne provoque **aucune** transition. Elle n'affecte que le mode de narration (F-23). |
 | S-4 | `Recording → Stopping` attend le vidage du tampon d'écriture avant `Sealed`. Un arrêt brutal laisse `raw.jsonl` valide jusqu'à la dernière ligne complète. |
-| S-5 | `Refining` et `Replaying` requièrent le profil `smart` joignable ; son indisponibilité empêche d'entrer dans ces états, jamais d'en sortir. |
+| S-5 | `Refining` requiert le profil `smart` joignable ; son indisponibilité empêche d'entrer dans cet état, jamais d'en sortir. `Replaying` déterministe (F-50, F-60) n'exige pas de clé. Seul le sous-état `Recovering` exige `smart` (F-52). |
 
 ## Sous-machine d'exécution d'une étape (lot 5)
 

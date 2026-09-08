@@ -22,6 +22,14 @@ import {
 } from './expurgate.ts';
 import { buildNarrationMessages, type NarrationItem, parseNarrationResponse } from './narration.ts';
 import {
+  buildRecoverMessages,
+  mockRecoverProposal,
+  parseRecoverResponse,
+  type RecoveryPatchProposal,
+  type RecoveryPromptInput,
+  recoverForbiddenTokens
+} from './recover.ts';
+import {
   allowedRefineIds,
   bindLlmProposal,
   buildRefineMessages,
@@ -75,6 +83,16 @@ export type RefineTransportResult =
       ok: true;
       steps: RefinedStep[];
       source: 'smart' | 'fallback';
+      inputTokens: number;
+      outputTokens: number;
+      latencyMs: number;
+    }
+  | { ok: false; error: string; latencyMs: number };
+
+export type RecoverTransportResult =
+  | {
+      ok: true;
+      proposal: RecoveryPatchProposal;
       inputTokens: number;
       outputTokens: number;
       latencyMs: number;
@@ -198,6 +216,43 @@ export class LlmGateway {
         ok: true,
         steps: bound,
         source: 'smart',
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        latencyMs: Date.now() - started
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        latencyMs: Date.now() - started
+      };
+    }
+  }
+
+  /**
+   * Smart-profile recovery (F-52). Expurgation is mandatory. Non
+   * `action.descriptor` patches are rejected in code (F-62 / ADR-0008).
+   */
+  async recover(input: RecoveryPromptInput): Promise<RecoverTransportResult> {
+    const started = Date.now();
+    const forbidden = recoverForbiddenTokens(input);
+    const messages = buildRecoverMessages(input);
+    assertNoLeak(messages, forbidden);
+    const profile = this.profiles().smart;
+    const request = toTransportRequest('smart', profile, messages.system, messages.user, {
+      maxTokens: LLM_SMART_MAX_TOKENS_DEFAULT
+    });
+    assertNoLeak(request.body, forbidden);
+    try {
+      const result = await this.resolveNarrateTransport().complete(request);
+      assertNoLeak(result, forbidden);
+      const parsed = parseRecoverResponse(result.text);
+      if ('error' in parsed) {
+        return { ok: false, error: parsed.error, latencyMs: Date.now() - started };
+      }
+      return {
+        ok: true,
+        proposal: parsed,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         latencyMs: Date.now() - started
@@ -373,6 +428,8 @@ export type MockTransportOptions = {
   fail?: boolean | string;
   tokensPerCall?: number;
   enrich?: (events: ExpurgatedEvent[]) => NarrationItem[];
+  /** Selector returned by mock smart recovery (Lot 5). */
+  recoverSelector?: string;
 };
 
 export function createMockTransport(options: MockTransportOptions = {}): LlmTransport {
@@ -390,15 +447,79 @@ export function createMockTransport(options: MockTransportOptions = {}): LlmTran
       const user = extractUserContent(request.body);
       let events: ExpurgatedEvent[] = [];
       let refineTask = false;
+      let recoverTask = false;
+      let recoverInput: RecoveryPromptInput | undefined;
       let aggressiveness: RefineAggressiveness = 'balanced';
       try {
         const parsed = JSON.parse(user) as {
           task?: unknown;
           aggressiveness?: unknown;
           events?: ExpurgatedEvent[];
+          failedStep?: {
+            index?: number;
+            intent?: string;
+            actionType?: string;
+            selector?: string;
+            description?: string;
+            fallbackSelectors?: string[];
+          };
+          error?: string;
+          attempt?: number;
+          sessionId?: string;
+          startUrl?: string;
+          screenshotIncluded?: boolean;
         };
         events = Array.isArray(parsed.events) ? parsed.events : [];
         refineTask = parsed.task === 'refine';
+        recoverTask = parsed.task === 'recover';
+        if (recoverTask && parsed.failedStep !== undefined) {
+          const actionType =
+            parsed.failedStep.actionType === 'fill' ||
+            parsed.failedStep.actionType === 'select' ||
+            parsed.failedStep.actionType === 'check' ||
+            parsed.failedStep.actionType === 'press' ||
+            parsed.failedStep.actionType === 'navigate' ||
+            parsed.failedStep.actionType === 'wait' ||
+            parsed.failedStep.actionType === 'scroll'
+              ? parsed.failedStep.actionType
+              : 'click';
+          recoverInput = {
+            scenario: {
+              schemaVersion: 1,
+              sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : 'ses_mock',
+              startUrl:
+                typeof parsed.startUrl === 'string' ? parsed.startUrl : 'https://exemple.test',
+              steps: []
+            },
+            step: {
+              index: typeof parsed.failedStep.index === 'number' ? parsed.failedStep.index : 0,
+              intent: parsed.failedStep.intent ?? 'mock',
+              action: {
+                type: actionType,
+                descriptor: {
+                  type: actionType,
+                  selector: parsed.failedStep.selector ?? '',
+                  ...(parsed.failedStep.description !== undefined
+                    ? { description: parsed.failedStep.description }
+                    : {}),
+                  ...(parsed.failedStep.fallbackSelectors !== undefined
+                    ? { fallbackSelectors: parsed.failedStep.fallbackSelectors }
+                    : {})
+                }
+              },
+              verification: {
+                type: 'elementVisible',
+                expected: parsed.failedStep.selector ?? '',
+                strength: 'strong',
+                confirmedByUser: true
+              },
+              sourceEvents: ['evt_000001']
+            },
+            error: typeof parsed.error === 'string' ? parsed.error : 'verification failed',
+            attempt: typeof parsed.attempt === 'number' ? parsed.attempt : 1,
+            screenshotIncluded: parsed.screenshotIncluded === true
+          };
+        }
         if (
           parsed.aggressiveness === 'conservative' ||
           parsed.aggressiveness === 'balanced' ||
@@ -413,6 +534,16 @@ export function createMockTransport(options: MockTransportOptions = {}): LlmTran
         const steps = mockRefineProposals(events as ExpurgatedRefineEvent[], aggressiveness);
         return {
           text: JSON.stringify({ steps }),
+          inputTokens: Math.max(1, tokensPerCall - 40),
+          outputTokens: Math.max(20, tokensPerCall)
+        };
+      }
+      if (recoverTask && recoverInput !== undefined) {
+        const override =
+          options.recoverSelector ?? nonempty(process.env.SPYGLASS_MOCK_RECOVER_SELECTOR);
+        const proposal = mockRecoverProposal(recoverInput, override);
+        return {
+          text: JSON.stringify(proposal),
           inputTokens: Math.max(1, tokensPerCall - 40),
           outputTokens: Math.max(20, tokensPerCall)
         };

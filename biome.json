@@ -22,6 +22,7 @@
       "!**/docs/lot-2/screenshots",
       "!**/docs/lot-3/screenshots",
       "!**/docs/lot-4/screenshots",
+      "!**/docs/lot-5/screenshots",
       "!**/assets/icons",
       "!**/docs/contracts/schemas"
     ]
