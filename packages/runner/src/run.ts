@@ -13,6 +13,7 @@ import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
 import { applyBaseUrl } from './base-url.ts';
 import type { PageDriver } from './driver.ts';
+import { generatedHelpText } from './help-text.ts';
 import {
   parseGeneratedArgv,
   type RunScenarioOptions,
@@ -96,21 +97,7 @@ async function runScenarioStandalone(
     parsed.reportDir = options.reportDir;
   }
   if (parsed.help) {
-    process.stdout.write(
-      `scenario.ts — Spyglass generated runner (visible by default)
-  --headless
-  --base-url <url>
-  --timeout <ms>
-  --max-ai-retries <n>
-  --no-ai
-  --ai
-  --report <dir>
-  --trace
-
-Relative --report is resolved from the scenario directory (this script's folder), not process.cwd() (A19a).
-Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
-`
-    );
+    process.stdout.write(generatedHelpText());
     const runId = options.runId ?? newRunId();
     return {
       exitCode: 0,

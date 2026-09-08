@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { spyglassRunHelpText } from './help-text.ts';
 import { launchPlaywrightRun, resolveReportDir } from './launch.ts';
 import { parseRunnerArgv } from './options.ts';
 import { newRunId } from './run.ts';
@@ -12,7 +13,7 @@ export async function runCli(
 ): Promise<number> {
   const parsed = parseRunnerArgv(argv, env);
   if (parsed.help) {
-    process.stdout.write(helpText());
+    process.stdout.write(spyglassRunHelpText());
     return 0;
   }
   if (parsed.scenarioPath === undefined) {
@@ -38,22 +39,6 @@ export async function runCli(
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     return 1;
   }
-}
-
-function helpText(): string {
-  return `spyglass-run <scenario.json>
-  --headless
-  --base-url <url>
-  --timeout <ms>
-  --max-ai-retries <n>
-  --no-ai
-  --ai
-  --report <dir>
-  --trace
-
-Relative --report is resolved from dirname(<scenario.json>), not process.cwd() (A19a).
-Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
-`;
 }
 
 const entry = process.argv[1];

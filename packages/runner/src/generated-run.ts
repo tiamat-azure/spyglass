@@ -1,4 +1,5 @@
 import type { Scenario } from '@spyglass/contracts';
+import { generatedHelpText } from './help-text.ts';
 import { parseGeneratedArgv } from './options.ts';
 import { runScenario } from './run.ts';
 import { asScenario } from './scenario.ts';
@@ -36,18 +37,4 @@ export async function runGeneratedScript(
   }
 }
 
-export function generatedHelpText(): string {
-  return `scenario.ts — Spyglass generated runner (visible by default)
-  --headless
-  --base-url <url>
-  --timeout <ms>
-  --max-ai-retries <n>
-  --no-ai
-  --ai
-  --report <dir>
-  --trace
-
-Relative --report is resolved from the scenario directory (this script's folder), not process.cwd() (A19a).
-Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
-`;
-}
+export { generatedHelpText };

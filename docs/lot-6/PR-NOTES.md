@@ -105,6 +105,10 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
    `resolve(dirname(scenario.json), dir)`, not `process.cwd()`. Absolute
    `--report` is used as-is. Default remains `../runs/<runId>/` from that
    directory. Do **not** restore cwd-relative resolve.
+7. **H29a / L6-029.** F-58 flag/help text lives in
+   `packages/runner/src/help-text.ts`. `cli.ts`, `generated-run.ts`, and
+   `run.ts` import it (no cycles). Do not duplicate the flag block. Relative
+   `--report` wording stays scenario-dir (A19a).
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -323,6 +327,18 @@ Applied on tip `921cc099874d27980b737925f4a9e85c28fdddf3`. Product decisions
   stay in `applyBaseUrl` only.
 
 Unit tests after this pass: **379 passed, 1 skipped**, 51 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 13 (H29a)
+
+Applied on tip `3fc72f440a90f5d48ad4d02665de919d2345d0d6`. Product decisions
+1–5, J1c, J8c, A19a, and **H29a** are locked.
+
+- **L6-029 / H29a** Shared `help-text.ts` for F-58 `--help` (`spyglass-run`,
+  `generatedHelpText`, `runScenario --help`). Behavior unchanged.
+- **L6-030** no-op (JPEG quality left as-is).
+
+Unit tests after this pass: **381 passed, 1 skipped**, 52 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals
