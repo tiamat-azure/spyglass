@@ -644,9 +644,9 @@ describe('applyCorrelatedObserveEnrichment (LOT4-R3c)', () => {
 
   it('still attaches on exact selector or token-set-equal description', () => {
     const bySelector = weakCssStep(0, '#accueil', 'Je clique sur accueil');
-    expect(observeMatchScore({ selector: '#accueil', description: 'autre texte' }, bySelector)).toBe(
-      100
-    );
+    expect(
+      observeMatchScore({ selector: '#accueil', description: 'autre texte' }, bySelector)
+    ).toBe(100);
     const byDescription: RefinedStep = {
       ...weakCssStep(0, '', 'Je clique sur lien'),
       action: {
