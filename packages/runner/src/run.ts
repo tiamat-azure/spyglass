@@ -106,6 +106,9 @@ async function runScenarioStandalone(
   --ai
   --report <dir>
   --trace
+
+Relative --report is resolved from the scenario directory (this script's folder), not process.cwd() (A19a).
+Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
 `
     );
     const runId = options.runId ?? newRunId();

@@ -26,8 +26,9 @@ thin `scenario.ts` importing `@spyglass/runner` `runScenario`
 **declared** `@spyglass/runner` dependency. The script runs **outside**
 Electron. Visible by default; `--headless` and the rest of F-58
 (`--base-url`, `--timeout`, `--max-ai-retries`, `--no-ai`, `--ai`,
-`--report`, `--trace`) are forwarded. `--no-ai` / `CI=1` constructs no LLM
-client (F-60).
+`--report`, `--trace`) are forwarded. Relative `--report` is resolved
+from the scenario file directory, not cwd (A19a). `--no-ai` / `CI=1`
+constructs no LLM client (F-60).
 
 Measurement protocol for PRD §2.2 non-contractual goals: corpus of 10
 public sites + 10 local CI pages, J+1 replay, rates published under
@@ -99,6 +100,11 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 5. **J+1.** First published wave is J+0 on 2026-09-08. True J+1 (≥24 h)
    is not in this lot’s wall-clock. Command is documented; parent can run
    `--public --j1` on 2026-09-09.
+6. **A19a / L6-019.** Relative `--report` for `spyglass-run` (and the
+   generated script via `scriptDir`) is **scenario-dir-relative**:
+   `resolve(dirname(scenario.json), dir)`, not `process.cwd()`. Absolute
+   `--report` is used as-is. Default remains `../runs/<runId>/` from that
+   directory. Do **not** restore cwd-relative resolve.
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -258,6 +264,19 @@ Applied on tip `674f6a2bed1a6bdb0b4582d6a35b87ebeffe7658`. Product decisions
   ask-user pending).
 
 Unit tests after this pass: **370 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 10 (A19a docs)
+
+Applied on tip `1dc825ace4879cf532a6a31adade12a66d735111`. Product decisions
+1–5, J1c, J8c, and **A19a** are locked. `resolveReportDir` is unchanged
+(scenario-dir-relative; not cwd-relative).
+
+- **L6-019 / A19a** Documented relative `--report` as resolved from
+  `dirname(<scenario.json>)` / generated `scriptDir` (CLI help, generated
+  README, root README, this file). Do not restore cwd-relative resolve.
+
+Unit tests after this pass: **371 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals

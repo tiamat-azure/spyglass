@@ -50,6 +50,9 @@ function helpText(): string {
   --ai
   --report <dir>
   --trace
+
+Relative --report is resolved from dirname(<scenario.json>), not process.cwd() (A19a).
+Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
 `;
 }
 

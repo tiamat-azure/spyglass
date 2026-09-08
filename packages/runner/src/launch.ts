@@ -70,6 +70,10 @@ export async function launchPlaywrightRun(
   }
 }
 
+/**
+ * Report output directory (A19a). Relative `--report` is resolved from `baseDir`
+ * (scenario file directory for `spyglass-run` / generated `scriptDir`), not cwd.
+ */
 export function resolveReportDir(
   reportDir: string | undefined,
   baseDir: string,

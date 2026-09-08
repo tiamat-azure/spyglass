@@ -277,10 +277,11 @@ absolu — or les scénarios capturés le sont. Avec \`--base-url\` :
 | \`--max-ai-retries <n>\` | tentatives de rattrapage (défaut 3 / \`MAX_AI_RETRIES\`) |
 | \`--no-ai\` | aucun rattrapage, aucun appel LLM |
 | \`--ai\` | force le rattrapage (même en CI) |
-| \`--report <dir>\` | dossier du rapport (\`report.json\`) |
+| \`--report <dir>\` | dossier du rapport (\`report.json\`). Chemin **relatif** : répertoire de \`scenario.json\` / \`scenario.ts\`, **pas** \`process.cwd()\` (A19a). Chemin absolu inchangé. |
 | \`--trace\` | écrit \`trace.zip\` (chemin Windows-safe) |
 
-Rapports par défaut : \`../runs/<runId>/\` (arborescence de session PRD §6.14).
+Rapports par défaut (sans \`--report\`) : \`../runs/<runId>/\` depuis le
+répertoire du scénario (arborescence de session PRD §6.14), pas le cwd.
 
 Variables d'environnement (amorçage, PRD §7) : \`LLM_SMART_*\` seulement si
 \`--ai\` ; \`MAX_AI_RETRIES\` ; \`CI\`.

@@ -228,8 +228,10 @@ truth), thin `scenario.ts` importing `runScenario` from
 `@spyglass/runner` (ADR-0006 / F-45), README mode d'emploi, F-58 flags with
 **visible by default** and `--headless`. `--base-url` rewrites the origin of
 an absolute http(s) `startUrl` (optional base path prefix); relative URLs
-still resolve with WHATWG. The script runs outside Electron; `--no-ai` needs
-no API key. Measurement protocol for PRD §2.2 non-contractual replay rates:
+still resolve with WHATWG. Relative `--report` is resolved from the
+scenario file directory, not `process.cwd()` (A19a). The script runs
+outside Electron; `--no-ai` needs no API key. Measurement protocol for
+PRD §2.2 non-contractual replay rates:
 10 public sites + local CI corpus, published under
 [`docs/lot-6/`](docs/lot-6/). **J+1 public is N/A / pending** (J1c). When
 `--public --j1` runs, Lot 6 **rebuilds from static `PUBLIC_CORPUS`**, not a

@@ -76,6 +76,7 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(readme).toContain('--max-ai-retries');
     expect(readme).toContain('--ai');
     expect(readme).toContain('--report');
+    expect(readme).toMatch(/pas.*process\.cwd\(\)|A19a/i);
     expect(readme).toContain('--trace');
     expect(readme).toContain(RUNNER_PACKAGE);
     const manifest = JSON.parse(await readFile(paths.packageJson, 'utf8')) as {
@@ -181,6 +182,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
       expect(result.exitCode).toBe(0);
       expect(chunks.join('')).toMatch(/--headless/);
       expect(chunks.join('')).toMatch(/--no-ai/);
+      expect(chunks.join('')).toMatch(/dirname|scenario directory/i);
+      expect(chunks.join('')).toMatch(/process\.cwd\(\)/);
     } finally {
       process.stdout.write = write;
     }
