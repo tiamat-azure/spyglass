@@ -10,12 +10,18 @@ export type GabaritTarget = {
 
 export type GabaritValue = { masked: true; secretRef: string } | { masked: false; text: string };
 
+export type GabaritVoice = {
+  text?: string;
+  relation?: 'before' | 'after' | 'unanchored';
+};
+
 export type GabaritInput = {
   kind: string;
   target?: GabaritTarget;
   value?: GabaritValue;
   page?: { url?: string; title?: string };
   key?: string;
+  voice?: GabaritVoice;
 };
 
 const FALLBACK_LABEL = 'cet élément';
@@ -85,11 +91,11 @@ export function gabaritText(input: GabaritInput): string {
     case 'selection.value':
       return `Tu as lu le contenu de ${q}`;
     case 'voice.partial':
-      return 'Dictée en cours';
+      return voicePartialGabarit(input);
     case 'voice.final':
-      return 'Un segment vocal a été transcrit';
+      return voiceFinalGabarit(input);
     case 'voice.edited':
-      return 'Un segment vocal a été corrigé';
+      return voiceEditedGabarit(input);
     case 'agent.message':
       return "Message de l'agent";
     case 'agent.narration-mode':
@@ -183,4 +189,37 @@ function nonempty(value: string | undefined): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function quotedVoice(input: GabaritInput): string | undefined {
+  const text = nonempty(input.voice?.text);
+  if (text === undefined) {
+    return undefined;
+  }
+  return `« ${text} »`;
+}
+
+function voicePartialGabarit(input: GabaritInput): string {
+  const quoted = quotedVoice(input);
+  return quoted === undefined ? 'Dictée en cours' : `Dictée en cours : ${quoted}`;
+}
+
+function voiceFinalGabarit(input: GabaritInput): string {
+  const quoted = quotedVoice(input);
+  const base =
+    quoted === undefined ? 'Un segment vocal a été transcrit' : `Tu as dicté : ${quoted}`;
+  if (input.voice?.relation === 'before') {
+    return `${base} (avant l'action)`;
+  }
+  if (input.voice?.relation === 'after') {
+    return `${base} (après l'action)`;
+  }
+  return base;
+}
+
+function voiceEditedGabarit(input: GabaritInput): string {
+  const quoted = quotedVoice(input);
+  return quoted === undefined
+    ? 'Un segment vocal a été corrigé'
+    : `Tu as corrigé la dictée : ${quoted}`;
 }

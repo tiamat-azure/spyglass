@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateRawEvent } from '@spyglass/contracts';
@@ -349,6 +349,25 @@ describe('session stop after record.stop append', () => {
     expect(typeof meta.sealedAt).toBe('string');
   });
 
+  it('rolls back to recording and notifies when stop fails before a durable record.stop', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-rollback-'));
+    let rolledBack = 0;
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {},
+      onBeforeSeal: async () => {
+        throw new Error('simulated pre-stop failure');
+      },
+      onStopRolledBack: () => {
+        rolledBack += 1;
+      }
+    });
+    await orch.start('https://example.test/');
+    await expect(orch.stop()).rejects.toThrow('simulated pre-stop failure');
+    expect(orch.snapshot().state).toBe('recording');
+    expect(rolledBack).toBe(1);
+  });
+
   it('retries {eventCount, sealedAt} and succeeds when meta recovers', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-retry-'));
     const orch = new SessionOrchestrator(() => root, stubPane, {
@@ -506,5 +525,157 @@ describe('net request URL redaction', () => {
       'https://api.example.test/v1/me'
     );
     expect(redactNetRequestUrl('not a url?token=abc#x')).toBe('not a url');
+  });
+});
+
+describe('lot 3 voice journal', () => {
+  function stubPane() {
+    return {
+      snapshot: () => ({
+        url: 'https://example.test/',
+        title: 'fixture',
+        loading: false,
+        canGoBack: false,
+        canGoForward: false
+      }),
+      webContents: {
+        mainFrame: {
+          executeJavaScript: async () => ({ url: 'https://example.test/' })
+        },
+        capturePage: async () => ({ toJPEG: () => Buffer.from([0xff, 0xd8, 0xff, 0xd9]) })
+      }
+    } as never;
+  }
+
+  it('correlates dictation before and after a committed click and keeps audioRef null', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const before = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: Date.now() - 50,
+      endTs: Date.now() - 10,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(before?.kind).toBe('voice.final');
+    expect(before?.voice?.relation).toBe('before');
+    expect(before?.voice?.audioRef).toBeNull();
+    expect(validateRawEvent(before).valid).toBe(true);
+    expect((orch as unknown as { voicePcm: Map<string, Buffer> }).voicePcm.size).toBe(0);
+    await (
+      orch as unknown as { commitProbeEvent: (wire: Record<string, unknown>) => Promise<void> }
+    ).commitProbeEvent({
+      kind: 'dom.click',
+      ts: Date.now(),
+      target: {
+        tag: 'button',
+        framePath: ['main'],
+        shadowPath: [],
+        accessibleName: 'Start',
+        testId: 'step-1'
+      }
+    });
+    const after = await orch.recordVoiceFinal({
+      text: "J'ai validé l'étape",
+      startTs: Date.now(),
+      endTs: Date.now() + 10,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(after?.voice?.relation).toBe('after');
+    expect(after?.voice?.correlatedEventId).toMatch(/^evt_/);
+    expect((orch as unknown as { voicePcm: Map<string, Buffer> }).voicePcm.size).toBe(0);
+    await orch.stop();
+    const sessions = await readdir(root);
+    const sessionDir = join(root, sessions[0] ?? '');
+    const names = await readdir(sessionDir);
+    expect(names).not.toContain('audio');
+    const raw = await readFile(join(sessionDir, 'raw.jsonl'), 'utf8');
+    expect(raw).toContain('"relation":"before"');
+    expect(raw).toContain('"relation":"after"');
+  });
+
+  it('C2b: voice that starts before a flushed click is before not after', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-c2b-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const tClick = Date.now();
+    await (
+      orch as unknown as { commitProbeEvent: (wire: Record<string, unknown>) => Promise<void> }
+    ).commitProbeEvent({
+      kind: 'dom.click',
+      ts: tClick,
+      target: {
+        tag: 'button',
+        framePath: ['main'],
+        shadowPath: [],
+        accessibleName: 'Start',
+        testId: 'step-1'
+      }
+    });
+    const overlapped = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: tClick - 80,
+      endTs: tClick + 40,
+      pcm: Buffer.alloc(3200)
+    });
+    expect(overlapped?.voice?.relation).toBe('before');
+    expect(overlapped?.voice?.correlatedEventId).toMatch(/^evt_/);
+    expect(overlapped?.voice?.correlatedStepIndex).toBe(1);
+    await orch.stop();
+  });
+
+  it('does not journal an empty voice.final', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-empty-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const empty = await orch.recordVoiceFinal({
+      text: '   ',
+      startTs: Date.now(),
+      endTs: Date.now() + 10,
+      pcm: Buffer.alloc(0)
+    });
+    expect(empty).toBeUndefined();
+    await orch.stop();
+  });
+
+  it('persists the edited transcript only, unwrapping a gabarit prompt', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-edit-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const final = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: Date.now() - 20,
+      endTs: Date.now(),
+      pcm: Buffer.alloc(3200)
+    });
+    expect(final?.id).toBeDefined();
+    const edited = await orch.recordVoiceEdited(
+      final?.id ?? '',
+      "Tu as dicté : « Je clique ici » (avant l'action)"
+    );
+    expect(edited?.kind).toBe('voice.edited');
+    expect(edited?.voice?.text).toBe('Je clique ici');
+    expect(edited?.voice?.text).not.toMatch(/Tu as dicté/);
+    await orch.stop();
   });
 });

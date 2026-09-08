@@ -2,7 +2,7 @@
   "name": "@spyglass/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass Electron shell (Lot 2 observer + Lot 1 capture)",
+  "description": "Spyglass Electron shell (Lot 3 voice + Lot 2 observer + Lot 1 capture)",
   "author": {
     "name": "Spyglass contributors",
     "email": "tiamat.azure@gmail.com"
@@ -35,6 +35,7 @@
     "@spyglass/contracts": "workspace:*",
     "@spyglass/llm": "workspace:*",
     "@spyglass/probe": "workspace:*",
+    "@spyglass/stt": "workspace:*",
     "playwright-core": "1.63.0",
     "zod": "3.25.76"
   },

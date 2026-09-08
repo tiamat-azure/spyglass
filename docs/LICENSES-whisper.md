@@ -1,14 +1,15 @@
-# whisper.cpp and model-weight licences (Lot -1)
+# whisper.cpp and model-weight licences
 
-PRD §16.3 requires licence compatibility of `whisper.cpp` **and** model weights
+PRD §16.3 required licence compatibility of `whisper.cpp` **and** model weights
 for redistribution in the Spyglass installer to be **verified and documented at
 Lot -1**, before the first package build that would ship them.
 
-This lot does **not** bundle the sidecar binary or weights. Packaging those
-artefacts is a later-lot concern (ADR-0013, Lot 3). The check below is the
-redistribution gate.
+Lot 3 ships the **integration path**: a localhost WebSocket sidecar that can
+invoke a local `whisper-cli` + `ggml-small-q5_1.bin`. CI does **not** download
+those artefacts (too heavy). Packaged/dev hosts fetch them with
+`node scripts/fetch-whisper.mjs` into `vendor/whisper/` (gitignored binaries).
 
-## Verification (2026-09-07)
+## Verification (2026-09-07, reaffirmed Lot 3 2026-09-08)
 
 | Component | Licence | Source | Retrieved |
 | --- | --- | --- | --- |
@@ -30,12 +31,12 @@ installer is compatible** with these licences, as long as:
 2. Third-party fine-tunes or non-official weights are **not** substituted
    without a separate licence review.
 3. No additional copyleft obligation is introduced by the build toolchain used
-   to compile the sidecar (verify at the lot that compiles the binary).
+   to compile the sidecar (verify when compiling the binary).
 
-## Out of scope here
+## Runtime (Lot 3)
 
-- Compiling per-platform `whisper.cpp` binaries
-- Downloading or vendoring `.gguf` / ggml weights
-- Runtime sidecar process (WebSocket from the Electron main process)
-
-Those land with the STT lot. `@spyglass/stt` is a package scaffold only.
+- Sidecar speaks WebSocket on `127.0.0.1` only. The Electron **main** process
+  is the only client (ADR-0005). The renderer sends PCM via IPC `spyglass:voice:frame`.
+- Default engine is **mock** when the binary/model are missing; **whisper** when
+  both exist or `SPYGLASS_STT_ENGINE=whisper`.
+- `AUDIO_RETENTION=none` by default: transcripts are journaled, raw WAV is not.

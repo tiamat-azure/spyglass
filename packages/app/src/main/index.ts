@@ -8,7 +8,9 @@ import type {
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
-  StagehandObserveResponse
+  StagehandObserveResponse,
+  VoiceFinalPayload,
+  VoiceStartResponse
 } from '../shared/ipc.ts';
 import { IPC } from '../shared/ipc.ts';
 import { BrowserPane } from './browser-pane.ts';
@@ -18,6 +20,7 @@ import { cdpHttpUrl, enableRemoteDebugging, resolveCdpPort } from './cdp-port.ts
 import { parseCdpTargetList, pickGuestTarget, resolvePinnedChromeTargetId } from './cdp-targets.ts';
 import { isChromeIpcSender } from './ipc-sender.ts';
 import {
+  asPcmFrame,
   parseBrowserBoundsPayload,
   parseConfigSetPayload,
   parseConfigTestPayload,
@@ -27,7 +30,9 @@ import {
   parseObservePayload,
   parseRaiseCeilingPayload,
   parseRetractPayload,
-  parseSessionStartPayload
+  parseSessionStartPayload,
+  parseVoiceEditPayload,
+  parseVoiceStartPayload
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { isLlmOffline } from './llm-transport.ts';
@@ -37,6 +42,7 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
+import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
 if (process.platform === 'linux' || process.env.SPYGLASS_DISABLE_GPU === '1') {
@@ -60,6 +66,7 @@ installWebContentsSecurityDefaults();
 let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
 let observerRuntime: ObserverRuntime | undefined;
+let voiceBridge: VoiceBridge | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -426,6 +433,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const snapshot = requirePane().snapshot();
     const startUrl = payload.startUrl ?? snapshot.url;
     const started = await requireSession().start(startUrl);
+    voiceBridge?.resumeCapture();
     observerRuntime?.observer.onSessionStart(started.sessionId);
     return started;
   });
@@ -437,7 +445,23 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (!parseEmptyPayload(raw)) {
       return { sessionId: '', eventCount: 0, sizeBytes: 0 };
     }
-    return await requireSession().stop();
+    const win = winRef.current;
+    if (win !== undefined && activeSession !== undefined) {
+      emitToChrome(win, IPC.sessionState, {
+        ...activeSession.snapshot(),
+        state: 'stopping'
+      });
+    }
+    voiceBridge?.beginStop();
+    await voiceBridge?.stopCapture();
+    try {
+      return await requireSession().stop();
+    } catch (error) {
+      if (activeSession?.snapshot().state === 'recording') {
+        voiceBridge?.resumeCapture();
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle(IPC.sessionRetract, async (event, raw: unknown) => {
@@ -596,6 +620,116 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     activePane.setVisible(payload.visible);
   });
+
+  ipcMain.handle(IPC.voiceStart, async (event, raw: unknown): Promise<VoiceStartResponse> => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceStart)) {
+      return {
+        ok: false,
+        mode: 'hold',
+        engine: 'mock',
+        model: 'mock-offline',
+        fakeCapture: true,
+        error: 'forbidden'
+      };
+    }
+    const payload = parseVoiceStartPayload(raw);
+    if (payload === undefined || voiceBridge === undefined) {
+      return {
+        ok: false,
+        mode: 'hold',
+        engine: 'mock',
+        model: 'mock-offline',
+        fakeCapture: true,
+        error: 'invalid payload'
+      };
+    }
+    try {
+      const status = await voiceBridge.startCapture(payload.mode);
+      if (!voiceBridge.isCapturing()) {
+        return {
+          ok: false,
+          mode: payload.mode,
+          engine: status.engine,
+          model: status.model,
+          fakeCapture: status.fakeCapture,
+          error: 'voice capture refused'
+        };
+      }
+      return {
+        ok: true,
+        mode: payload.mode,
+        engine: status.engine,
+        model: status.model,
+        fakeCapture: status.fakeCapture
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        mode: payload.mode,
+        engine: 'mock',
+        model: 'mock-offline',
+        fakeCapture: true,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
+
+  ipcMain.handle(IPC.voiceStop, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceStop)) {
+      return { ok: false };
+    }
+    if (!parseEmptyPayload(raw)) {
+      return { ok: false };
+    }
+    await voiceBridge?.stopCapture();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.voiceAbort, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceAbort)) {
+      return { ok: false };
+    }
+    if (!parseEmptyPayload(raw)) {
+      return { ok: false };
+    }
+    voiceBridge?.abort();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.voiceSetMode, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceSetMode)) {
+      return { ok: false };
+    }
+    const payload = parseVoiceStartPayload(raw);
+    if (payload === undefined) {
+      return { ok: false };
+    }
+    voiceBridge?.setCaptureMode(payload.mode);
+    return { ok: true, mode: payload.mode };
+  });
+
+  ipcMain.on(IPC.voiceFrame, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceFrame)) {
+      return;
+    }
+    const frame = asPcmFrame(raw);
+    if (frame === undefined) {
+      return;
+    }
+    voiceBridge?.sendFrame(frame);
+  });
+
+  ipcMain.handle(IPC.voiceEdit, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceEdit)) {
+      return { ok: false };
+    }
+    const payload = parseVoiceEditPayload(raw);
+    if (payload === undefined) {
+      return { ok: false };
+    }
+    const edited = await requireSession().recordVoiceEdited(payload.eventId, payload.text);
+    return { ok: edited !== undefined };
+  });
 }
 
 void (async () => {
@@ -651,13 +785,86 @@ void (async () => {
         },
         onState: (state: SessionStatePayload) => {
           emitToChrome(win, IPC.sessionState, state);
+          if (state.state === 'recording') {
+            voiceBridge?.resumeCapture();
+          }
         },
         onBeforeSeal: async () => {
           await observerRuntime?.observer.flush();
+        },
+        onBeforeStop: async () => {
+          voiceBridge?.beginStop();
+          await voiceBridge?.stopCapture();
+        },
+        onStopRolledBack: () => {
+          voiceBridge?.resumeCapture();
         }
       }
     );
     activeSession.attachProbe();
+    const sttEnv: NodeJS.ProcessEnv = { ...process.env };
+    if (sttEnv.SPYGLASS_STT_RESOURCES === undefined || sttEnv.SPYGLASS_STT_RESOURCES.length === 0) {
+      sttEnv.SPYGLASS_STT_RESOURCES = app.isPackaged
+        ? join(process.resourcesPath, 'stt')
+        : join(app.getAppPath(), '../../vendor/whisper');
+    }
+    voiceBridge = new VoiceBridge(
+      {
+        onPartial: (payload) => {
+          emitToChrome(win, IPC.voicePartial, payload);
+        },
+        onFinal: (payload) => {
+          if (payload.text.trim().length === 0) {
+            return;
+          }
+          return requireSession()
+            .recordVoiceFinal({
+              text: payload.text,
+              startTs: payload.startTs,
+              endTs: payload.endTs,
+              pcm: payload.pcm
+            })
+            .then((event) => {
+              if (event === undefined) {
+                return;
+              }
+              const message: VoiceFinalPayload = {
+                eventId: event.id,
+                utteranceId: payload.utteranceId,
+                text: payload.text,
+                startTs: payload.startTs,
+                endTs: payload.endTs
+              };
+              if (event.voice?.relation !== undefined) {
+                message.relation = event.voice.relation;
+              }
+              if (event.voice?.correlatedEventId !== undefined) {
+                message.correlatedEventId = event.voice.correlatedEventId;
+              }
+              if (event.voice?.correlatedStepIndex !== undefined) {
+                message.correlatedStepIndex = event.voice.correlatedStepIndex;
+              }
+              emitToChrome(win, IPC.voiceFinal, message);
+            })
+            .catch((error: unknown) => {
+              console.error('Failed to journal voice.final:', error);
+            });
+        },
+        onLevel: (rms) => {
+          emitToChrome(win, IPC.voiceLevel, { rms });
+        },
+        onError: (message) => {
+          console.error('[stt]', message);
+        }
+      },
+      sttEnv,
+      {
+        canCapture: () => {
+          const state = activeSession?.snapshot().state;
+          return state === 'recording';
+        }
+      }
+    );
     pane.webContents.on('did-navigate', () => {
       void activeSession?.recordNav('nav.load', pane.snapshot());
     });
@@ -747,7 +954,12 @@ void (async () => {
   app.exit(1);
 });
 
+app.on('before-quit', () => {
+  void voiceBridge?.dispose();
+});
+
 app.on('window-all-closed', () => {
+  void voiceBridge?.dispose();
   if (process.platform !== 'darwin') {
     app.quit();
   }

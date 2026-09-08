@@ -3,8 +3,8 @@
 AI-assisted web scenario recorder (Stagehand). This repository is a **pnpm
 monorepo**. Lot **-1** froze the toolchain. Lot **0** shipped the two-zone
 Electron shell and Stagehand CDP. Lot **1** adds **DOM capture**. Lot **2**
-adds the **observer agent** (deterministic gabarits, two-profile LLM
-enrichment, expurgation, token ceilings, F-29 settings).
+adds the **observer agent**. Lot **3** adds **local voice** (hold-to-talk,
+VAD, streaming STT, whisper.cpp sidecar).
 
 French product specs stay in [`PRD.md`](PRD.md) and [`webdesign.md`](webdesign.md).
 Implementation and CI comments are English.
@@ -44,7 +44,7 @@ publishing to the public registry is not part of Lot 0. Register the
 | `@spyglass/runner` | Library scaffold only — `runScenario` is Lot 5 |
 | `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |
-| `@spyglass/stt` | Sidecar scaffold only — whisper.cpp binary is a later lot |
+| `@spyglass/stt` | Local STT sidecar — mock engine in CI, whisper.cpp for packaged/dev (ADR-0013) |
 
 ## Prerequisites
 
@@ -201,6 +201,15 @@ masking (F-15), denoising (F-16), retraction (F-19), local replay descriptor
 (F-22), append-only `raw.jsonl` (F-40), sliding screenshot retention (D-11),
 Stagehand `act()` without LLM (I-07). D-10 `loginRedirect` confirmed 2026-09-08.
 
-**Not** implemented: Lot 2+ narration/LLM chat, voice, refinement, runner
-execution. Closed shadow DOM remains out of scope (ADR-0009). I-08 extra DOM
-snapshot on mutation-without-user-action is not in this lot.
+Implemented (Lot 2): gabarit-first observer chat (F-21), two-profile LLM
+enrichment, expurgation, token ceilings, F-29 settings.
+
+Implemented (Lot 3): hold-to-talk + VAD mic capture (F-30), streaming
+partial→final STT (F-31), temporal correlation in `raw.jsonl` (F-32), local
+whisper.cpp sidecar over **main-only** localhost WebSocket (ADR-0004/0005/0013),
+`AUDIO_RETENTION=none` by default (F-49). CI uses the mock engine when
+whisper binaries/models are absent (`SPYGLASS_STT_ENGINE=mock`). Fetch weights
+with `node scripts/fetch-whisper.mjs` for the real packaged/dev path.
+
+**Not** implemented: Lot 4+ refinement, runner execution, generated scripts.
+Closed shadow DOM remains out of scope (ADR-0009).

@@ -12,11 +12,15 @@ import type {
   StagehandActResponse,
   StagehandCdpResponse,
   StagehandObserveResponse,
-  UsagePayload
+  UsagePayload,
+  VoiceFinalPayload,
+  VoiceLevelPayload,
+  VoicePartialPayload,
+  VoiceStartResponse
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '2';
+  lot: '3';
   versions: {
     electron: string;
     chrome: string;
@@ -59,6 +63,17 @@ export type SpyglassPreloadApi = {
     act: () => Promise<StagehandActResponse>;
     cdp: () => Promise<StagehandCdpResponse>;
     onResult: (callback: (result: StagehandObserveResponse) => void) => () => void;
+  };
+  voice: {
+    start: (mode: 'hold' | 'continuous') => Promise<VoiceStartResponse>;
+    stop: () => Promise<{ ok: boolean }>;
+    abort: () => Promise<{ ok: boolean }>;
+    setMode: (mode: 'hold' | 'continuous') => Promise<{ ok: boolean }>;
+    frame: (pcm: ArrayBuffer) => void;
+    edit: (eventId: string, text: string) => Promise<{ ok: boolean }>;
+    onPartial: (callback: (payload: VoicePartialPayload) => void) => () => void;
+    onFinal: (callback: (payload: VoiceFinalPayload) => void) => () => void;
+    onLevel: (callback: (payload: VoiceLevelPayload) => void) => () => void;
   };
 };
 

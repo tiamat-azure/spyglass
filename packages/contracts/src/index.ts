@@ -8,7 +8,8 @@ export type {
   RefinedStep,
   ReplayDescriptor,
   ScenarioHealth,
-  VoiceCapture
+  VoiceCapture,
+  VoiceRelation
 } from './types.ts';
 export {
   assertFixtureCorpus,

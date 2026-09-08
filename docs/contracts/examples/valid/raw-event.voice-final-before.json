@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "evt_000010",
+  "sessionId": "ses_20260908_voice",
+  "ts": 1757300001000,
+  "kind": "voice.final",
+  "pageId": "page_main",
+  "voice": {
+    "text": "Je vais cliquer sur Démarrer",
+    "startTs": 1757300000500,
+    "endTs": 1757300001000,
+    "audioRef": null,
+    "relation": "before",
+    "correlatedStepIndex": 1
+  },
+  "narration": {
+    "mode": "template",
+    "text": "Tu as dicté : « Je vais cliquer sur Démarrer » (avant l'action)"
+  }
+}

@@ -22,6 +22,10 @@ export function formatScreenshotRef(index: number): string {
   return `shot_${String(index).padStart(6, '0')}`;
 }
 
+export function formatAudioRef(eventId: string): string {
+  return `audio/${eventId}.wav`;
+}
+
 export function newProbeNonce(): string {
   return randomBytes(16).toString('hex');
 }

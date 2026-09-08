@@ -14,12 +14,16 @@ import type {
   StagehandCdpResponse,
   StagehandObserveRequest,
   StagehandObserveResponse,
-  UsagePayload
+  UsagePayload,
+  VoiceFinalPayload,
+  VoiceLevelPayload,
+  VoicePartialPayload,
+  VoiceStartResponse
 } from '../shared/ipc.ts';
 import { IPC } from '../shared/ipc.ts';
 
 const spyglass = {
-  lot: '2' as const,
+  lot: '3' as const,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -151,6 +155,46 @@ const spyglass = {
       ipcRenderer.on(IPC.stagehandResult, listener);
       return () => {
         ipcRenderer.removeListener(IPC.stagehandResult, listener);
+      };
+    }
+  },
+  voice: {
+    start: async (mode: 'hold' | 'continuous') =>
+      ipcRenderer.invoke(IPC.voiceStart, { mode }) as Promise<VoiceStartResponse>,
+    stop: async () => ipcRenderer.invoke(IPC.voiceStop, {}) as Promise<{ ok: boolean }>,
+    abort: async () => ipcRenderer.invoke(IPC.voiceAbort, {}) as Promise<{ ok: boolean }>,
+    setMode: async (mode: 'hold' | 'continuous') =>
+      ipcRenderer.invoke(IPC.voiceSetMode, { mode }) as Promise<{ ok: boolean }>,
+    frame: (pcm: ArrayBuffer): void => {
+      ipcRenderer.send(IPC.voiceFrame, pcm);
+    },
+    edit: async (eventId: string, text: string) =>
+      ipcRenderer.invoke(IPC.voiceEdit, { eventId, text }) as Promise<{ ok: boolean }>,
+    onPartial: (callback: (payload: VoicePartialPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: VoicePartialPayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.voicePartial, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.voicePartial, listener);
+      };
+    },
+    onFinal: (callback: (payload: VoiceFinalPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: VoiceFinalPayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.voiceFinal, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.voiceFinal, listener);
+      };
+    },
+    onLevel: (callback: (payload: VoiceLevelPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: VoiceLevelPayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.voiceLevel, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.voiceLevel, listener);
       };
     }
   }

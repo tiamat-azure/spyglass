@@ -1,9 +1,5 @@
 import { app, type Session, session, type WebContents } from 'electron';
-import {
-  denyPermissionCheck,
-  denyPermissionRequest,
-  denyWindowOpenHandler
-} from './web-security.ts';
+import { allowPermission, denyWindowOpenHandler } from './web-security.ts';
 
 const hardenedSessions = new WeakSet<Session>();
 
@@ -34,8 +30,21 @@ function hardenSession(ses: Session): void {
     return;
   }
   hardenedSessions.add(ses);
-  ses.setPermissionRequestHandler((contents, permission, callback) => {
-    denyPermissionRequest(contents, permission, callback);
+  ses.setPermissionRequestHandler((contents, permission, callback, details) => {
+    const isChrome = contents.session === session.defaultSession;
+    const mediaTypes =
+      'mediaTypes' in details && Array.isArray(details.mediaTypes) ? details.mediaTypes : undefined;
+    callback(allowPermission({ isChrome, permission, mediaTypes }));
   });
-  ses.setPermissionCheckHandler(() => denyPermissionCheck());
+  ses.setPermissionCheckHandler((contents, permission, _requestingOrigin, details) => {
+    if (contents === undefined || contents === null) {
+      return false;
+    }
+    const isChrome = contents.session === session.defaultSession;
+    const mediaType =
+      details !== undefined && 'mediaType' in details && typeof details.mediaType === 'string'
+        ? details.mediaType
+        : undefined;
+    return allowPermission({ isChrome, permission: String(permission), mediaType });
+  });
 }

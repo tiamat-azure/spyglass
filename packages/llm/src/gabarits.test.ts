@@ -96,5 +96,33 @@ describe('gabarits (I-04)', () => {
     expect(isEnrichableKind('nav.load')).toBe(true);
     expect(isEnrichableKind('record.start')).toBe(false);
     expect(isEnrichableKind('agent.narration-mode')).toBe(false);
+    expect(isEnrichableKind('voice.final')).toBe(false);
+  });
+
+  it('quotes dictated text and tags before/after correlation', () => {
+    expect(
+      gabaritText({
+        kind: 'voice.final',
+        voice: { text: 'Je vais cliquer sur Démarrer', relation: 'before' }
+      })
+    ).toBe("Tu as dicté : « Je vais cliquer sur Démarrer » (avant l'action)");
+    expect(
+      gabaritText({
+        kind: 'voice.final',
+        voice: { text: "J'ai validé l'étape", relation: 'after' }
+      })
+    ).toBe("Tu as dicté : « J'ai validé l'étape » (après l'action)");
+    expect(
+      gabaritText({
+        kind: 'voice.partial',
+        voice: { text: 'Je vais' }
+      })
+    ).toBe('Dictée en cours : « Je vais »');
+    expect(
+      gabaritText({
+        kind: 'voice.edited',
+        voice: { text: 'corrigé' }
+      })
+    ).toBe('Tu as corrigé la dictée : « corrigé »');
   });
 });

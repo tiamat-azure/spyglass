@@ -11,6 +11,7 @@ export class CaptureRetention {
   private readonly pinned = new Set<number>();
   private readonly screenshots = new Map<number, string>();
   private readonly snapshots = new Map<number, string>();
+  private audioDirCreated = false;
 
   constructor(
     private readonly sessionDir: string,
@@ -41,6 +42,17 @@ export class CaptureRetention {
     this.screenshots.set(stepIndex, ref);
     await this.pruneScreenshots();
     return ref;
+  }
+
+  /** AUDIO_RETENTION ≠ none only. Never create audio/ on the default none path. */
+  async writeAudio(eventId: string, wav: Buffer): Promise<string> {
+    if (!this.audioDirCreated) {
+      await mkdir(join(this.sessionDir, 'audio'), { recursive: true });
+      this.audioDirCreated = true;
+    }
+    const file = join(this.sessionDir, 'audio', `${eventId}.wav`);
+    await writeFile(file, wav);
+    return `audio/${eventId}.wav`;
   }
 
   private async pruneScreenshots(): Promise<void> {
@@ -74,6 +86,15 @@ export class CaptureRetention {
     try {
       const names = await readdir(join(this.sessionDir, 'screenshots'));
       return names.filter((name) => name.endsWith('.jpg')).sort();
+    } catch {
+      return [];
+    }
+  }
+
+  async listAudioFiles(): Promise<string[]> {
+    try {
+      const names = await readdir(join(this.sessionDir, 'audio'));
+      return names.filter((name) => name.endsWith('.wav')).sort();
     } catch {
       return [];
     }
