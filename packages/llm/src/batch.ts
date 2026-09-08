@@ -40,6 +40,7 @@ export class SlidingBatcher<T> {
 
   async flushNow(): Promise<void> {
     await this.flush();
+    await this.chain;
   }
 
   pendingCount(): number {

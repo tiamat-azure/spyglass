@@ -72,6 +72,8 @@ describe('packaged Observe', () => {
       stopFn.indexOf("this.state = 'stopping'")
     );
     expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(stopFn.indexOf('onBeforeSeal')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
+    expect(orch).toContain('AsyncLocalStorage');
     expect(stopFn.indexOf("this.state = 'stopping'")).toBeLessThan(
       stopFn.indexOf("kind: 'record.stop'")
     );

@@ -36,4 +36,26 @@ describe('sliding batcher (F-24)', () => {
     expect(flushed).toEqual([[1, 2]]);
     batcher.dispose();
   });
+
+  it('flushNow waits for an in-flight onFlush before returning', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let finished = false;
+    const batcher = new SlidingBatcher<number>({
+      windowMs: 0,
+      onFlush: async () => {
+        await gate;
+        finished = true;
+      }
+    });
+    batcher.push(1);
+    const flushed = batcher.flushNow();
+    expect(finished).toBe(false);
+    release();
+    await flushed;
+    expect(finished).toBe(true);
+    batcher.dispose();
+  });
 });

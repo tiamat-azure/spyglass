@@ -81,7 +81,9 @@ async function latestRawJsonl(sessionsDir: string): Promise<string> {
 test.describe('Lot 2 observer', () => {
   test('gabarit paints under 200ms then enrichment replaces in place', async () => {
     test.setTimeout(120_000);
-    const env = await launchEnv();
+    const env = await launchEnv({
+      SPYGLASS_LLM_MOCK_DELAY_MS: '1200'
+    });
     const electronApp = await electron.launch({
       cwd: appDir,
       args: ['--no-sandbox', '--no-zygote', appDir],
@@ -97,12 +99,17 @@ test.describe('Lot 2 observer', () => {
       await guest.locator('#step-1').click();
       const msg = chrome.locator('#log li.chat-msg[data-kind="dom.click"]').first();
       await expect(msg).toBeVisible({ timeout: 15_000 });
+      await expect(msg).toHaveAttribute('data-mode', 'template');
+      await expect(msg.locator('.mode-pill')).toHaveText(/gabarit déterministe/i);
       await expect(msg).toContainText(/Tu as cliqué/i);
       const latency = Number(await msg.getAttribute('data-latency-ms'));
       expect(latency).toBeLessThan(200);
       await chrome.screenshot({ path: join(shotDir, 'gabarit-under-200ms.png') });
       await expect(msg).toHaveAttribute('data-mode', 'llm', { timeout: 10_000 });
       await expect(msg.locator('.mode-pill')).toHaveText(/enrichi/i);
+      await msg.locator('details.tech-block').evaluate((el: HTMLDetailsElement) => {
+        el.open = true;
+      });
       await chrome.screenshot({ path: join(shotDir, 'enrichment-replace-in-place.png') });
       await chrome.locator('#record-btn').click();
       await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
@@ -180,6 +187,9 @@ test.describe('Lot 2 observer', () => {
       await expect(chrome.locator('#log')).toContainText(/Plafond de tokens atteint/i, {
         timeout: 20_000
       });
+      const ceilingBanner = chrome.locator('li.chat-msg[data-banner="danger"]');
+      await expect(ceilingBanner).toBeVisible();
+      await ceilingBanner.scrollIntoViewIfNeeded();
       await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i);
       await expect(chrome.locator('#rec-pill')).toHaveAttribute('data-active', 'true');
       await chrome.screenshot({
