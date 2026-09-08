@@ -139,11 +139,19 @@ export function screenshotFormatForPath(filePath: string): {
   return { type: 'jpeg', quality: 80 };
 }
 
+/** N52b: CI or SPYGLASS_NO_SANDBOX=1 disables the sandbox and warns on stderr. */
 export function chromiumLaunchArgs(env: NodeJS.ProcessEnv = process.env): string[] {
   const args: string[] = [];
   const ci = env.CI === '1' || env.CI === 'true' || env.CI === 'yes';
-  if (env.SPYGLASS_NO_SANDBOX === '1' || ci) {
+  const explicit = env.SPYGLASS_NO_SANDBOX === '1';
+  if (explicit || ci) {
     args.push('--no-sandbox', '--disable-setuid-sandbox');
+    const via = [ci ? 'CI' : undefined, explicit ? 'SPYGLASS_NO_SANDBOX' : undefined]
+      .filter((row): row is string => row !== undefined)
+      .join(', ');
+    process.stderr.write(
+      `spyglass: Chromium sandbox disabled (--no-sandbox / --disable-setuid-sandbox) via ${via}\n`
+    );
   }
   if (env.SPYGLASS_DISABLE_GPU === '1') {
     args.push('--disable-gpu');

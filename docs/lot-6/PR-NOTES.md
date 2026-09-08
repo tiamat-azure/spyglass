@@ -123,6 +123,11 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 11. **S44b / L6-044.** Omitting `driver` in `runScenario` launches a real
     standalone Playwright Chromium (generated script / CLI). In-app callers
     (`ReplayEngine`) must pass an explicit driver. Do not invert this.
+12. **N52b / L6-052.** `chromiumLaunchArgs` still adds `--no-sandbox` /
+    `--disable-setuid-sandbox` when `CI` is `1`/`true`/`yes` **or**
+    `SPYGLASS_NO_SANDBOX=1`. Do **not** require the env var alone. Emit a
+    stderr warning whenever the sandbox is disabled (CI-derived and/or
+    explicit).
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -454,6 +459,16 @@ S44b are unchanged. Chromium `--no-sandbox` / CI coupling is unchanged
 Unit tests after this pass: **400 passed, 1 skipped**, 53 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lot 6 e2e spec passed;
 mkdtemp session/screenshot dirs are removed in `finally`.
+
+## Adversarial pass 16 (Captain lock)
+
+Applied on tip `b5098c5497a31aa906eafc1a041aa3666f1b01da`. Product decisions
+1–11 and prior locks are unchanged. Locks **N52b**.
+
+- **L6-052 / N52b** Keep CI → `--no-sandbox` / `--disable-setuid-sandbox`
+  in `chromiumLaunchArgs`. Warn on stderr whenever the sandbox is disabled
+  (`CI` and/or `SPYGLASS_NO_SANDBOX=1`). Do not require
+  `SPYGLASS_NO_SANDBOX`-only.
 
 ## Residuals
 

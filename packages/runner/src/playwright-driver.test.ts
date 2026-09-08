@@ -68,11 +68,50 @@ describe('screenshotFormatForPath (L6-018)', () => {
 });
 
 describe('chromiumLaunchArgs (Lot 6 CI / sandbox)', () => {
+  function captureStderr(env: NodeJS.ProcessEnv): { args: string[]; stderr: string } {
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      return { args: chromiumLaunchArgs(env), stderr: chunks.join('') };
+    } finally {
+      process.stderr.write = write;
+    }
+  }
+
   it('adds no-sandbox and disable-gpu from env without path separators', () => {
-    const args = chromiumLaunchArgs({ CI: '1', SPYGLASS_DISABLE_GPU: '1' });
+    const { args, stderr } = captureStderr({ CI: '1', SPYGLASS_DISABLE_GPU: '1' });
     expect(args).toContain('--no-sandbox');
+    expect(args).toContain('--disable-setuid-sandbox');
     expect(args).toContain('--disable-gpu');
     expect(args.every((arg) => !arg.includes('\\') && !arg.includes('/'))).toBe(true);
+    expect(stderr).toMatch(/sandbox disabled/);
+    expect(stderr).toMatch(/CI/);
+  });
+
+  it('warns on stderr for CI-derived and explicit no-sandbox (N52b / L6-052)', () => {
+    const ciOnly = captureStderr({ CI: 'true' });
+    expect(ciOnly.args).toContain('--no-sandbox');
+    expect(ciOnly.stderr).toMatch(/sandbox disabled/);
+    expect(ciOnly.stderr).toMatch(/CI/);
+    expect(ciOnly.stderr).not.toMatch(/SPYGLASS_NO_SANDBOX/);
+
+    const explicit = captureStderr({ SPYGLASS_NO_SANDBOX: '1' });
+    expect(explicit.args).toContain('--no-sandbox');
+    expect(explicit.stderr).toMatch(/sandbox disabled/);
+    expect(explicit.stderr).toMatch(/SPYGLASS_NO_SANDBOX/);
+
+    const both = captureStderr({ CI: '1', SPYGLASS_NO_SANDBOX: '1' });
+    expect(both.args).toContain('--no-sandbox');
+    expect(both.stderr).toMatch(/CI/);
+    expect(both.stderr).toMatch(/SPYGLASS_NO_SANDBOX/);
+
+    const none = captureStderr({});
+    expect(none.args).not.toContain('--no-sandbox');
+    expect(none.stderr).toBe('');
   });
 });
 
