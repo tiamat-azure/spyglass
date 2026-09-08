@@ -16,6 +16,8 @@ import type {
   RefineRevisionView,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayProgressPayload,
+  ReplayStartResponse,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -30,7 +32,7 @@ import type {
 import { IPC } from '../shared/ipc.ts';
 
 const spyglass = {
-  lot: '4' as const,
+  lot: '5' as const,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -243,6 +245,27 @@ const spyglass = {
       ipcRenderer.on(IPC.refineState, listener);
       return () => {
         ipcRenderer.removeListener(IPC.refineState, listener);
+      };
+    }
+  },
+  replay: {
+    start: async (forceAi?: boolean, noAi?: boolean) => {
+      const payload: { forceAi?: boolean; noAi?: boolean } = {};
+      if (forceAi === true) {
+        payload.forceAi = true;
+      }
+      if (noAi === true) {
+        payload.noAi = true;
+      }
+      return ipcRenderer.invoke(IPC.replayStart, payload) as Promise<ReplayStartResponse>;
+    },
+    onProgress: (callback: (payload: ReplayProgressPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: ReplayProgressPayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.replayProgress, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.replayProgress, listener);
       };
     }
   }

@@ -20,7 +20,13 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@spyglass/probe', '@spyglass/contracts', '@spyglass/llm', '@spyglass/stt']
+        exclude: [
+          '@spyglass/probe',
+          '@spyglass/contracts',
+          '@spyglass/llm',
+          '@spyglass/stt',
+          '@spyglass/runner'
+        ]
       }),
       copyGuestResources()
     ],

@@ -15,6 +15,8 @@ import type {
   RefineRevisionView,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayProgressPayload,
+  ReplayStartResponse,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -27,7 +29,7 @@ import type {
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '4';
+  lot: '5';
   versions: {
     electron: string;
     chrome: string;
@@ -99,6 +101,10 @@ export type SpyglassPreloadApi = {
     finalize: () => Promise<RefineFinalizeResponse>;
     get: () => Promise<RefineRevisionView | undefined>;
     onState: (callback: (payload: RefineStatePayload) => void) => () => void;
+  };
+  replay: {
+    start: (forceAi?: boolean, noAi?: boolean) => Promise<ReplayStartResponse>;
+    onProgress: (callback: (payload: ReplayProgressPayload) => void) => () => void;
   };
 };
 

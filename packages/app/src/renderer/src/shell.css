@@ -731,6 +731,44 @@ h1 {
   display: none;
 }
 
+.replay-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-3);
+  padding-top: var(--sg-space-4);
+  border-top: 1px solid var(--sg-border);
+}
+
+.replay-panel[hidden] {
+  display: none;
+}
+
+.replay-panel h3 {
+  margin: 0;
+  font-size: var(--sg-text-sm);
+  letter-spacing: var(--sg-tracking-caps);
+  text-transform: uppercase;
+}
+
+.replay-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: var(--sg-text-xs);
+  color: var(--sg-text-muted);
+}
+
+.replay-step[data-status="passed"] {
+  color: var(--sg-text);
+}
+
+.replay-step[data-status="failed"] {
+  color: var(--sg-danger);
+}
+
+.replay-step[data-mode="AI"] {
+  color: var(--sg-warning);
+}
+
 .refine-header h2,
 .refine-weaks h3 {
   margin: 0;

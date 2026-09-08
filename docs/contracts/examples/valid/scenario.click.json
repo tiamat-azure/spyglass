@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "ses_lot5_demo",
+  "startUrl": "https://exemple.test/start",
+  "generatedAt": "2026-09-08T09:00:00.000Z",
+  "model": "claude-sonnet-4-5-20250929",
+  "steps": [
+    {
+      "index": 0,
+      "intent": "Je clique sur Démarrer",
+      "action": {
+        "type": "click",
+        "descriptor": {
+          "type": "click",
+          "selector": "[data-testid='step-1']",
+          "selectorStrategy": "testId",
+          "description": "Clic sur « Start »",
+          "framePath": ["main"],
+          "shadowPath": []
+        }
+      },
+      "verification": {
+        "type": "elementVisible",
+        "expected": "[data-testid='step-1']",
+        "strength": "strong",
+        "confirmedByUser": true
+      },
+      "sourceEvents": ["evt_000002"]
+    }
+  ]
+}

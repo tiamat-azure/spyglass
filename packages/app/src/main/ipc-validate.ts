@@ -9,6 +9,7 @@ import type {
   RefineEditRequest,
   RefineEstimateRequest,
   RefineRunRequest,
+  ReplayStartRequest,
   SessionRetractRequest,
   SessionStartRequest,
   StagehandObserveRequest,
@@ -266,6 +267,24 @@ export function parseRefineEditPayload(input: unknown): RefineEditRequest | unde
   const result: RefineEditRequest = { index: record.index };
   if (typeof record.intent === 'string') {
     result.intent = record.intent;
+  }
+  return result;
+}
+
+export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
+  if (input === undefined || input === null) {
+    return {};
+  }
+  if (typeof input !== 'object') {
+    return {};
+  }
+  const record = input as { forceAi?: unknown; noAi?: unknown };
+  const result: ReplayStartRequest = {};
+  if (record.forceAi === true) {
+    result.forceAi = true;
+  }
+  if (record.noAi === true) {
+    result.noAi = true;
   }
   return result;
 }

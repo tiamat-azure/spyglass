@@ -188,7 +188,7 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 4 — raffinement</p>
+              <p class="tagline">Lot 5 — exécution</p>
             </div>
           </header>
           <div class="token-meter" id="token-meter" data-level="ok">
@@ -239,6 +239,16 @@
               <button type="button" class="observe-btn" id="refine-confirm-routine">
                 Confirmer les routinières
               </button>
+            </section>
+            <section class="replay-panel" id="replay-panel" hidden data-running="false">
+              <h3>Rejeu</h3>
+              <p class="refine-copy" id="replay-status">Finalisez pour rejouer dans le navigateur embarqué.</p>
+              <label class="toggle" id="replay-ai-row">
+                <input id="replay-ai" name="replay-ai" type="checkbox" />
+                Forcer le rattrapage IA (--ai)
+              </label>
+              <button type="button" class="observe-btn" id="replay-run">Rejouer</button>
+              <ol class="replay-steps" id="replay-steps" aria-live="polite"></ol>
             </section>
           </section>
           <p class="meta" id="versions">Loading…</p>

@@ -29,6 +29,8 @@ export const RATE_LIMIT_CALLS_PER_MIN_DEFAULT = 60;
 export const SMART_TOKEN_CONFIRM_DEFAULT = 100_000;
 /** Smart refine completions need more room than narration (ADR-0014). */
 export const LLM_SMART_MAX_TOKENS_DEFAULT = 8192;
+/** Bounded AI recovery attempts per step (F-53, MAX_AI_RETRIES). */
+export const MAX_AI_RETRIES_DEFAULT = 3;
 
 /** Visible label / text sent to a remote profile (6.9). */
 export const EXPURGATE_TEXT_MAX = 80;
@@ -54,4 +56,11 @@ export const REFINE_SYSTEM_PROMPT = [
   'Ne fournis pas verification.expected: type, expected et strength sont calculés localement.',
   'Ordre canonique: intention, action, vérification. Fusionne les répétitions, ignore le bruit et les étapes rétractées.',
   "Jamais de valeur de champ, jamais d'URL brute, jamais de secret, jamais d'id inconnu."
+].join(' ');
+
+export const RECOVER_SYSTEM_PROMPT = [
+  "Tu diagnostiques l'échec d'une étape Spyglass et proposes un patch de descripteur d'action.",
+  'Réponds uniquement par un JSON objet { "diagnosis": string, "patch": { "scope": "action.descriptor", "descriptor": { ... } }, "confidence": number }.',
+  'scope ne peut valoir que action.descriptor. Ne propose jamais de modifier une vérification ni la structure du scénario.',
+  "Jamais de valeur de champ, jamais d'URL brute, jamais de secret."
 ].join(' ');

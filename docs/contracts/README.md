@@ -9,7 +9,10 @@ Ces fichiers sont **normatifs**. Le PRD (section 15) les référence et ne les d
 | Santé d'un scénario | [`schemas/health.schema.json`](schemas/health.schema.json) | -1 |
 | Canaux IPC | [`ipc.md`](ipc.md) | -1 |
 | Machine à états | [`state-machine.md`](state-machine.md) | -1 |
-| Prompts et sorties structurées | [`prompts.md`](prompts.md) | 2 et 4 |
+| Prompts et sorties structurées | [`prompts.md`](prompts.md) | 2, 4 et 5 |
+| Scénario exécutable | [`schemas/scenario.schema.json`](schemas/scenario.schema.json) | 5 |
+| Rapport d'exécution | [`schemas/execution-report.schema.json`](schemas/execution-report.schema.json) | 5 |
+| Patch suggéré | [`schemas/suggested-patch.schema.json`](schemas/suggested-patch.schema.json) | 5 |
 
 ## Règle de version
 

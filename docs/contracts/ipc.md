@@ -21,10 +21,10 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:session:retract` | invoke | `{ eventId: string }` | `{ retractedEventId: string }` (F-19) |
 | `spyglass:session:state` | emit | — | `{ state: RecorderState, since: number, sessionId? }` |
 
-`RecorderState` is `idle` | `recording` | `stopping` | `sealed` | `sealed-failed` | `refining` | `reviewing` | `finalized`.
+`RecorderState` is `idle` | `recording` | `stopping` | `sealed` | `sealed-failed` | `refining` | `reviewing` | `finalized` | `replaying`.
 `sealed-failed` is terminal for that session after a durable `record.stop` when
 `meta.json` could not be sealed; retry Stop repairs meta only (no second stop event).
-`refining` / `reviewing` / `finalized` never write `raw.jsonl` (F-42).
+`refining` / `reviewing` / `finalized` / `replaying` never write `raw.jsonl` (F-42, F-59).
 
 ## Événements et chat
 
@@ -80,8 +80,8 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:refine:get` | invoke | `{}` → révision courante |
 | `spyglass:refine:state` | emit | `{ phase, revision? }` |
 | `spyglass:generate:script` | invoke | `{ sessionId, revision }` → `{ paths: string[] }` |
-| `spyglass:replay:start` | invoke | `{ sessionId }` → `{ runId }` (F-59) |
-| `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt }` |
+| `spyglass:replay:start` | invoke | `{ forceAi?, noAi? }` → `{ ok: true, runId }` or `{ ok: false, error }` (F-59, F-60) |
+| `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt, message }` |
 
 ## Règles
 

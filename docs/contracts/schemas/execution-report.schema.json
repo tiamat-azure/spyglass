@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spyglass.dev/schemas/execution-report.v1.json",
+  "title": "Rapport d'exécution Spyglass",
+  "description": "runs/<runId>/report.json (F-56).",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "sessionId",
+    "startedAt",
+    "finishedAt",
+    "exitCode",
+    "headless",
+    "aiRecovery",
+    "maxAiRetries",
+    "smartModel",
+    "multimodal",
+    "warnings",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "exitCode": { "type": "integer", "minimum": 0 },
+    "headless": { "type": "boolean" },
+    "aiRecovery": { "type": "boolean" },
+    "maxAiRetries": { "type": "integer", "minimum": 0 },
+    "smartModel": { "type": "string" },
+    "multimodal": { "type": "boolean" },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "intent", "status", "durationMs", "mode", "attempts", "verificationOk"],
+        "additionalProperties": false,
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "intent": { "type": "string" },
+          "status": { "enum": ["passed", "failed", "skipped"] },
+          "durationMs": { "type": "integer", "minimum": 0 },
+          "mode": { "enum": ["script", "AI"] },
+          "attempts": { "type": "integer", "minimum": 1 },
+          "verificationOk": { "type": "boolean" },
+          "error": { "type": "string" },
+          "screenshotRef": { "type": "string" }
+        }
+      }
+    }
+  }
+}

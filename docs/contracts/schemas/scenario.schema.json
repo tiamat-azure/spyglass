@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spyglass.dev/schemas/scenario.v1.json",
+  "title": "Scénario exécutable Spyglass",
+  "description": "scenario.json — source de vérité du runner (PRD §6.12, ADR-0006).",
+  "type": "object",
+  "required": ["schemaVersion", "sessionId", "startUrl", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "sessionId": { "type": "string", "minLength": 1 },
+    "startUrl": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "model": { "type": "string" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "https://spyglass.dev/schemas/refined-step.v1.json" }
+    }
+  }
+}

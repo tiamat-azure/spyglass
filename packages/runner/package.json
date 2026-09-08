@@ -2,8 +2,11 @@
   "name": "@spyglass/runner",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass scenario runner library scaffold (ADR-0006). Runtime lands in Lot 5.",
+  "description": "Spyglass scenario runner: deterministic replay, verification, bounded AI recovery (Lot 5, ADR-0006).",
   "type": "module",
+  "bin": {
+    "spyglass-run": "./src/cli.ts"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -17,7 +20,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@spyglass/contracts": "workspace:*",
+    "@spyglass/llm": "workspace:*",
+    "playwright-core": "1.63.0"
+  },
   "devDependencies": {
+    "@types/node": "24.10.0",
     "typescript": "5.9.3",
     "vitest": "5.0.0"
   }

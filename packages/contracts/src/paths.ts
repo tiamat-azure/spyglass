@@ -26,7 +26,10 @@ export function examplesDir(): string {
 export const schemaFiles = {
   'raw-event': 'raw-event.schema.json',
   'refined-step': 'refined-step.schema.json',
-  health: 'health.schema.json'
+  health: 'health.schema.json',
+  scenario: 'scenario.schema.json',
+  'execution-report': 'execution-report.schema.json',
+  'suggested-patch': 'suggested-patch.schema.json'
 } as const;
 
 export type SchemaName = keyof typeof schemaFiles;

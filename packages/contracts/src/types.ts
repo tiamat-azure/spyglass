@@ -142,3 +142,63 @@ export type ScenarioHealth = {
     lastRunId: string;
   }>;
 };
+
+/** Executable scenario (PRD §6.12). Source of truth for `@spyglass/runner`. */
+export type Scenario = {
+  schemaVersion: 1;
+  sessionId: string;
+  startUrl: string;
+  generatedAt?: string;
+  model?: string;
+  steps: RefinedStep[];
+};
+
+export type ExecutionStepMode = 'script' | 'AI';
+
+export type ExecutionStepStatus = 'passed' | 'failed' | 'skipped';
+
+export type ExecutionStepReport = {
+  index: number;
+  intent: string;
+  status: ExecutionStepStatus;
+  durationMs: number;
+  mode: ExecutionStepMode;
+  attempts: number;
+  verificationOk: boolean;
+  error?: string;
+  screenshotRef?: string;
+};
+
+export type ExecutionReport = {
+  schemaVersion: 1;
+  runId: string;
+  sessionId: string;
+  startedAt: string;
+  finishedAt: string;
+  exitCode: number;
+  headless: boolean;
+  aiRecovery: boolean;
+  maxAiRetries: number;
+  smartModel: string;
+  multimodal: boolean;
+  warnings: string[];
+  steps: ExecutionStepReport[];
+};
+
+export type SuggestedPatchEntry = {
+  stepIndex: number;
+  scope: 'action.descriptor';
+  original: ReplayDescriptor;
+  suggested: ReplayDescriptor;
+  diagnosis: string;
+  confidence: number;
+};
+
+/** F-57 / ADR-0008: written on successful recovery, never auto-applied (Lot 5). */
+export type SuggestedPatch = {
+  schemaVersion: 1;
+  runId: string;
+  sessionId: string;
+  applied: false;
+  patches: SuggestedPatchEntry[];
+};

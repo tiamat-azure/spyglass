@@ -403,6 +403,24 @@ export class SessionOrchestrator {
     this.emitState();
   }
 
+  beginReplay(): void {
+    if (this.state !== 'finalized' && this.state !== 'replaying') {
+      throw new Error(`Cannot replay from ${this.state}`);
+    }
+    this.state = 'replaying';
+    this.since = Date.now();
+    this.emitState();
+  }
+
+  endReplay(): void {
+    if (this.state !== 'replaying') {
+      return;
+    }
+    this.state = 'finalized';
+    this.since = Date.now();
+    this.emitState();
+  }
+
   async readRawEvents(): Promise<RawEvent[]> {
     if (this.journal === undefined) {
       return [];
@@ -890,7 +908,9 @@ function canStartRecording(state: RecorderState): boolean {
 }
 
 function isRefinePhase(state: RecorderState): boolean {
-  return state === 'refining' || state === 'reviewing' || state === 'finalized';
+  return (
+    state === 'refining' || state === 'reviewing' || state === 'finalized' || state === 'replaying'
+  );
 }
 
 export function screenshotLimitFromEnv(env: NodeJS.ProcessEnv = process.env): number {
