@@ -105,7 +105,9 @@ export function attachVoiceCapture(
       if (pcm.length === 0) {
         return;
       }
-      api.voice.frame(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
+      const copy = new ArrayBuffer(pcm.byteLength);
+      new Int16Array(copy).set(pcm);
+      api.voice.frame(copy);
     };
     source.connect(processor);
     muteGain = audioContext.createGain();
