@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (221 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (226 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**12 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
@@ -155,7 +155,7 @@ Applied on tip `2b5ab40`. V1a energy VAD and C2b `before`-on-overlap are unchang
 
 ### Adversarial pass 5 (auto-fixes)
 
-Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+Applied on tip `cd6fe10`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 1. **P5-N1 high — Stop tears down the mic before STT flush.** Renderer Stop calls `setArmed(false)` (`stopGraph` / `track.stop`) **before** `session.stop()`. Main emits `stopping` then `await stopCapture()` so the MediaStream is not left hot for the ≤10s flush. `setArmed(false)` does **not** `voice.abort()`, so main can still journal `voice.final` with `capturing=false`.
 2. **P5-N2 medium — dropUtterance aborts in-process.** Empty-hold / mode-switch `dropUtterance` restores `inProcess.abort()` so engine `open` maps for the dropped live utterance are cleared. `abort()` is per-live (or pending finalize id), not `dispose()` of the whole engine.
