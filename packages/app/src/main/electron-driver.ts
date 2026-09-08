@@ -1,60 +1,9 @@
 import { writeFile } from 'node:fs/promises';
 import type { PageDriver, PageSnapshot } from '@spyglass/runner';
 import type { WebContents } from 'electron';
+import { guestScript } from './electron-guest-script.ts';
 
-const QUERY_HELPER = `function spyglassQuery(selector) {
-  const hops = String(selector).split(' >> ').map((part) => part.trim()).filter(Boolean);
-  let root = document;
-  for (let i = 0; i < hops.length - 1; i += 1) {
-    const host = spyglassQueryDeep(root, hops[i]);
-    if (host == null || host.contentDocument == null) {
-      return null;
-    }
-    root = host.contentDocument;
-  }
-  return spyglassQueryDeep(root, hops[hops.length - 1] ?? selector);
-}
-function spyglassQueryDeep(root, selector) {
-  if (selector.startsWith('xpath=')) {
-    const found = root.evaluate(
-      selector.slice(6),
-      root,
-      null,
-      XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null
-    ).singleNodeValue;
-    return found;
-  }
-  const role = /^role=([^\\[]+)(?:\\[name="([^"]*)"\\])?$/.exec(selector);
-  if (role) {
-    const nodes = root.querySelectorAll('*');
-    for (const node of nodes) {
-      const name = (node.getAttribute('aria-label') || node.textContent || '').trim();
-      const computed = (node.getAttribute('role') || node.tagName).toLowerCase();
-      if (computed === role[1].toLowerCase() && (!role[2] || name === role[2])) {
-        return node;
-      }
-    }
-  }
-  try {
-    const direct = root.querySelector(selector);
-    if (direct) {
-      return direct;
-    }
-  } catch {
-    // invalid CSS — try shadow pierce below
-  }
-  const walk = root.querySelectorAll('*');
-  for (const node of walk) {
-    if (node.shadowRoot) {
-      const nested = spyglassQueryDeep(node.shadowRoot, selector);
-      if (nested) {
-        return nested;
-      }
-    }
-  }
-  return null;
-}`;
+export { guestScript } from './electron-guest-script.ts';
 
 export class ElectronPageDriver implements PageDriver {
   constructor(private readonly contents: WebContents) {}
@@ -73,24 +22,24 @@ export class ElectronPageDriver implements PageDriver {
 
   async click(selector: string): Promise<void> {
     await this.eval(
-      `${QUERY_HELPER}
+      guestScript(`
       const el = spyglassQuery(${JSON.stringify(selector)});
       if (!el) { throw new Error(${JSON.stringify(`selector not found: ${selector}`)}); }
       el.click();
-      true;`
+      return true;`)
     );
   }
 
   async fill(selector: string, value: string): Promise<void> {
     await this.eval(
-      `${QUERY_HELPER}
+      guestScript(`
       const el = spyglassQuery(${JSON.stringify(selector)});
       if (!el) { throw new Error(${JSON.stringify(`selector not found: ${selector}`)}); }
       el.focus();
       el.value = ${JSON.stringify(value)};
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      true;`
+      return true;`)
     );
   }
 
@@ -100,22 +49,22 @@ export class ElectronPageDriver implements PageDriver {
 
   async check(selector: string, checked: boolean): Promise<void> {
     await this.eval(
-      `${QUERY_HELPER}
+      guestScript(`
       const el = spyglassQuery(${JSON.stringify(selector)});
       if (!el) { throw new Error(${JSON.stringify(`selector not found: ${selector}`)}); }
       el.checked = ${checked ? 'true' : 'false'};
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      true;`
+      return true;`)
     );
   }
 
   async press(selector: string, key: string): Promise<void> {
     await this.eval(
-      `${QUERY_HELPER}
+      guestScript(`
       const el = spyglassQuery(${JSON.stringify(selector)});
       if (!el) { throw new Error(${JSON.stringify(`selector not found: ${selector}`)}); }
       el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true }));
-      true;`
+      return true;`)
     );
   }
 
@@ -137,11 +86,11 @@ export class ElectronPageDriver implements PageDriver {
   async isVisible(selector: string): Promise<boolean> {
     try {
       const result = await this.eval(
-        `${QUERY_HELPER}
+        guestScript(`
         const el = spyglassQuery(${JSON.stringify(selector)});
         if (!el) { return false; }
         const style = window.getComputedStyle(el);
-        return style.display !== 'none' && style.visibility !== 'hidden';`
+        return style.display !== 'none' && style.visibility !== 'hidden';`)
       );
       return result === true;
     } catch {
@@ -160,9 +109,9 @@ export class ElectronPageDriver implements PageDriver {
 
   async inputValue(selector: string): Promise<string> {
     const value = await this.eval(
-      `${QUERY_HELPER}
+      guestScript(`
       const el = spyglassQuery(${JSON.stringify(selector)});
-      return el && 'value' in el ? String(el.value) : '';`
+      return el && 'value' in el ? String(el.value) : '';`)
     );
     return typeof value === 'string' ? value : '';
   }
