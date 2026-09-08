@@ -169,7 +169,7 @@ Applied on tip `e72eae0`. V1a energy VAD and C2b `before`-on-overlap are unchang
 
 ### Adversarial pass 7 (auto-fixes)
 
-Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+Applied on tip `84d5566`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 1. **P7-N1 medium — fail-closed during Stop flush.** `beginStop()` sets `stopping` when Session Stop starts so `allowsCapture` is false for the whole flush window, even while the recorder is still `recording`. A **fresh** `voice.start` cannot re-arm; not only in-flight epochs. `resumeCapture()` on the next Record.
 2. **P7-N2 low — refused start is `ok:false`.** `startCapture` throws `voice capture refused`; IPC maps that (and `!isCapturing()`) to `voice.start` `ok: false` so the renderer contract is fail-closed.
