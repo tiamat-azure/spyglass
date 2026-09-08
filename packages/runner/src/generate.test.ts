@@ -154,6 +154,36 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     }
   });
 
+  it('spyglass-generate exits 1 on stderr when no finalized revision (L6-010)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-cli-fail-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'reviewing',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(await runGenerateCli([sessionDir])).toBe(1);
+      expect(chunks.join('')).toMatch(/no finalized revision to generate from/);
+    } finally {
+      process.stderr.write = write;
+    }
+  });
+
   it('generateFromSessionDir reads a finalized rev-N.json', async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-session-'));
     const { mkdir, writeFile } = await import('node:fs/promises');

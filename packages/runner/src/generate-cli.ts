@@ -14,9 +14,14 @@ export async function runGenerateCli(
     process.stdout.write('Usage: spyglass-generate <sessionDir>\n');
     return 2;
   }
-  const paths = await generateFromSessionDir(resolve(sessionDir));
-  process.stdout.write(`${JSON.stringify({ ok: true, dir: paths.dir })}\n`);
-  return 0;
+  try {
+    const paths = await generateFromSessionDir(resolve(sessionDir));
+    process.stdout.write(`${JSON.stringify({ ok: true, dir: paths.dir })}\n`);
+    return 0;
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
 }
 
 const entry = process.argv[1];

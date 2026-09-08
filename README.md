@@ -230,8 +230,10 @@ truth), thin `scenario.ts` importing `runScenario` from
 an absolute http(s) `startUrl` (optional base path prefix); relative URLs
 still resolve with WHATWG. The script runs outside Electron; `--no-ai` needs
 no API key. Measurement protocol for PRD §2.2 non-contractual replay rates:
-10 public sites + local CI corpus, J+1 replay, published under
-[`docs/lot-6/`](docs/lot-6/).
+10 public sites + local CI corpus, published under
+[`docs/lot-6/`](docs/lot-6/). **J+1 public is N/A / pending** (J1c). When
+`--public --j1` runs, Lot 6 **rebuilds from static `PUBLIC_CORPUS`**, not a
+persisted J+0 `scenario.json` (J8c).
 
 **Not** implemented: Lot 7 assisted patch apply / PR to the target repo
 (F-62–F-65). Closed shadow DOM remains out of scope (ADR-0009).

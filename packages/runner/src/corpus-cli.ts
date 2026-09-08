@@ -21,7 +21,12 @@ export async function runCorpusCli(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<number> {
   const publicLive = argv.includes('--public');
-  const wave = publicLive ? (argv.includes('--j1') ? 'J+1' : 'J+0') : 'local-immutable';
+  const wantsJ1 = argv.includes('--j1');
+  if (wantsJ1 && !publicLive) {
+    process.stderr.write('--j1 requires --public (J+1 is the public corpus wave)\n');
+    return 2;
+  }
+  const wave = publicLive ? (wantsJ1 ? 'J+1' : 'J+0') : 'local-immutable';
   const out = resolveCorpusOutPath(argv, wave);
   let close: (() => Promise<void>) | undefined;
   let sites = [...PUBLIC_CORPUS];

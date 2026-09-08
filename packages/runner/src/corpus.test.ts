@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
 import { LOCAL_CORPUS_SIZE, localCorpusSites, measureCorpus, PUBLIC_CORPUS } from './corpus.ts';
-import { resolveCorpusOutPath } from './corpus-cli.ts';
+import { resolveCorpusOutPath, runCorpusCli } from './corpus-cli.ts';
 import { startFixtureServer } from './http-fixture.ts';
 
 describe('Lot 6 measurement protocol corpus', () => {
@@ -61,5 +61,20 @@ describe('Lot 6 measurement protocol corpus', () => {
       await readFile(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')
     ) as { scripts: Record<string, string> };
     expect(pkg.scripts['measure-corpus']).toContain('--experimental-transform-types');
+  });
+
+  it('refuses --j1 without --public (L6-012)', async () => {
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      expect(await runCorpusCli(['--j1'])).toBe(2);
+      expect(chunks.join('')).toMatch(/--j1 requires --public/);
+    } finally {
+      process.stderr.write = write;
+    }
   });
 });

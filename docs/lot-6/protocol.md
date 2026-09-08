@@ -44,7 +44,7 @@ Commande :
 
 ```bash
 pnpm measure-corpus
-# live public (réseau requis) — `--j1` écrit `measured-rates.j1.json` par défaut :
+# live public (réseau requis) — `--j1` exige `--public` ; écrit `measured-rates.j1.json` par défaut :
 pnpm --filter @spyglass/runner exec node --experimental-transform-types src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json
 ```
 

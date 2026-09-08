@@ -170,6 +170,23 @@ L6-007, and L6-009 were already on that tip.
   static `PUBLIC_CORPUS`. Same-artifact replay is a residual for later. No
   invented J+1 percentage.
 
+## Adversarial pass 4 (auto-fix)
+
+Applied on tip `6bb40bddd59285a5479ad7071364e6d6c45b2d0f`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-010** `spyglass-generate` wraps `generateFromSessionDir` in try/catch
+  (same pattern as `spyglass-run`): expected failures (e.g. no finalized
+  revision) write stderr and exit 1; no unhandled rejection.
+- **L6-011** Root README Lot 6 blurb records J1c (J+1 **N/A / pending**) and
+  J8c (`--j1` rebuilds from `PUBLIC_CORPUS`, not a persisted J+0
+  `scenario.json`).
+- **L6-012** `--j1` without `--public` fails closed (exit 2, stderr:
+  `--j1 requires --public`).
+
+Unit tests after this pass: **362 passed, 1 skipped**, 49 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
