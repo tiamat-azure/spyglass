@@ -1,4 +1,4 @@
-export const SHELL_LOT = '1' as const;
+export const SHELL_LOT = '2' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -22,7 +22,15 @@ export const IPC = {
   sessionStop: 'spyglass:session:stop',
   sessionRetract: 'spyglass:session:retract',
   sessionState: 'spyglass:session:state',
-  eventAppended: 'spyglass:event:appended'
+  eventAppended: 'spyglass:event:appended',
+  chatMessage: 'spyglass:chat:message',
+  chatEnriched: 'spyglass:chat:enriched',
+  usageUpdate: 'spyglass:usage:update',
+  usageRaiseCeiling: 'spyglass:usage:raiseCeiling',
+  configGet: 'spyglass:config:get',
+  configSet: 'spyglass:config:set',
+  configTest: 'spyglass:config:test',
+  layoutGuestVisible: 'spyglass:layout:guestVisible'
 } as const;
 
 export type NavState = {
@@ -128,4 +136,107 @@ export type StagehandActResponse = {
   error?: string;
   guestUrl?: string;
   cdpUrl?: string;
+};
+
+export type ChatMode = 'template' | 'llm' | 'system';
+
+export type ChatAction = {
+  id: 'raise-ceiling';
+  label: string;
+};
+
+export type ChatMessagePayload = {
+  eventId: string;
+  stepIndex?: number;
+  kind: string;
+  mode: ChatMode;
+  text: string;
+  technical?: string;
+  issuedAt: number;
+  retractable: boolean;
+  banner?: 'degraded' | 'warning' | 'danger';
+  actions?: ChatAction[];
+};
+
+export type ChatEnrichedPayload = {
+  eventId: string;
+  mode: 'llm';
+  text: string;
+};
+
+export type UsagePayload = {
+  profile: 'fast' | 'smart';
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  ceiling: number;
+  ratio: number;
+  halt: string;
+  estimatedUsd?: number;
+};
+
+export type ConfigSource = 'default' | 'env' | 'ui';
+
+export type MaskedProfileConfig = {
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasApiKey: boolean;
+  apiKeyMasked: string;
+  sources: {
+    provider: ConfigSource;
+    model: ConfigSource;
+    baseUrl: ConfigSource;
+    apiKey: ConfigSource;
+  };
+};
+
+export type ConfigGetResponse = {
+  enrichmentEnabled: boolean;
+  sessionTokenLimitFast: number;
+  tokenWarnRatio: number;
+  rateLimitCallsPerMin: number;
+  smartTokenConfirm: number;
+  encryptionAvailable: boolean;
+  fast: MaskedProfileConfig;
+  smart: MaskedProfileConfig;
+};
+
+export type ConfigSetRequest = {
+  profile?: 'fast' | 'smart';
+  provider?: string;
+  model?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  enrichmentEnabled?: boolean;
+  sessionTokenLimitFast?: number;
+  tokenWarnRatio?: number;
+  rateLimitCallsPerMin?: number;
+  smartTokenConfirm?: number;
+};
+
+export type ConfigSetResponse = {
+  ok: boolean;
+  persistedKey: boolean;
+  error?: string;
+};
+
+export type ConfigTestRequest = {
+  profile: 'fast' | 'smart';
+};
+
+export type ConfigTestResponse = {
+  ok: boolean;
+  latencyMs: number;
+  multimodal: boolean;
+  error?: string;
+};
+
+export type GuestVisiblePayload = {
+  visible: boolean;
+};
+
+export type RaiseCeilingRequest = {
+  tokens?: number;
 };

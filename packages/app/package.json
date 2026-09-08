@@ -2,7 +2,7 @@
   "name": "@spyglass/app",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass Electron shell (Lot 1 capture + two-zone WebContentsView)",
+  "description": "Spyglass Electron shell (Lot 2 observer + Lot 1 capture)",
   "author": {
     "name": "Spyglass contributors",
     "email": "tiamat.azure@gmail.com"
@@ -33,6 +33,7 @@
   "dependencies": {
     "@browserbasehq/stagehand": "3.7.3",
     "@spyglass/contracts": "workspace:*",
+    "@spyglass/llm": "workspace:*",
     "@spyglass/probe": "workspace:*",
     "playwright-core": "1.63.0",
     "zod": "3.25.76"

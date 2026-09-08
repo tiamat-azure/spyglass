@@ -19,15 +19,21 @@ import { parseCdpTargetList, pickGuestTarget, resolvePinnedChromeTargetId } from
 import { isChromeIpcSender } from './ipc-sender.ts';
 import {
   parseBrowserBoundsPayload,
+  parseConfigSetPayload,
+  parseConfigTestPayload,
   parseEmptyPayload,
   parseGotoPayload,
+  parseGuestVisiblePayload,
   parseObservePayload,
+  parseRaiseCeilingPayload,
   parseRetractPayload,
   parseSessionStartPayload
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
+import { createObserverRuntime, type ObserverRuntime } from './observer-host.ts';
 import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.ts';
+import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
@@ -52,6 +58,7 @@ installWebContentsSecurityDefaults();
 
 let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
+let observerRuntime: ObserverRuntime | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -417,7 +424,9 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const payload = parseSessionStartPayload(raw);
     const snapshot = requirePane().snapshot();
     const startUrl = payload.startUrl ?? snapshot.url;
-    return await requireSession().start(startUrl);
+    const started = await requireSession().start(startUrl);
+    observerRuntime?.observer.onSessionStart(started.sessionId);
+    return started;
   });
 
   ipcMain.handle(IPC.sessionStop, async (event, raw: unknown) => {
@@ -522,6 +531,57 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     activePane.setBounds(clamped);
   });
+
+  ipcMain.handle(IPC.configGet, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.configGet)) {
+      return emptyConfig();
+    }
+    return observerRuntime?.settings.masked() ?? emptyConfig();
+  });
+
+  ipcMain.handle(IPC.configSet, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.configSet)) {
+      return { ok: false, persistedKey: false, error: 'forbidden' };
+    }
+    const payload = parseConfigSetPayload(raw);
+    if (payload === undefined || observerRuntime === undefined) {
+      return { ok: false, persistedKey: false, error: 'invalid payload' };
+    }
+    const result = await observerRuntime.settings.apply(payload);
+    observerRuntime.observer.setEnabled(observerRuntime.settings.enrichmentEnabled());
+    return result;
+  });
+
+  ipcMain.handle(IPC.configTest, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.configTest)) {
+      return { ok: false, latencyMs: 0, multimodal: false, error: 'forbidden' };
+    }
+    const payload = parseConfigTestPayload(raw);
+    if (payload === undefined || observerRuntime === undefined) {
+      return { ok: false, latencyMs: 0, multimodal: false, error: 'invalid payload' };
+    }
+    return await observerRuntime.gateway.testConnection(payload.profile);
+  });
+
+  ipcMain.handle(IPC.usageRaiseCeiling, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.usageRaiseCeiling)) {
+      return { ok: false };
+    }
+    const payload = parseRaiseCeilingPayload(raw);
+    observerRuntime?.observer.raiseCeiling(payload.tokens);
+    return { ok: true };
+  });
+
+  ipcMain.on(IPC.layoutGuestVisible, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.layoutGuestVisible)) {
+      return;
+    }
+    const payload = parseGuestVisiblePayload(raw);
+    if (payload === undefined || activePane === undefined) {
+      return;
+    }
+    activePane.setVisible(payload.visible);
+  });
 }
 
 void (async () => {
@@ -540,6 +600,10 @@ void (async () => {
     pinnedChromeTargetId = undefined;
     const win = createWindow();
     winRef.current = win;
+    const runtimePromise = createObserverRuntime(win, () => requireSession()).then((runtime) => {
+      observerRuntime = runtime;
+      return runtime;
+    });
     if (cdpPort > 0) {
       pinChromeFromWebContents(win.webContents);
     }
@@ -569,9 +633,13 @@ void (async () => {
       {
         onEvent: (rawEvent) => {
           emitToChrome(win, IPC.eventAppended, rawEvent);
+          observerRuntime?.observer.onRawEvent(rawEvent);
         },
         onState: (state: SessionStatePayload) => {
           emitToChrome(win, IPC.sessionState, state);
+        },
+        onBeforeSeal: async () => {
+          await observerRuntime?.observer.flush();
         }
       }
     );
@@ -599,9 +667,10 @@ void (async () => {
     applyFallbackBounds();
 
     win.once('ready-to-show', () => {
-      win.show();
-      applyFallbackBounds();
       void (async () => {
+        observerRuntime = await runtimePromise;
+        win.show();
+        applyFallbackBounds();
         const startUrl = process.env.SPYGLASS_START_URL;
         if (startUrl !== undefined && startUrl.length > 0) {
           const normalized = normalizeGotoUrl(startUrl);

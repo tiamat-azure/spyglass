@@ -1,18 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   BrowserBounds,
+  ChatEnrichedPayload,
+  ChatMessagePayload,
+  ConfigGetResponse,
+  ConfigSetRequest,
+  ConfigSetResponse,
+  ConfigTestResponse,
   NavState,
   PopupRedirectedPayload,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
   StagehandObserveRequest,
-  StagehandObserveResponse
+  StagehandObserveResponse,
+  UsagePayload
 } from '../shared/ipc.ts';
 import { IPC } from '../shared/ipc.ts';
 
 const spyglass = {
-  lot: '1' as const,
+  lot: '2' as const,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -48,6 +55,9 @@ const spyglass = {
   layout: {
     setBrowserBounds: (bounds: BrowserBounds): void => {
       ipcRenderer.send(IPC.layoutBrowserBounds, bounds);
+    },
+    setGuestVisible: (visible: boolean): void => {
+      ipcRenderer.send(IPC.layoutGuestVisible, { visible });
     }
   },
   session: {
@@ -81,6 +91,48 @@ const spyglass = {
         ipcRenderer.removeListener(IPC.eventAppended, listener);
       };
     }
+  },
+  chat: {
+    onMessage: (callback: (message: ChatMessagePayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: ChatMessagePayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.chatMessage, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.chatMessage, listener);
+      };
+    },
+    onEnriched: (callback: (payload: ChatEnrichedPayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: ChatEnrichedPayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.chatEnriched, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.chatEnriched, listener);
+      };
+    }
+  },
+  usage: {
+    onUpdate: (callback: (usage: UsagePayload) => void): (() => void) => {
+      const listener = (_event: unknown, payload: UsagePayload): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.usageUpdate, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.usageUpdate, listener);
+      };
+    },
+    raiseCeiling: async (tokens?: number) =>
+      ipcRenderer.invoke(IPC.usageRaiseCeiling, tokens === undefined ? {} : { tokens }) as Promise<{
+        ok: boolean;
+      }>
+  },
+  config: {
+    get: async () => ipcRenderer.invoke(IPC.configGet) as Promise<ConfigGetResponse>,
+    set: async (patch: ConfigSetRequest) =>
+      ipcRenderer.invoke(IPC.configSet, patch) as Promise<ConfigSetResponse>,
+    test: async (profile: 'fast' | 'smart') =>
+      ipcRenderer.invoke(IPC.configTest, { profile }) as Promise<ConfigTestResponse>
   },
   stagehand: {
     observe: async (instruction?: string) => {

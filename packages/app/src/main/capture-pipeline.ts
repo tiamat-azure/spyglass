@@ -4,6 +4,7 @@ import type {
   RawEvent,
   ReplayDescriptor
 } from '@spyglass/contracts';
+import { gabaritText } from '@spyglass/llm';
 import {
   buildReplayDescriptor,
   checkedStateArgument,
@@ -216,9 +217,22 @@ export function buildRawEvent(options: {
       event.action = action as ReplayDescriptor;
     }
   }
+  const gabarit: Parameters<typeof gabaritText>[0] = { kind: wire.kind };
+  if (wire.target !== undefined) {
+    gabarit.target = wire.target;
+  }
+  if (value !== undefined) {
+    gabarit.value = value;
+  }
+  if (event.page !== undefined) {
+    gabarit.page = event.page;
+  }
+  if (wire.key !== undefined) {
+    gabarit.key = wire.key;
+  }
   event.narration = {
     mode: 'template',
-    text: templateNarration(wire.kind, wire.target)
+    text: gabaritText(gabarit)
   };
   if (options.snapshotRef !== undefined) {
     event.snapshotRef = options.snapshotRef;
@@ -251,6 +265,13 @@ export function buildControlEvent(options: {
   if (options.retracts !== undefined) {
     event.retracts = options.retracts;
   }
-  event.narration = { mode: 'template', text: templateNarration(options.kind) };
+  const gabarit: Parameters<typeof gabaritText>[0] = { kind: options.kind };
+  if (options.page !== undefined) {
+    gabarit.page = options.page;
+  }
+  event.narration = {
+    mode: 'template',
+    text: gabaritText(gabarit)
+  };
   return event;
 }

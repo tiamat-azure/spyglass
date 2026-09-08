@@ -3,11 +3,11 @@ import { formatShellTitle, isProductUiEnabled, SHELL_LOT } from './shell-meta.ts
 
 describe('Lot 0 shell meta', () => {
   it('identifies the capture lot', () => {
-    expect(SHELL_LOT).toBe('1');
+    expect(SHELL_LOT).toBe('2');
     expect(formatShellTitle()).toBe('Spyglass');
   });
 
-  it('enables product UI for Lot 1', () => {
+  it('enables product UI for Lot 2', () => {
     expect(isProductUiEnabled(SHELL_LOT)).toBe(true);
     expect(isProductUiEnabled('-1')).toBe(false);
   });

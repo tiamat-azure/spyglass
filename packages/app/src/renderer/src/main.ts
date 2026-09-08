@@ -1,4 +1,13 @@
-import type { NavState, SessionStatePayload, StagehandObserveResponse } from '../../shared/ipc.ts';
+import type {
+  ChatMessagePayload,
+  ConfigGetResponse,
+  ConfigSetRequest,
+  MaskedProfileConfig,
+  NavState,
+  SessionStatePayload,
+  StagehandObserveResponse,
+  UsagePayload
+} from '../../shared/ipc.ts';
 import { DEFAULT_SPLIT_RATIO } from '../../shared/ipc.ts';
 
 const CHAT_MIN_PX = 300;
@@ -28,7 +37,12 @@ function applyRatio(browserSlot: HTMLElement, ratio: number): void {
 
 function appendLog(log: HTMLOListElement, text: string): void {
   const item = document.createElement('li');
-  item.textContent = text;
+  item.className = 'chat-msg';
+  item.dataset.mode = 'system';
+  const body = document.createElement('p');
+  body.className = 'chat-body';
+  body.textContent = text;
+  item.append(body);
   log.append(item);
   log.scrollTop = log.scrollHeight;
 }
@@ -48,6 +62,185 @@ function formatObservations(result: StagehandObserveResponse): string {
   return `observe ok (${result.model ?? 'stub'})\n${lines.join('\n')}`;
 }
 
+function clock(ts: number): string {
+  const date = new Date(ts);
+  return date.toLocaleTimeString('fr-FR', { hour12: false });
+}
+
+function renderChatMessage(
+  log: HTMLOListElement,
+  api: NonNullable<typeof window.spyglass>,
+  message: ChatMessagePayload
+): void {
+  const existing = log.querySelector(`[data-event-id="${CSS.escape(message.eventId)}"]`);
+  const item = existing instanceof HTMLLIElement ? existing : document.createElement('li');
+  item.className = 'chat-msg';
+  item.dataset.eventId = message.eventId;
+  item.dataset.kind = message.kind;
+  item.dataset.mode = message.mode;
+  const latency = Math.max(0, Date.now() - message.issuedAt);
+  item.dataset.latencyMs = String(latency);
+  if (message.banner !== undefined) {
+    item.dataset.banner = message.banner;
+  }
+  item.replaceChildren();
+
+  const meta = document.createElement('div');
+  meta.className = 'chat-meta';
+  const time = document.createElement('span');
+  time.textContent = clock(message.issuedAt);
+  meta.append(time);
+  if (message.stepIndex !== undefined) {
+    const step = document.createElement('span');
+    step.textContent = `étape ${String(message.stepIndex).padStart(2, '0')}`;
+    meta.append(step);
+  }
+  const pill = document.createElement('span');
+  pill.className = 'mode-pill';
+  pill.dataset.mode = message.mode;
+  pill.textContent =
+    message.mode === 'template'
+      ? 'gabarit déterministe'
+      : message.mode === 'llm'
+        ? 'enrichi'
+        : message.kind;
+  meta.append(pill);
+  item.append(meta);
+
+  const body = document.createElement('p');
+  body.className = 'chat-body';
+  body.textContent = message.text;
+  item.append(body);
+
+  if (message.technical !== undefined && message.technical.length > 0) {
+    const details = document.createElement('details');
+    details.className = 'tech-block';
+    const summary = document.createElement('summary');
+    summary.textContent = 'descripteur DOM';
+    const grid = document.createElement('div');
+    grid.className = 'tech-grid';
+    const pre = document.createElement('pre');
+    pre.textContent = message.technical;
+    grid.append(pre);
+    details.append(summary, grid);
+    item.append(details);
+  }
+
+  if (message.retractable) {
+    const retract = document.createElement('button');
+    retract.type = 'button';
+    retract.className = 'retract';
+    retract.textContent = 'Retract';
+    retract.addEventListener('click', () => {
+      void api.session.retract(message.eventId);
+    });
+    item.append(retract);
+  }
+
+  if (message.actions !== undefined) {
+    for (const action of message.actions) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'chat-action';
+      button.textContent = action.label;
+      button.addEventListener('click', () => {
+        void api.usage.raiseCeiling();
+      });
+      item.append(button);
+    }
+  }
+
+  if (!(existing instanceof HTMLLIElement)) {
+    log.append(item);
+  }
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+  if (nearBottom) {
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function applyUsage(
+  meter: HTMLElement,
+  fill: HTMLElement,
+  counts: HTMLElement,
+  hint: HTMLElement,
+  usage: UsagePayload
+): void {
+  const pct = Math.min(100, Math.max(0, usage.ratio * 100));
+  fill.style.width = `${String(pct)}%`;
+  counts.textContent = `${String(usage.totalTokens)} / ${String(usage.ceiling)}`;
+  const level = usage.halt === 'ceiling' || pct >= 100 ? 'danger' : pct >= 50 ? 'warn' : 'ok';
+  meter.dataset.level = level;
+  const usd =
+    usage.estimatedUsd !== undefined ? ` · ~$${usage.estimatedUsd.toFixed(4)} (indicative)` : '';
+  hint.textContent =
+    usage.halt === 'none'
+      ? `${String(usage.calls)} calls · ${String(usage.inputTokens)} in / ${String(usage.outputTokens)} out${usd}`
+      : `enrichment ${usage.halt} · recording continues${usd}`;
+}
+
+function sourceLabel(source: string): string {
+  if (source === 'ui') {
+    return 'réglée';
+  }
+  if (source === 'env') {
+    return 'env';
+  }
+  return 'défaut';
+}
+
+function fillProfile(prefix: 'fast' | 'smart', profile: MaskedProfileConfig): void {
+  requireEl<HTMLInputElement>(`${prefix}-provider`).value = profile.provider;
+  requireEl<HTMLInputElement>(`${prefix}-model`).value = profile.model;
+  requireEl<HTMLInputElement>(`${prefix}-baseUrl`).value = profile.baseUrl;
+  requireEl<HTMLInputElement>(`${prefix}-apiKey`).value = profile.apiKeyMasked;
+  const map: Record<string, string> = {
+    provider: profile.sources.provider,
+    model: profile.sources.model,
+    baseUrl: profile.sources.baseUrl,
+    apiKey: profile.sources.apiKey
+  };
+  for (const [key, source] of Object.entries(map)) {
+    const pill = document.querySelector(`[data-source-for="${prefix}-${key}"]`);
+    if (pill instanceof HTMLElement) {
+      pill.textContent = sourceLabel(source);
+    }
+  }
+}
+
+function readProfile(
+  prefix: 'fast' | 'smart'
+): Pick<ConfigSetRequest, 'provider' | 'model' | 'baseUrl' | 'apiKey'> {
+  const apiKey = requireEl<HTMLInputElement>(`${prefix}-apiKey`).value;
+  const patch: Pick<ConfigSetRequest, 'provider' | 'model' | 'baseUrl' | 'apiKey'> = {
+    provider: requireEl<HTMLInputElement>(`${prefix}-provider`).value,
+    model: requireEl<HTMLInputElement>(`${prefix}-model`).value,
+    baseUrl: requireEl<HTMLInputElement>(`${prefix}-baseUrl`).value
+  };
+  if (apiKey.length > 0 && !apiKey.startsWith('•')) {
+    patch.apiKey = apiKey;
+  }
+  return patch;
+}
+
+async function loadSettings(api: NonNullable<typeof window.spyglass>): Promise<void> {
+  const config = await api.config.get();
+  applyConfigForm(config);
+}
+
+function applyConfigForm(config: ConfigGetResponse): void {
+  fillProfile('fast', config.fast);
+  fillProfile('smart', config.smart);
+  requireEl<HTMLInputElement>('session-token-limit').value = String(config.sessionTokenLimitFast);
+  requireEl<HTMLInputElement>('token-warn-ratio').value = String(config.tokenWarnRatio);
+  requireEl<HTMLInputElement>('rate-limit').value = String(config.rateLimitCallsPerMin);
+  requireEl<HTMLInputElement>('enrichment-enabled').checked = config.enrichmentEnabled;
+  const encryption = requireEl<HTMLElement>('encryption-status');
+  encryption.textContent = config.encryptionAvailable
+    ? 'safeStorage encryption is available. Keys are stored as ciphertext.'
+    : 'safeStorage unavailable on this host — keys stay in memory / env, never plaintext on disk.';
+}
+
 const api = window.spyglass;
 const toolbar = requireEl<HTMLElement>('toolbar');
 const urlInput = requireEl<HTMLInputElement>('url');
@@ -65,6 +258,13 @@ const recordBtn = requireEl<HTMLButtonElement>('record-btn');
 const replayActBtn = requireEl<HTMLButtonElement>('replay-act');
 const recPill = requireEl<HTMLElement>('rec-pill');
 const log = requireEl<HTMLOListElement>('log');
+const tabBrowser = requireEl<HTMLButtonElement>('tab-browser');
+const tabSettings = requireEl<HTMLButtonElement>('tab-settings');
+const settingsPanel = requireEl<HTMLElement>('settings-panel');
+const tokenMeter = requireEl<HTMLElement>('token-meter');
+const tokenFill = requireEl<HTMLElement>('token-fill');
+const tokenCounts = requireEl<HTMLElement>('token-counts');
+const tokenHint = requireEl<HTMLElement>('token-hint');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -86,6 +286,17 @@ function reportBounds(): void {
     width: rect.width,
     height: rect.height
   });
+}
+
+function showTab(name: 'browser' | 'settings'): void {
+  const settings = name === 'settings';
+  tabBrowser.setAttribute('aria-selected', settings ? 'false' : 'true');
+  tabSettings.setAttribute('aria-selected', settings ? 'true' : 'false');
+  settingsPanel.hidden = !settings;
+  api?.layout.setGuestVisible(!settings);
+  if (!settings) {
+    reportBounds();
+  }
 }
 
 const resizeObserver = new ResizeObserver(() => {
@@ -144,37 +355,37 @@ if (api !== undefined) {
   });
 
   api.session.onEvent((event) => {
-    const kind = typeof event.kind === 'string' ? event.kind : 'event';
-    const id = typeof event.id === 'string' ? event.id : '';
-    const narration =
-      typeof event.narration === 'object' &&
-      event.narration !== null &&
-      typeof (event.narration as { text?: unknown }).text === 'string'
-        ? (event.narration as { text: string }).text
-        : kind;
-    const item = document.createElement('li');
-    item.dataset.eventId = id;
-    const label = document.createElement('span');
-    label.textContent = `${kind} · ${narration}`;
-    item.append(label);
-    if (kind.startsWith('dom.') && id.length > 0) {
-      const retract = document.createElement('button');
-      retract.type = 'button';
-      retract.className = 'retract';
-      retract.textContent = 'Retract';
-      retract.addEventListener('click', () => {
-        void api.session.retract(id);
-      });
-      item.append(retract);
-    }
-    if (kind === 'step.retracted' && typeof event.retracts === 'string') {
-      const previous = log.querySelector(`[data-event-id="${event.retracts}"]`);
+    if (event.kind === 'step.retracted' && typeof event.retracts === 'string') {
+      const previous = log.querySelector(`[data-event-id="${CSS.escape(event.retracts)}"]`);
       if (previous instanceof HTMLElement) {
         previous.dataset.retracted = 'true';
       }
     }
-    log.append(item);
-    log.scrollTop = log.scrollHeight;
+  });
+
+  api.chat.onMessage((message) => {
+    renderChatMessage(log, api, message);
+  });
+
+  api.chat.onEnriched((payload) => {
+    const item = log.querySelector(`[data-event-id="${CSS.escape(payload.eventId)}"]`);
+    if (!(item instanceof HTMLElement)) {
+      return;
+    }
+    item.dataset.mode = 'llm';
+    const body = item.querySelector('.chat-body');
+    if (body instanceof HTMLElement) {
+      body.textContent = payload.text;
+    }
+    const pill = item.querySelector('.mode-pill');
+    if (pill instanceof HTMLElement) {
+      pill.dataset.mode = 'llm';
+      pill.textContent = 'enrichi';
+    }
+  });
+
+  api.usage.onUpdate((usage: UsagePayload) => {
+    applyUsage(tokenMeter, tokenFill, tokenCounts, tokenHint, usage);
   });
 
   void api.stagehand.cdp().then((info) => {
@@ -185,6 +396,8 @@ if (api !== undefined) {
     const target = info.targetId === undefined ? 'resolving' : info.targetId.slice(0, 8);
     cdpStatus.textContent = `CDP ${info.cdpUrl} · target ${target}`;
   });
+
+  void loadSettings(api);
 }
 
 urlForm.addEventListener('submit', (event) => {
@@ -207,6 +420,16 @@ forwardBtn.addEventListener('click', () => {
 });
 reloadBtn.addEventListener('click', () => {
   void api?.nav.reload();
+});
+
+tabBrowser.addEventListener('click', () => {
+  showTab('browser');
+});
+tabSettings.addEventListener('click', () => {
+  showTab('settings');
+  if (api !== undefined) {
+    void loadSettings(api);
+  }
 });
 
 observeBtn.addEventListener('click', () => {
@@ -267,6 +490,67 @@ replayActBtn.addEventListener('click', () => {
     .finally(() => {
       replayActBtn.disabled = false;
     });
+});
+
+requireEl<HTMLButtonElement>('fast-test').addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const status = requireEl<HTMLElement>('fast-test-status');
+  status.textContent = 'test en cours';
+  status.removeAttribute('data-ok');
+  void api.config.test('fast').then((result) => {
+    status.dataset.ok = result.ok ? 'true' : 'false';
+    status.textContent = result.ok
+      ? `Connexion établie, ${String(result.latencyMs)} ms`
+      : (result.error ?? 'échec');
+  });
+});
+
+requireEl<HTMLButtonElement>('smart-test').addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const status = requireEl<HTMLElement>('smart-test-status');
+  status.textContent = 'test en cours';
+  status.removeAttribute('data-ok');
+  void api.config.test('smart').then((result) => {
+    status.dataset.ok = result.ok ? 'true' : 'false';
+    const extra = result.multimodal ? '' : ' · modèle non multimodal (avertissement)';
+    status.textContent = result.ok
+      ? `Connexion établie, ${String(result.latencyMs)} ms${extra}`
+      : (result.error ?? 'échec');
+  });
+});
+
+requireEl<HTMLButtonElement>('settings-save').addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const status = requireEl<HTMLElement>('settings-save-status');
+  const fast = readProfile('fast');
+  const smart = readProfile('smart');
+  const limit = Number.parseInt(requireEl<HTMLInputElement>('session-token-limit').value, 10);
+  const warn = Number.parseFloat(requireEl<HTMLInputElement>('token-warn-ratio').value);
+  const rate = Number.parseInt(requireEl<HTMLInputElement>('rate-limit').value, 10);
+  void (async () => {
+    const first = await api.config.set({
+      profile: 'fast',
+      ...fast,
+      enrichmentEnabled: requireEl<HTMLInputElement>('enrichment-enabled').checked,
+      sessionTokenLimitFast: limit,
+      tokenWarnRatio: warn,
+      rateLimitCallsPerMin: rate
+    });
+    const second = await api.config.set({ profile: 'smart', ...smart });
+    status.dataset.ok = first.ok && second.ok ? 'true' : 'false';
+    status.textContent =
+      first.ok && second.ok
+        ? first.persistedKey
+          ? 'Saved (keys encrypted)'
+          : (first.error ?? 'Saved')
+        : (first.error ?? second.error ?? 'save failed');
+  })();
 });
 
 let dragging = false;

@@ -10,6 +10,10 @@ export function formatEventId(index: number): string {
   return `evt_${String(index).padStart(6, '0')}`;
 }
 
+export function formatBatchId(index: number): string {
+  return `bat_${String(index).padStart(5, '0')}`;
+}
+
 export function formatSnapshotRef(index: number): string {
   return `snap_${String(index).padStart(6, '0')}`;
 }

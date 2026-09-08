@@ -62,6 +62,11 @@ export class BrowserPane {
     this.view.setBounds(bounds);
   }
 
+  /** W-08: hide the guest without resizing it (must not trip page media queries). */
+  setVisible(visible: boolean): void {
+    this.view.setVisible(visible);
+  }
+
   async loadStartPage(): Promise<void> {
     await this.webContents.loadFile(guestStartPagePath());
   }

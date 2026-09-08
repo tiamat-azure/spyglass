@@ -116,7 +116,9 @@ test.describe('Lot 1 capture', () => {
       await guest.frameLocator('#lot1-frame').locator('#step-9').click();
       await guest.locator('#step-10').click();
 
-      await expect(chrome.locator('#log')).toContainText('dom.click', { timeout: 20_000 });
+      await expect(chrome.locator('#log')).toContainText(/dom\.click|Tu as cliqué/i, {
+        timeout: 20_000
+      });
       await expect(chrome.locator('#log')).toContainText(/iframe|step-9|Iframe/i);
       await expect(chrome.locator('#log')).toContainText(/shadow|step-10|Shadow/i);
 

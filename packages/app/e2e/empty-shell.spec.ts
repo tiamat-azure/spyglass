@@ -75,7 +75,7 @@ test.describe('Lot 0 two-zone shell', () => {
 
       await expect(chrome).toHaveTitle(/Spyglass/);
       await expect(chrome.locator('h1')).toHaveText('Spyglass');
-      await expect(chrome.locator('.tagline')).toContainText('Lot 1');
+      await expect(chrome.locator('.tagline')).toContainText('Lot 2');
       await expect(chrome.locator('#url')).toBeVisible();
       await expect(chrome.locator('#back')).toBeVisible();
       await expect(chrome.locator('#forward')).toBeVisible();
