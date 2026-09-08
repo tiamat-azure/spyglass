@@ -56,7 +56,7 @@ F-59: in-app **Rejouer** in the embedded guest, step list + chat
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (**332 passed, 1 skipped**, 45
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (**334 passed, 1 skipped**, 45
 files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 (**15 passed**, Lots 0–5) on this branch. CI uses the mock LLM transport
 (no live keys).
