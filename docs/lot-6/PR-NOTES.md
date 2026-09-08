@@ -451,6 +451,10 @@ S44b are unchanged. Chromium `--no-sandbox` / CI coupling is unchanged
 - **L6-051** `spyglass-generate` missing-arg usage writes stderr (not stdout)
   on exit 2. `--help` still uses stdout.
 
+Unit tests after this pass: **400 passed, 1 skipped**, 53 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lot 6 e2e spec passed;
+mkdtemp session/screenshot dirs are removed in `finally`.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
