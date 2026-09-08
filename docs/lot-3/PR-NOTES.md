@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (200 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (211 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**11 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
