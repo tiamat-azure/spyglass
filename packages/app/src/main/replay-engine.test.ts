@@ -311,4 +311,33 @@ describe('ReplayEngine', () => {
     }
     expect(state).toBe('finalized');
   });
+
+  it('picks the highest-numbered finalized rev when generated is missing (L6-022)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-revsort-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    const revision = (n: number, selector: string): string =>
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: n,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep(selector)]
+      });
+    await writeFile(join(dir, 'refined', 'rev-2.json'), revision(2, '#rev2'), 'utf8');
+    await writeFile(join(dir, 'refined', 'rev-10.json'), revision(10, '#rev10'), 'utf8');
+    const scenario = await loadFinalizedScenario(dir);
+    expect(scenario.steps[0]?.action.descriptor.selector).toBe('#rev10');
+  });
 });

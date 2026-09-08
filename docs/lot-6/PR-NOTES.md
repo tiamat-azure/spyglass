@@ -279,6 +279,19 @@ Applied on tip `1dc825ace4879cf532a6a31adade12a66d735111`. Product decisions
 Unit tests after this pass: **371 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 10 (L6-022)
+
+Applied on tip `eee887c1d8c62f469a87ad795b3b83d442ec2519`. Product decisions
+1–5, J1c, J8c, and A19a are unchanged.
+
+- **L6-022** `loadFinalizedScenario` fallback sorts `rev-N.json` with
+  `Number.parseInt(name.slice(4), 10)` (same as
+  `loadFinalizedScenarioForGenerate`). `Number("1.json")` is `NaN`;
+  `parseInt` yields `1`, so `rev-10` sorts after `rev-2`.
+
+Unit tests after this pass: **372 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

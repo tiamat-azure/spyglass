@@ -123,7 +123,9 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';
   const refinedDir = join(sessionDir, 'refined');
   const files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
-  files.sort((left, right) => Number(left.slice(4)) - Number(right.slice(4)));
+  files.sort(
+    (left, right) => Number.parseInt(left.slice(4), 10) - Number.parseInt(right.slice(4), 10)
+  );
   for (let index = files.length - 1; index >= 0; index -= 1) {
     const name = files[index];
     if (name === undefined) {
