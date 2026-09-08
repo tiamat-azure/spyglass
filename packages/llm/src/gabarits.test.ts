@@ -66,6 +66,31 @@ describe('gabarits (I-04)', () => {
     ).toBe('Tu as décoché « CGU »');
   });
 
+  it('never interpolates password or single-character keys', () => {
+    expect(
+      gabaritText({
+        kind: 'dom.key',
+        target: { name: 'password', accessibleName: 'Mot de passe' },
+        key: 'p',
+        value: { masked: true, secretRef: 'SECRET_PASSWORD' }
+      })
+    ).toBe('Tu as appuyé sur une touche dans « Mot de passe »');
+    expect(
+      gabaritText({
+        kind: 'dom.key',
+        target: { accessibleName: 'Mot de passe' },
+        key: 'x'
+      })
+    ).not.toMatch(/\sx\s/);
+    expect(
+      gabaritText({
+        kind: 'dom.key',
+        target: { accessibleName: 'Nom' },
+        key: 'Enter'
+      })
+    ).toBe('Tu as appuyé sur Enter dans « Nom »');
+  });
+
   it('marks capture events as enrichable and control events as local-only', () => {
     expect(isEnrichableKind('dom.click')).toBe(true);
     expect(isEnrichableKind('nav.load')).toBe(true);

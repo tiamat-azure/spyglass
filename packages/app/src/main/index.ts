@@ -30,6 +30,7 @@ import {
   parseSessionStartPayload
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
+import { isLlmOffline } from './llm-transport.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
 import { createObserverRuntime, type ObserverRuntime } from './observer-host.ts';
 import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.ts';
@@ -548,7 +549,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: false, persistedKey: false, error: 'invalid payload' };
     }
     const result = await observerRuntime.settings.apply(payload);
-    observerRuntime.observer.setEnabled(observerRuntime.settings.enrichmentEnabled());
+    const settings = observerRuntime.settings;
+    observerRuntime.observer.configureBudget({
+      ceiling: settings.sessionTokenLimitFast(),
+      warnRatio: settings.tokenWarnRatio(),
+      rateLimitPerMin: settings.rateLimitCallsPerMin()
+    });
+    if (isLlmOffline(process.env)) {
+      observerRuntime.observer.setOffline(true);
+    } else {
+      observerRuntime.observer.setEnabled(settings.enrichmentEnabled());
+    }
     return result;
   });
 

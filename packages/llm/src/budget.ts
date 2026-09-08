@@ -20,8 +20,11 @@ export type FastTokenBudgetOptions = {
   ceiling?: number;
   warnRatio?: number;
   rateLimitPerMin?: number;
+  errorRetryMs?: number;
   now?: () => number;
 };
+
+const ERROR_RETRY_MS_DEFAULT = 15_000;
 
 /**
  * Fast-profile session breaker (F-28, F-70, F-72, F-73, ADR-0016).
@@ -34,15 +37,18 @@ export class FastTokenBudget {
   private readonly callTimes: number[] = [];
   private warned = false;
   private halt: BudgetHalt = 'none';
+  private errorAt = 0;
   private ceiling: number;
   private warnRatio: number;
   private rateLimitPerMin: number;
+  private readonly errorRetryMs: number;
   private readonly now: () => number;
 
   constructor(options: FastTokenBudgetOptions = {}) {
     this.ceiling = positiveInt(options.ceiling, 500_000);
     this.warnRatio = clampRatio(options.warnRatio ?? 0.5);
     this.rateLimitPerMin = positiveInt(options.rateLimitPerMin, 60);
+    this.errorRetryMs = positiveInt(options.errorRetryMs, ERROR_RETRY_MS_DEFAULT);
     this.now = options.now ?? Date.now;
   }
 
@@ -74,7 +80,10 @@ export class FastTokenBudget {
       return { decision: 'halt', reason: this.halt, snapshot: this.snapshot() };
     }
     if (this.halt === 'error') {
-      return { decision: 'halt', reason: 'error', snapshot: this.snapshot() };
+      if (this.now() - this.errorAt < this.errorRetryMs) {
+        return { decision: 'halt', reason: 'error', snapshot: this.snapshot() };
+      }
+      this.halt = 'none';
     }
     const total = this.inputTokens + this.outputTokens;
     if (total >= this.ceiling) {
@@ -110,6 +119,9 @@ export class FastTokenBudget {
 
   setHalt(halt: BudgetHalt): UsageSnapshot {
     this.halt = halt;
+    if (halt === 'error') {
+      this.errorAt = this.now();
+    }
     return this.snapshot();
   }
 

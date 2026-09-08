@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { batchMsFromEnv, selectTransport } from './llm-transport.ts';
+import { batchMsFromEnv, isLlmOffline, selectTransport } from './llm-transport.ts';
 
 describe('llm transport selection', () => {
   it('defaults to mock so CI never needs a live key', async () => {
@@ -32,5 +32,12 @@ describe('llm transport selection', () => {
   it('reads the batch window from env', () => {
     expect(batchMsFromEnv({})).toBe(500);
     expect(batchMsFromEnv({ LLM_FAST_BATCH_MS: '50' })).toBe(50);
+  });
+
+  it('treats OFFLINE=1 and transport=offline as offline without going live', () => {
+    expect(isLlmOffline({ SPYGLASS_LLM_OFFLINE: '1' })).toBe(true);
+    expect(isLlmOffline({ SPYGLASS_LLM_TRANSPORT: 'offline' })).toBe(true);
+    expect(isLlmOffline({ SPYGLASS_LLM_TRANSPORT: 'mock' })).toBe(false);
+    expect(isLlmOffline({})).toBe(false);
   });
 });

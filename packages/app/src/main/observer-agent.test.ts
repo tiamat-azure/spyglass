@@ -2,7 +2,7 @@ import type { RawEvent } from '@spyglass/contracts';
 import { createMockTransport, FastTokenBudget, LlmGateway } from '@spyglass/llm';
 import { describe, expect, it } from 'vitest';
 import type { ChatEnrichedPayload, ChatMessagePayload, UsagePayload } from '../shared/ipc.ts';
-import { ObserverAgent } from './observer-agent.ts';
+import { ObserverAgent, technicalBlock } from './observer-agent.ts';
 
 function click(id: string): RawEvent {
   return {
@@ -186,6 +186,190 @@ describe('observer agent', () => {
     expect(chat.some((row) => row.text.includes('Plafond') && row.banner === 'danger')).toBe(true);
     expect(chat.filter((row) => row.eventId.startsWith('evt_'))).toHaveLength(3);
     expect(enriched.length).toBeLessThan(3);
+    agent.dispose();
+  });
+
+  it('redacts page query and password keystrokes from the collapsible tech block', () => {
+    const tech = technicalBlock({
+      schemaVersion: 1,
+      id: 'evt_000040',
+      sessionId: 'ses_test',
+      ts: 1,
+      kind: 'dom.key',
+      stepIndex: 4,
+      page: { url: 'https://exemple.fr/login?token=abcd1234&q=ok', title: 'Login' },
+      target: {
+        tag: 'input',
+        name: 'password',
+        accessibleName: 'Mot de passe',
+        framePath: ['main'],
+        shadowPath: []
+      },
+      value: { masked: true, secretRef: 'SECRET_PASSWORD' },
+      action: {
+        type: 'press',
+        selector: '#pwd',
+        arguments: ['p']
+      }
+    });
+    expect(tech).toBeDefined();
+    expect(tech).not.toContain('abcd1234');
+    expect(tech).not.toContain('"p"');
+    expect(tech).not.toContain('SECRET_PASSWORD');
+    expect(tech).toContain('https://exemple.fr/login?q=ok');
+  });
+
+  it('does not clear an offline halt when Settings re-enables enrichment', async () => {
+    const enriched: ChatEnrichedPayload[] = [];
+    const gateway = new LlmGateway({
+      transport: createMockTransport({ delayMs: 1, tokensPerCall: 20 }),
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'x',
+          baseUrl: '',
+          apiKey: '',
+          timeoutMs: 50
+        }
+      })
+    });
+    const budget = new FastTokenBudget({ ceiling: 10_000 });
+    const agent = new ObserverAgent(
+      {
+        emitChat: () => undefined,
+        emitEnriched: (payload) => {
+          enriched.push(payload);
+        },
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway,
+        budget,
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001'
+      }
+    );
+    agent.onSessionStart('ses_test');
+    agent.setOffline(true);
+    agent.setEnabled(true);
+    expect(budget.snapshot().halt).toBe('offline');
+    agent.onRawEvent(click('evt_000001'));
+    await agent.flush();
+    expect(enriched).toHaveLength(0);
+    agent.dispose();
+  });
+
+  it('re-announces rate-limit after the window auto-clears', async () => {
+    const chat: ChatMessagePayload[] = [];
+    let now = 1_000;
+    const gateway = new LlmGateway({
+      transport: createMockTransport({ delayMs: 1, tokensPerCall: 10 }),
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'x',
+          baseUrl: '',
+          apiKey: '',
+          timeoutMs: 50
+        }
+      })
+    });
+    const agent = new ObserverAgent(
+      {
+        emitChat: (message) => {
+          chat.push(message);
+        },
+        emitEnriched: () => undefined,
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway,
+        budget: new FastTokenBudget({
+          ceiling: 500_000,
+          rateLimitPerMin: 1,
+          now: () => now
+        }),
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001',
+        now: () => now
+      }
+    );
+    agent.onSessionStart('ses_test');
+    agent.onRawEvent(click('evt_000001'));
+    await agent.flush();
+    agent.onRawEvent({ ...click('evt_000002'), id: 'evt_000002' });
+    await agent.flush();
+    const first = chat.filter((row) => row.text.includes('appels/min'));
+    expect(first).toHaveLength(1);
+    expect(first[0]?.text).toContain('1 appels/min');
+    now += 60_001;
+    agent.onRawEvent({ ...click('evt_000003'), id: 'evt_000003' });
+    await agent.flush();
+    agent.onRawEvent({ ...click('evt_000004'), id: 'evt_000004' });
+    await agent.flush();
+    expect(chat.filter((row) => row.text.includes('appels/min'))).toHaveLength(2);
+    agent.dispose();
+  });
+
+  it('clears a transient error halt when enrichment is re-enabled', () => {
+    const budget = new FastTokenBudget({ ceiling: 10_000 });
+    const agent = new ObserverAgent(
+      {
+        emitChat: () => undefined,
+        emitEnriched: () => undefined,
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway: new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: {
+              provider: 'anthropic',
+              model: 'claude-haiku-4-5-20251001',
+              baseUrl: 'https://api.anthropic.com',
+              apiKey: 'sk-test',
+              timeoutMs: 50
+            },
+            smart: {
+              provider: 'anthropic',
+              model: 'x',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            }
+          })
+        }),
+        budget,
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001'
+      }
+    );
+    budget.setHalt('error');
+    agent.setEnabled(true);
+    expect(budget.snapshot().halt).toBe('none');
+    agent.configureBudget({ ceiling: 200, rateLimitPerMin: 12 });
+    expect(budget.snapshot().ceiling).toBe(200);
+    expect(budget.snapshot().rateLimitPerMin).toBe(12);
     agent.dispose();
   });
 });

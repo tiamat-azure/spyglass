@@ -1,5 +1,7 @@
-import type { RawEvent } from '@spyglass/contracts';
+import type { RawEvent, ReplayDescriptor } from '@spyglass/contracts';
 import {
+  expurgatePage,
+  expurgateTarget,
   type FastTokenBudget,
   gabaritText,
   isEnrichableKind,
@@ -8,6 +10,7 @@ import {
   SlidingBatcher,
   type UsageSnapshot
 } from '@spyglass/llm';
+import { shouldMaskField } from '@spyglass/probe';
 import type { ChatEnrichedPayload, ChatMessagePayload, UsagePayload } from '../shared/ipc.ts';
 import { formatBatchId } from './session-ids.ts';
 
@@ -112,16 +115,34 @@ export class ObserverAgent {
     return payload;
   }
 
+  configureBudget(options: {
+    ceiling?: number;
+    warnRatio?: number;
+    rateLimitPerMin?: number;
+  }): UsagePayload {
+    const snapshot = this.deps.budget.configure(options);
+    const payload = toUsagePayload(snapshot, this.deps.modelName());
+    this.handlers.emitUsage(payload);
+    return payload;
+  }
+
   setEnabled(enabled: boolean): void {
     const halt = this.deps.budget.snapshot().halt;
-    if (enabled) {
-      if (halt === 'disabled' || halt === 'offline') {
-        this.deps.budget.setHalt('none');
+    if (!enabled) {
+      if (halt !== 'offline') {
+        this.deps.budget.setHalt('disabled');
       }
-      this.announcedHalt = undefined;
-    } else {
-      this.deps.budget.setHalt('disabled');
+      this.emitUsage();
+      return;
     }
+    if (halt === 'offline') {
+      this.emitUsage();
+      return;
+    }
+    if (halt === 'disabled' || halt === 'error') {
+      this.deps.budget.setHalt('none');
+    }
+    this.announcedHalt = undefined;
     this.emitUsage();
   }
 
@@ -144,6 +165,7 @@ export class ObserverAgent {
       return;
     }
     const decision = this.deps.budget.decide();
+    this.reconcileAnnouncedHalt(decision.snapshot);
     this.handlers.emitUsage(toUsagePayload(decision.snapshot, this.deps.modelName()));
     if (decision.decision === 'warn') {
       this.emitWarning(decision.snapshot);
@@ -160,6 +182,7 @@ export class ObserverAgent {
       return;
     }
     const decision = this.deps.budget.decide();
+    this.reconcileAnnouncedHalt(decision.snapshot);
     if (decision.decision === 'halt') {
       this.announceHalt(decision.snapshot);
       return;
@@ -202,7 +225,7 @@ export class ObserverAgent {
       return;
     }
     this.announcedHalt = snapshot.halt;
-    const text = haltMessage(snapshot.halt, detail);
+    const text = haltMessage(snapshot, detail);
     this.handlers.emitChat(
       systemMessage(
         this.now(),
@@ -212,6 +235,12 @@ export class ObserverAgent {
       )
     );
     void this.appendMode(snapshot.halt, text);
+  }
+
+  private reconcileAnnouncedHalt(snapshot: UsageSnapshot): void {
+    if (this.announcedHalt !== undefined && snapshot.halt !== this.announcedHalt) {
+      this.announcedHalt = undefined;
+    }
   }
 
   private async appendNarration(sourceId: string, text: string, batchId: string): Promise<void> {
@@ -252,25 +281,70 @@ export function gabaritFor(event: RawEvent): string {
     input.page = event.page;
   }
   const key = event.action?.arguments?.[0];
-  if (typeof key === 'string') {
+  if (typeof key === 'string' && event.value?.masked !== true) {
     input.key = key;
   }
   return gabaritText(input);
 }
 
 export function technicalBlock(event: RawEvent): string | undefined {
+  const dropValues = shouldDropTechnicalValues(event);
+  const page = expurgatePage(event.page);
+  const target = expurgateTarget(event.target, dropValues);
+  const action = redactTechnicalAction(event.action, dropValues);
   return JSON.stringify(
     {
       kind: event.kind,
       id: event.id,
       stepIndex: event.stepIndex,
-      page: event.page,
-      target: event.target,
-      action: event.action
+      page,
+      target,
+      action
     },
     null,
     2
   );
+}
+
+function shouldDropTechnicalValues(event: RawEvent): boolean {
+  if (event.value?.masked === true) {
+    return true;
+  }
+  if (
+    event.kind === 'dom.input' ||
+    event.kind === 'dom.change' ||
+    event.kind === 'dom.select' ||
+    event.kind === 'dom.key'
+  ) {
+    return true;
+  }
+  return shouldMaskField({ name: event.target?.name });
+}
+
+function redactTechnicalAction(
+  action: ReplayDescriptor | undefined,
+  dropArgs: boolean
+): ReplayDescriptor | undefined {
+  if (action === undefined) {
+    return undefined;
+  }
+  const redacted: ReplayDescriptor = {
+    type: action.type,
+    selector: action.selector
+  };
+  if (action.selectorStrategy !== undefined) {
+    redacted.selectorStrategy = action.selectorStrategy;
+  }
+  if (action.framePath !== undefined) {
+    redacted.framePath = action.framePath;
+  }
+  if (action.shadowPath !== undefined) {
+    redacted.shadowPath = action.shadowPath;
+  }
+  if (!dropArgs && action.arguments !== undefined) {
+    redacted.arguments = action.arguments;
+  }
+  return redacted;
 }
 
 export function toUsagePayload(snapshot: UsageSnapshot, model: string): UsagePayload {
@@ -319,12 +393,12 @@ function estimateUsd(model: string, input: number, output: number): number | und
   return (input * HAIKU_USD_PER_MTOK.input + output * HAIKU_USD_PER_MTOK.output) / 1_000_000;
 }
 
-function haltMessage(halt: string, detail?: string): string {
-  switch (halt) {
+function haltMessage(snapshot: UsageSnapshot, detail?: string): string {
+  switch (snapshot.halt) {
     case 'ceiling':
       return "Plafond de tokens atteint — enrichissement suspendu. L'enregistrement continue.";
     case 'rate-limit':
-      return "Seuil de débit atteint (60 appels/min) — enrichissement suspendu. L'enregistrement continue.";
+      return `Seuil de débit atteint (${String(snapshot.rateLimitPerMin)} appels/min) — enrichissement suspendu. L'enregistrement continue.`;
     case 'offline':
       return "Réseau indisponible — le chat reste en gabarits déterministes. Aucun événement n'est perdu.";
     case 'disabled':

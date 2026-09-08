@@ -123,6 +123,23 @@ write (Lot 1 Record/Stop e2e still ~2.7 s).
   template line; it emits `spyglass:chat:enriched` and appends `agent.message`.
 - Guest pane hide uses `setVisible`, not zero bounds (W-08 / C-1).
 
+### Adversarial pass 1 (auto-fix)
+
+Applied on this branch without a PR. T1 (Settings test / mock transport unless
+`SPYGLASS_LLM_TRANSPORT=live`) left for the captain.
+
+- Password/card keystrokes are omitted from gabarits (`shouldMaskField`) and
+  `keyGabarit` never interpolates masked or single-character keys.
+- Collapsible tech blocks run `expurgatePage` / `expurgateTarget` and drop
+  action arguments on field/sensitive events.
+- `configSet` calls `budget.configure` live and will not clear an offline halt
+  (`SPYGLASS_LLM_OFFLINE=1` or `SPYGLASS_LLM_TRANSPORT=offline`).
+- Transient `halt=error` retries after 15 s (and clears on `setEnabled(true)`).
+- Rate-limit banners re-announce after the window auto-clears, using the live
+  `rateLimitCallsPerMin`.
+- `resolveProfile('smart')` uses `LLM_SMART_TIMEOUT_MS` (default 8000), not the
+  fast 1200 ms budget.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

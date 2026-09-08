@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { FastTokenBudget, LlmGateway } from '@spyglass/llm';
 import { app, type BrowserWindow, safeStorage } from 'electron';
 import { IPC } from '../shared/ipc.ts';
-import { batchMsFromEnv, selectTransport } from './llm-transport.ts';
+import { batchMsFromEnv, isLlmOffline, selectTransport } from './llm-transport.ts';
 import { ObserverAgent } from './observer-agent.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
 import { electronSafeStorageVault, SettingsStore } from './settings-store.ts';
@@ -63,14 +63,13 @@ export async function createObserverRuntime(
       gateway,
       budget,
       windowMs,
-      enrichmentEnabled: () =>
-        settings.enrichmentEnabled() && process.env.SPYGLASS_LLM_OFFLINE !== '1',
+      enrichmentEnabled: () => settings.enrichmentEnabled() && !isLlmOffline(process.env),
       modelName: () => settings.profileConfig('fast').model
     }
   );
-  if (!settings.enrichmentEnabled() || process.env.SPYGLASS_LLM_OFFLINE === '1') {
+  if (!settings.enrichmentEnabled() || isLlmOffline(process.env)) {
     observer.setEnabled(false);
-    if (process.env.SPYGLASS_LLM_OFFLINE === '1') {
+    if (isLlmOffline(process.env)) {
       observer.setOffline(true);
     }
   }

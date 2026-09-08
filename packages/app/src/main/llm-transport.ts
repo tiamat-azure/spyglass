@@ -9,13 +9,17 @@ export function selectTransport(env: NodeJS.ProcessEnv, hasFastKey: boolean): Ll
   const mode = env.SPYGLASS_LLM_TRANSPORT;
   const delayMs = intOr(env.SPYGLASS_LLM_MOCK_DELAY_MS, 80);
   const tokensPerCall = intOr(env.SPYGLASS_LLM_MOCK_TOKENS, 80);
-  if (mode === 'offline' || env.SPYGLASS_LLM_OFFLINE === '1') {
+  if (isLlmOffline(env)) {
     return createMockTransport({ delayMs: 1, fail: 'network cut' });
   }
   if (mode === 'live' && hasFastKey) {
     return fetchTransport();
   }
   return createMockTransport({ delayMs, tokensPerCall });
+}
+
+export function isLlmOffline(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SPYGLASS_LLM_OFFLINE === '1' || env.SPYGLASS_LLM_TRANSPORT === 'offline';
 }
 
 export function batchMsFromEnv(env: NodeJS.ProcessEnv): number {

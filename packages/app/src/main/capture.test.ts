@@ -241,6 +241,34 @@ describe('capture pipeline', () => {
     expect(JSON.stringify(event)).not.toContain('hunter2');
     expect(validateRawEvent(event).valid).toBe(true);
   });
+
+  it('omits password keystrokes from gabarit narration', () => {
+    const event = buildRawEvent({
+      id: 'evt_000016',
+      sessionId: 'ses_test',
+      wire: {
+        kind: 'dom.key',
+        ts: 16,
+        key: 'p',
+        type: 'password',
+        name: 'password',
+        target: {
+          tag: 'input',
+          framePath: ['main'],
+          shadowPath: [],
+          name: 'password',
+          testId: 'pwd'
+        }
+      },
+      stepIndex: 16
+    });
+    expect(event.narration?.text).toBe('Tu as appuyé sur une touche dans « password »');
+    expect(event.narration?.text).not.toContain(' p ');
+    expect(event.value).toEqual({ masked: true, secretRef: 'SECRET_PASSWORD' });
+    expect(event.action?.arguments).toEqual(['SECRET_PASSWORD']);
+    expect(JSON.stringify(event.narration)).not.toMatch(/"p"/);
+    expect(validateRawEvent(event).valid).toBe(true);
+  });
 });
 
 describe('parseActStdout', () => {

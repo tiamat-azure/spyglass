@@ -8,7 +8,8 @@ import {
   LLM_FAST_PROVIDER_DEFAULT,
   LLM_FAST_TIMEOUT_MS_DEFAULT,
   LLM_SMART_MODEL_DEFAULT,
-  LLM_SMART_PROVIDER_DEFAULT
+  LLM_SMART_PROVIDER_DEFAULT,
+  LLM_SMART_TIMEOUT_MS_DEFAULT
 } from './constants.ts';
 import { assertNoLeak, type ExpurgatedEvent, expurgateBatch } from './expurgate.ts';
 import { buildNarrationMessages, type NarrationItem, parseNarrationResponse } from './narration.ts';
@@ -174,11 +175,14 @@ export function resolveProfile(
   const baseUrl =
     nonempty(env[`${prefix}_BASE_URL`]) ??
     (provider === 'openai' ? DEFAULT_OPENAI_BASE_URL : DEFAULT_FAST_BASE_URL);
-  const timeoutRaw = nonempty(env.LLM_FAST_TIMEOUT_MS);
+  const timeoutKey = name === 'fast' ? 'LLM_FAST_TIMEOUT_MS' : 'LLM_SMART_TIMEOUT_MS';
+  const timeoutDefault =
+    name === 'fast' ? LLM_FAST_TIMEOUT_MS_DEFAULT : LLM_SMART_TIMEOUT_MS_DEFAULT;
+  const timeoutRaw = nonempty(env[timeoutKey]);
   const timeoutMs =
     timeoutRaw !== undefined && Number.parseInt(timeoutRaw, 10) > 0
       ? Number.parseInt(timeoutRaw, 10)
-      : LLM_FAST_TIMEOUT_MS_DEFAULT;
+      : timeoutDefault;
   return {
     provider,
     model,

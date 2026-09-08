@@ -130,12 +130,43 @@ function checkGabarit(input: GabaritInput, quoted: string): string {
   return `Tu as modifié la case ${quoted}`;
 }
 
+const NAMED_SAFE_KEYS = new Set([
+  'Enter',
+  'Tab',
+  'Escape',
+  'Esc',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'Backspace',
+  'Delete',
+  'Shift',
+  'Control',
+  'Alt',
+  'Meta',
+  'CapsLock',
+  'Insert',
+  'Space'
+]);
+
 function keyGabarit(input: GabaritInput, quoted: string): string {
+  if (input.value?.masked === true) {
+    return `Tu as appuyé sur une touche dans ${quoted}`;
+  }
   const key = nonempty(input.key);
-  if (key === undefined) {
+  if (key === undefined || !isNamedSafeKey(key)) {
     return `Tu as appuyé sur une touche dans ${quoted}`;
   }
   return `Tu as appuyé sur ${key} dans ${quoted}`;
+}
+
+function isNamedSafeKey(key: string): boolean {
+  return NAMED_SAFE_KEYS.has(key) || /^F([1-9]|1[0-2])$/.test(key);
 }
 
 function pageTitle(input: GabaritInput): string | undefined {

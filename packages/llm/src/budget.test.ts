@@ -46,4 +46,30 @@ describe('fast token budget (F-70 / F-72 / F-73)', () => {
     budget.setHalt('disabled');
     expect(budget.decide().reason).toBe('disabled');
   });
+
+  it('recovers from a sticky error halt after the retry window', () => {
+    let now = 1_000;
+    const budget = new FastTokenBudget({
+      ceiling: 1000,
+      errorRetryMs: 500,
+      now: () => now
+    });
+    budget.setHalt('error');
+    expect(budget.decide().reason).toBe('error');
+    now += 499;
+    expect(budget.decide().reason).toBe('error');
+    now += 2;
+    expect(budget.decide().decision).toBe('allow');
+  });
+
+  it('applies configure() ceilings and rate limits without a restart', () => {
+    const budget = new FastTokenBudget({ ceiling: 10_000, rateLimitPerMin: 60 });
+    budget.configure({ ceiling: 50, warnRatio: 0.2, rateLimitPerMin: 1 });
+    const snap = budget.snapshot();
+    expect(snap.ceiling).toBe(50);
+    expect(snap.warnRatio).toBe(0.2);
+    expect(snap.rateLimitPerMin).toBe(1);
+    budget.recordCall(1, 1);
+    expect(budget.decide().reason).toBe('rate-limit');
+  });
 });

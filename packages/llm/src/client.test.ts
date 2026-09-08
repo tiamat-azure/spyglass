@@ -1,7 +1,11 @@
 import type { RawEvent } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
-import { createMockTransport, LlmGateway, toTransportRequest } from './client.ts';
-import { LLM_FAST_MODEL_DEFAULT } from './constants.ts';
+import { createMockTransport, LlmGateway, resolveProfile, toTransportRequest } from './client.ts';
+import {
+  LLM_FAST_MODEL_DEFAULT,
+  LLM_FAST_TIMEOUT_MS_DEFAULT,
+  LLM_SMART_TIMEOUT_MS_DEFAULT
+} from './constants.ts';
 import { parseNarrationResponse } from './narration.ts';
 
 function clickEvent(): RawEvent {
@@ -122,5 +126,19 @@ describe('llm gateway', () => {
     );
     expect(request.url).toBe('https://example.test/v1/chat/completions');
     expect(request.headers.authorization).toBe('Bearer sk-test');
+  });
+});
+
+describe('resolveProfile', () => {
+  it('uses the smart timeout for the smart profile, not the fast budget', () => {
+    const fast = resolveProfile('fast', {});
+    const smart = resolveProfile('smart', {});
+    expect(fast.timeoutMs).toBe(LLM_FAST_TIMEOUT_MS_DEFAULT);
+    expect(smart.timeoutMs).toBe(LLM_SMART_TIMEOUT_MS_DEFAULT);
+    expect(smart.timeoutMs).not.toBe(fast.timeoutMs);
+    expect(resolveProfile('smart', { LLM_SMART_TIMEOUT_MS: '9000' }).timeoutMs).toBe(9000);
+    expect(resolveProfile('smart', { LLM_FAST_TIMEOUT_MS: '50' }).timeoutMs).toBe(
+      LLM_SMART_TIMEOUT_MS_DEFAULT
+    );
   });
 });

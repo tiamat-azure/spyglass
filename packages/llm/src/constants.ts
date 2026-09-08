@@ -9,6 +9,8 @@ export const LLM_SMART_PROVIDER_DEFAULT = 'anthropic';
 
 export const LLM_FAST_BATCH_MS_DEFAULT = 500;
 export const LLM_FAST_TIMEOUT_MS_DEFAULT = 1200;
+/** Smart profile is latency-tolerant (ADR-0014); do not reuse the fast budget. */
+export const LLM_SMART_TIMEOUT_MS_DEFAULT = 8000;
 export const SESSION_TOKEN_LIMIT_FAST_DEFAULT = 500_000;
 export const TOKEN_WARN_RATIO_DEFAULT = 0.5;
 export const RATE_LIMIT_CALLS_PER_MIN_DEFAULT = 60;
