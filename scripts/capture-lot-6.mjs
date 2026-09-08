@@ -4,6 +4,7 @@
 import { mkdir, mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import {
   createPlaywrightDriver,
@@ -170,11 +171,11 @@ const driver = await createPlaywrightDriver({
   headless: true,
   env: { ...process.env, SPYGLASS_NO_SANDBOX: '1', SPYGLASS_DISABLE_GPU: '1' }
 });
-await driver.goto(`file://${join(shotDir, 'tree.html')}`);
+await driver.goto(pathToFileURL(join(shotDir, 'tree.html')).href);
 await driver.screenshot(join(shotDir, 'generated-script-tree.png'));
-await driver.goto(`file://${join(shotDir, 'headless.html')}`);
+await driver.goto(pathToFileURL(join(shotDir, 'headless.html')).href);
 await driver.screenshot(join(shotDir, 'headless-run.png'));
-await driver.goto(`file://${join(shotDir, 'protocol.html')}`);
+await driver.goto(pathToFileURL(join(shotDir, 'protocol.html')).href);
 await driver.screenshot(join(shotDir, 'corpus-protocol-snippet.png'), { fullPage: true });
 await driver.close();
 

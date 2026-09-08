@@ -124,6 +124,15 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(capture).toContain("join(shotDir, 'corpus-protocol-snippet.png')");
   });
 
+  it('Lot 6 capture goto uses pathToFileURL not file:// plus join (L6-021)', async () => {
+    const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
+    expect(capture).toContain("import { pathToFileURL } from 'node:url'");
+    expect(capture).toContain("pathToFileURL(join(shotDir, 'tree.html')).href");
+    expect(capture).toContain("pathToFileURL(join(shotDir, 'headless.html')).href");
+    expect(capture).toContain("pathToFileURL(join(shotDir, 'protocol.html')).href");
+    expect(capture).not.toMatch(/file:\/\/\$\{join/);
+  });
+
   it('is visible by default and wires F-58 flags; CI does not force headless', () => {
     const headed = parseGeneratedArgv(['--no-ai', '--timeout', '5000'], { CI: '1' });
     expect(headed.headless).toBe(false);

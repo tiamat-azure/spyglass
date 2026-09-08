@@ -234,4 +234,81 @@ describe('ReplayEngine', () => {
     }
     expect(state).toBe('finalized');
   });
+
+  it('fails closed on corrupt generated/scenario.json instead of refined fallback (L6-020)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-corrupt-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    await writeFile(join(dir, 'generated', 'scenario.json'), '{', 'utf8');
+    await expect(loadFinalizedScenario(dir)).rejects.toThrow();
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({ sessionId: 'ses_r', steps: 'nope' }),
+      'utf8'
+    );
+    await expect(loadFinalizedScenario(dir)).rejects.toThrow(/invalid scenario/i);
+
+    let state = 'finalized';
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () => new MemoryPageDriver({ elements: [{ selector: '#go', visible: true }] }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = await engine.start({ noAi: true });
+    expect(started.ok).toBe(false);
+    if (!started.ok) {
+      expect(started.error).toMatch(/invalid scenario/i);
+    }
+    expect(state).toBe('finalized');
+  });
 });

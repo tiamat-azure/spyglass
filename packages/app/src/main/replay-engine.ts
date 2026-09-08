@@ -111,7 +111,11 @@ export class ReplayEngine {
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
   try {
     return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
-  } catch {
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
     // Sessions finalized before Lot 6 only have refined/rev-N.json.
   }
   const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');

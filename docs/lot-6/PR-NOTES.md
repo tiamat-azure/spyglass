@@ -242,6 +242,24 @@ Applied on tip `3af1695cf6fedcb8bc049fab2f54a609f7e8e235`. Product decisions
 Unit tests after this pass: **368 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 9 (auto-fix)
+
+Applied on tip `674f6a2bed1a6bdb0b4582d6a35b87ebeffe7658`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-020** `loadFinalizedScenario` only falls back to `refined/rev-N.json`
+  when `generated/scenario.json` is missing (`ENOENT`). JSON / schema /
+  other errors are rethrown so Rejouer fails closed on a corrupt generated
+  artifact.
+- **L6-021** `scripts/capture-lot-6.mjs` goto targets use
+  `pathToFileURL(...).href` (Windows-safe) instead of `` file://${join(...)} ``.
+- **L6-022** no-op (duplicate measured-rates files left as-is).
+- **L6-019** not applied (`resolveReportDir` / relative `--report` remains
+  ask-user pending).
+
+Unit tests after this pass: **370 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
