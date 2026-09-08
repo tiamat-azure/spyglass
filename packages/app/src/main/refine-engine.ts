@@ -475,6 +475,7 @@ export class RefineEngine {
     if (!result.ok) {
       return false;
     }
+    // R3c: never observations[i] → insufficient[i]. Correlate or skip.
     applyCorrelatedObserveEnrichment(steps, result.observations);
     return true;
   }

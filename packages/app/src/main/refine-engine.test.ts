@@ -516,6 +516,20 @@ describe('RefineEngine', () => {
 });
 
 describe('applyCorrelatedObserveEnrichment (LOT4-R3c)', () => {
+  it('does not attach observations[0] to the first insufficient step (used++ poison)', () => {
+    const later = weakCssStep(0, '#later-weak', 'Je clique sur later');
+    const earlier = weakCssStep(1, '#first-click', 'Je clique sur first');
+    const applied = applyCorrelatedObserveEnrichment(
+      [later, earlier],
+      [{ selector: '#first-click' }, { selector: '#later-weak' }]
+    );
+    expect(applied).toBe(2);
+    expect(later.action.descriptor.fallbackSelectors).toEqual(['#later-weak']);
+    expect(later.action.descriptor.fallbackSelectors).not.toContain('#first-click');
+    expect(earlier.action.descriptor.fallbackSelectors).toEqual(['#first-click']);
+    expect(earlier.action.descriptor.fallbackSelectors).not.toContain('#later-weak');
+  });
+
   it('matches reverse-order observations and skips unmatched leftover selectors', () => {
     const first = weakCssStep(0, '#first-click', 'Je clique sur first');
     const later = weakCssStep(1, '#later-weak', 'Je clique sur later');
