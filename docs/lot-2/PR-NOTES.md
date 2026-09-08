@@ -66,21 +66,38 @@ Stagehand `act()` replay remains LLM-free (I-07).
 
 ### How the three exit demos were proven
 
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (152 passed, 1 skipped),
+`pnpm test:coverage`, and `pnpm test:e2e` (**7/7**, including Lot 0 shell and
+Lot 1 Record/Stop) were green on this branch. CI uses the mock LLM transport
+(no live keys).
+
 1. **< 200 ms then enrich.** Unit test
    `observer agent > emits a gabarit chat message before enrichment replaces it`
    asserts gabarit emit delay < 200 ms, then mock LLM replace-in-place.
    Playwright `packages/app/e2e/lot2-observer.spec.ts` records the Lot 1
-   fixture, clicks `#step-1`, asserts `data-latency-ms < 200` on the gabarit
-   row, then `data-mode=llm` after the mock batch.
+   fixture, clicks `#step-1`, asserts `data-mode=template`, mode pill
+   `gabarit déterministe`, and `data-latency-ms < 200` **before** taking
+   `gabarit-under-200ms.png` (mock delay 1200 ms so enrichment cannot race the
+   shot). Then `data-mode=llm` / pill `enrichi` and
+   `enrichment-replace-in-place.png` with the tech block opened.
 2. **Offline, no event loss.** Unit test with `enrichmentEnabled: false`.
    E2E launches with `SPYGLASS_LLM_OFFLINE=1` / `SPYGLASS_LLM_TRANSPORT=offline`,
-   records several actions, asserts gabarit copy in chat, zero `data-mode=llm`
-   rows, and `raw.jsonl` still contains `record.start`, `dom.click`,
-   `dom.input`, `record.stop` with no `"mode": "llm"`.
+   records click + fill, asserts gabarit copy in chat, zero `data-mode=llm`
+   rows, meter `enrichment offline · recording continues`, banner « Réseau
+   indisponible… Aucun événement n'est perdu. », and `raw.jsonl` still contains
+   `record.start`, `dom.click`, `dom.input`, `record.stop` with no
+   `"mode": "llm"`.
 3. **Lowered ceiling.** Unit test with `ceiling: 100` and 80 tokens/call.
    E2E sets `SESSION_TOKEN_LIMIT_FAST=100` and `SPYGLASS_LLM_MOCK_TOKENS=80`,
-   clicks several fixture controls, asserts the 50 % warning and the ceiling
-   banner, while `#record-btn` still reads Stop and `#rec-pill` stays active.
+   clicks several fixture controls, asserts the 50 % warning (« Attention :
+   80 % du plafond… ») and the danger banner « Plafond de tokens atteint —
+   enrichissement suspendu. L'enregistrement continue. », meter `160 / 100`
+   with `enrichment ceiling · recording continues`, while `#record-btn` still
+   reads Stop and `#rec-pill` stays active.
+
+Stop no longer deadlocks when `onBeforeSeal` flushes the observer: journal
+writes use `AsyncLocalStorage` so `appendAgentEvent` may re-enter the current
+write (Lot 1 Record/Stop e2e still ~2.7 s).
 
 ### Residuals / not in this lot
 
@@ -110,11 +127,11 @@ Stagehand `act()` replay remains LLM-free (I-07).
 
 | Relative path | What it shows |
 | --- | --- |
-| [`screenshots/gabarit-under-200ms.png`](screenshots/gabarit-under-200ms.png) | Gabarit in chat immediately after a click |
-| [`screenshots/enrichment-replace-in-place.png`](screenshots/enrichment-replace-in-place.png) | Same row after mock LLM replace-in-place |
-| [`screenshots/offline-gabarits.png`](screenshots/offline-gabarits.png) | Offline session, gabarits only |
-| [`screenshots/suspended-enrichment-recording-continues.png`](screenshots/suspended-enrichment-recording-continues.png) | Ceiling banner while REC is still active |
-| [`screenshots/f29-settings-safestorage.png`](screenshots/f29-settings-safestorage.png) | F-29 Settings tab, profiles + safeStorage copy |
+| [`screenshots/gabarit-under-200ms.png`](screenshots/gabarit-under-200ms.png) | Click row still `GABARIT DÉTERMINISTE` (`Tu as cliqué sur « Start »`), 0 tokens, REC on |
+| [`screenshots/enrichment-replace-in-place.png`](screenshots/enrichment-replace-in-place.png) | Same row `ENRICHI` (`Tu as cliqué sur le bouton Start`) + open `descripteur DOM` JSON |
+| [`screenshots/offline-gabarits.png`](screenshots/offline-gabarits.png) | Gabarits only, réseau indisponible banner, `enrichment offline · recording continues` |
+| [`screenshots/suspended-enrichment-recording-continues.png`](screenshots/suspended-enrichment-recording-continues.png) | 80 % warning + ceiling banner, meter 160/100, Stop/REC still active |
+| [`screenshots/f29-settings-safestorage.png`](screenshots/f29-settings-safestorage.png) | F-29 Settings: Haiku pin, `safeStorage` copy, ceiling 100 |
 
 Absolute paths in this checkout:
 
