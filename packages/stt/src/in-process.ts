@@ -36,9 +36,6 @@ export function createInProcessStt(
     engine: engine.name,
     model: engine.model,
     begin(utteranceId: string, startTs: number): void {
-      if (live !== undefined) {
-        engine.abort(live.utteranceId);
-      }
       live = { utteranceId, startTs };
       engine.begin(utteranceId);
     },

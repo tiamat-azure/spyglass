@@ -614,4 +614,49 @@ describe('lot 3 voice journal', () => {
     expect(overlapped?.voice?.correlatedStepIndex).toBe(1);
     await orch.stop();
   });
+
+  it('does not journal an empty voice.final', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-empty-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const empty = await orch.recordVoiceFinal({
+      text: '   ',
+      startTs: Date.now(),
+      endTs: Date.now() + 10,
+      pcm: Buffer.alloc(0)
+    });
+    expect(empty).toBeUndefined();
+    await orch.stop();
+  });
+
+  it('persists the edited transcript only, unwrapping a gabarit prompt', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-voice-edit-'));
+    const orch = new SessionOrchestrator(
+      () => root,
+      stubPane,
+      { onEvent: () => {}, onState: () => {} },
+      { AUDIO_RETENTION: 'none' }
+    );
+    await orch.start('https://example.test/');
+    const final = await orch.recordVoiceFinal({
+      text: 'Je vais cliquer sur Démarrer',
+      startTs: Date.now() - 20,
+      endTs: Date.now(),
+      pcm: Buffer.alloc(3200)
+    });
+    expect(final?.id).toBeDefined();
+    const edited = await orch.recordVoiceEdited(
+      final?.id ?? '',
+      "Tu as dicté : « Je clique ici » (avant l'action)"
+    );
+    expect(edited?.kind).toBe('voice.edited');
+    expect(edited?.voice?.text).toBe('Je clique ici');
+    expect(edited?.voice?.text).not.toMatch(/Tu as dicté/);
+    await orch.stop();
+  });
 });

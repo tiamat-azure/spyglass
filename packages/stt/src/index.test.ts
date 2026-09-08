@@ -12,6 +12,7 @@ import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
 import { createWhisperEngine, runWhisperCli, whisperAvailable } from './whisper-engine.ts';
+import { isLoopbackWsHost } from './ws-localhost.ts';
 
 describe('@spyglass/stt', () => {
   it('exports a ready sidecar (no longer a scaffold)', () => {
@@ -144,6 +145,22 @@ describe('@spyglass/stt', () => {
     expect(partials[0]?.startsWith('bonjour')).toBe(true);
   });
 
+  it('mock engine does not invent text for a 0-byte utterance', async () => {
+    const engine = createMockEngine(['ne pas inventer']);
+    engine.begin('empty');
+    await expect(engine.finalize('empty')).resolves.toBe('');
+  });
+
+  it('accepts only exact loopback Host headers', () => {
+    expect(isLoopbackWsHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackWsHost('127.0.0.1:9400')).toBe(true);
+    expect(isLoopbackWsHost('localhost')).toBe(true);
+    expect(isLoopbackWsHost('LOCALHOST:9')).toBe(true);
+    expect(isLoopbackWsHost('127.0.0.1.evil.test')).toBe(false);
+    expect(isLoopbackWsHost('localhost.evil.test')).toBe(false);
+    expect(isLoopbackWsHost('10.0.0.1')).toBe(false);
+  });
+
   it('in-process session streams a final without opening a socket', async () => {
     const session = createInProcessStt(
       { SPYGLASS_STT_ENGINE: 'mock' },
@@ -157,6 +174,78 @@ describe('@spyglass/stt', () => {
     const final = await session.end(2);
     expect(final?.text).toBe('hors ligne');
     expect(partials[0]?.startsWith('hors')).toBe(true);
+  });
+
+  it('keeps PCM per utterance when the next start arrives before the prior final', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const inner = createMockEngine(['alpha', 'beta']);
+    const delayed = {
+      name: inner.name,
+      model: inner.model,
+      begin: (id: string) => {
+        inner.begin(id);
+      },
+      pushPcm: (id: string, pcm: Buffer, onPartial: (text: string) => void) => {
+        inner.pushPcm(id, pcm, onPartial);
+      },
+      abort: (id: string) => {
+        inner.abort(id);
+      },
+      finalize: async (id: string) => {
+        if (id === 'u1') {
+          await firstGate;
+        }
+        return await inner.finalize(id);
+      }
+    };
+    const handle = await startSidecarServer({ SPYGLASS_STT_ENGINE: 'mock' }, delayed);
+    try {
+      const ws = new WebSocket(`ws://127.0.0.1:${String(handle.port)}`);
+      const finals: Array<{ utteranceId: string; text: string }> = [];
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('overlap timeout')), 4000);
+        ws.addEventListener('message', (event) => {
+          const raw = typeof event.data === 'string' ? event.data : String(event.data);
+          if (!raw.includes('"type":"final"')) {
+            return;
+          }
+          const parsed = JSON.parse(raw) as { utteranceId: string; text: string };
+          finals.push({ utteranceId: parsed.utteranceId, text: parsed.text });
+          if (finals.length >= 2) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+        ws.addEventListener('error', () => {
+          clearTimeout(timer);
+          reject(new Error('ws error'));
+        });
+        ws.addEventListener('open', () => {
+          ws.send(JSON.stringify({ type: 'hello', sampleRate: 16000 }));
+          ws.send(JSON.stringify({ type: 'start', utteranceId: 'u1', startTs: 1 }));
+          ws.send(new Int16Array(1600).buffer);
+          ws.send(JSON.stringify({ type: 'end', utteranceId: 'u1', endTs: 2 }));
+          ws.send(JSON.stringify({ type: 'start', utteranceId: 'u2', startTs: 3 }));
+          ws.send(new Int16Array(1600).buffer);
+          ws.send(JSON.stringify({ type: 'end', utteranceId: 'u2', endTs: 4 }));
+          releaseFirst?.();
+        });
+      });
+      ws.close();
+      expect(finals.find((row) => row.utteranceId === 'u1')).toEqual({
+        utteranceId: 'u1',
+        text: 'alpha'
+      });
+      expect(finals.find((row) => row.utteranceId === 'u2')).toEqual({
+        utteranceId: 'u2',
+        text: 'beta'
+      });
+    } finally {
+      await handle.close();
+    }
   });
 
   it('serves streaming transcripts over localhost WebSocket only', async () => {

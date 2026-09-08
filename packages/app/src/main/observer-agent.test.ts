@@ -581,7 +581,8 @@ describe('observer agent', () => {
       }
     });
     expect(chat[0]?.kind).toBe('voice.final');
-    expect(chat[0]?.text).toContain('Je vais cliquer sur Démarrer');
+    expect(chat[0]?.text).toBe("Tu as dicté : « Je vais cliquer sur Démarrer » (avant l'action)");
+    expect(chat[0]?.transcript).toBe('Je vais cliquer sur Démarrer');
     expect(chat[0]?.technical).toContain('"relation": "before"');
     expect(enriched).toHaveLength(0);
     agent.dispose();

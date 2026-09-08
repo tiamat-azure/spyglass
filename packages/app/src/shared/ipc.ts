@@ -33,6 +33,7 @@ export const IPC = {
   layoutGuestVisible: 'spyglass:layout:guestVisible',
   voiceStart: 'spyglass:voice:start',
   voiceStop: 'spyglass:voice:stop',
+  voiceAbort: 'spyglass:voice:abort',
   voiceFrame: 'spyglass:voice:frame',
   voicePartial: 'spyglass:voice:partial',
   voiceFinal: 'spyglass:voice:final',
@@ -158,6 +159,8 @@ export type ChatMessagePayload = {
   kind: string;
   mode: ChatMode;
   text: string;
+  /** Raw dictation (unwrapped) for Edit — not the gabarit wrapper. */
+  transcript?: string;
   technical?: string;
   issuedAt: number;
   retractable: boolean;

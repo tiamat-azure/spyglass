@@ -4,6 +4,21 @@ import type { AddressInfo, Socket } from 'node:net';
 
 const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
+function hostName(hostHeader: string): string {
+  const trimmed = hostHeader.trim().toLowerCase();
+  const colon = trimmed.lastIndexOf(':');
+  if (colon > 0 && /^\d+$/.test(trimmed.slice(colon + 1))) {
+    return trimmed.slice(0, colon);
+  }
+  return trimmed;
+}
+
+/** Exact loopback Host: `127.0.0.1` / `localhost` or those names with a port. */
+export function isLoopbackWsHost(hostHeader: string): boolean {
+  const host = hostName(hostHeader);
+  return host === '127.0.0.1' || host === 'localhost';
+}
+
 export type LocalSocketHandlers = {
   onText: (text: string) => void;
   onBinary: (payload: Buffer) => void;
@@ -172,7 +187,7 @@ export function listenLocalWs(options: {
         return;
       }
       const hostHeader = String(req.headers.host ?? '');
-      if (!hostHeader.startsWith('127.0.0.1') && !hostHeader.startsWith('localhost')) {
+      if (!isLoopbackWsHost(hostHeader)) {
         socket.end();
         return;
       }

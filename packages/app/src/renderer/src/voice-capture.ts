@@ -1,3 +1,5 @@
+import { resampleToSttPcm } from '../../shared/resample-pcm.ts';
+
 const SAMPLE_RATE = 16_000;
 const FRAME_SAMPLES = 1600;
 
@@ -9,6 +11,7 @@ type VoiceApi = {
       error?: string;
     }>;
     stop: () => Promise<{ ok: boolean }>;
+    abort: () => Promise<{ ok: boolean }>;
     frame: (pcm: ArrayBuffer) => void;
     onPartial: (callback: (payload: { text: string }) => void) => () => void;
     onFinal: (callback: (payload: { text: string }) => void) => () => void;
@@ -97,12 +100,12 @@ export function attachVoiceCapture(
     processor = audioContext.createScriptProcessor(4096, 1, 1);
     processor.onaudioprocess = (event) => {
       const input = event.inputBuffer.getChannelData(0);
-      const pcm = new Int16Array(input.length);
-      for (let index = 0; index < input.length; index += 1) {
-        const sample = input[index] ?? 0;
-        pcm[index] = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
+      const sourceRate = audioContext?.sampleRate ?? event.inputBuffer.sampleRate;
+      const pcm = resampleToSttPcm(input, sourceRate);
+      if (pcm.length === 0) {
+        return;
       }
-      api.voice.frame(pcm.buffer);
+      api.voice.frame(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength));
     };
     source.connect(processor);
     muteGain = audioContext.createGain();
@@ -136,6 +139,11 @@ export function attachVoiceCapture(
       options.liveEl.textContent = message;
       return false;
     }
+  };
+
+  const abort = async (): Promise<void> => {
+    stopGraph();
+    await api.voice.abort();
   };
 
   const end = async (): Promise<void> => {
@@ -183,7 +191,7 @@ export function attachVoiceCapture(
       if (!started) {
         holding = false;
         setMicState('idle');
-        await end();
+        await abort();
         return;
       }
       if (!holding) {
@@ -214,7 +222,7 @@ export function attachVoiceCapture(
       if (!started) {
         holding = false;
         setMicState('idle');
-        await end();
+        await abort();
       }
     },
     dispose: () => {

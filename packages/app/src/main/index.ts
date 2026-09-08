@@ -658,6 +658,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true };
   });
 
+  ipcMain.handle(IPC.voiceAbort, (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.voiceAbort)) {
+      return { ok: false };
+    }
+    if (!parseEmptyPayload(raw)) {
+      return { ok: false };
+    }
+    voiceBridge?.abort();
+    return { ok: true };
+  });
+
   ipcMain.on(IPC.voiceFrame, (event, raw: unknown) => {
     if (rejectForeignIpc(event, winRef, IPC.voiceFrame)) {
       return;
@@ -754,6 +765,9 @@ void (async () => {
           emitToChrome(win, IPC.voicePartial, payload);
         },
         onFinal: (payload) => {
+          if (payload.text.trim().length === 0) {
+            return;
+          }
           void requireSession()
             .recordVoiceFinal({
               text: payload.text,

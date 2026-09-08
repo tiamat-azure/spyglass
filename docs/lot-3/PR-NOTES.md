@@ -123,6 +123,17 @@ yields before then after.
   line.
 - Renderer/preload contain neither `new WebSocket` nor `ws://`.
 
+### Adversarial pass 2 (auto-fixes)
+
+Applied on tip `906c075`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **high — empty hold / mic-fail.** Hold does not `beginUtterance` until the first PCM frame. `stopCapture` with 0 bytes **aborts** (drop), not `end`. Mock assigns a phrase only on `pushPcm`; `finalize` of a 0-byte utterance is `''` and is not journaled. Renderer `getUserMedia` failure calls `spyglass:voice:abort` (not stop). `recordVoiceFinal` ignores blank text.
+2. **medium — capturing flag.** `startCapture` sets `capturing`; `stopCapture` / `abort` clear it. `sendFrame` returns immediately when disarmed, so post-stop VAD cannot open a new utterance.
+3. **medium — Chat Edit.** Observer chat payload carries `transcript` = raw `voice.text`. Edit prompt seeds that string, not the gabarit wrapper. `recordVoiceEdited` persists `asEditedVoiceTranscript` only (unwraps a pasted gabarit).
+4. **medium — real-mic PCM.** Renderer resamples ScriptProcessor floats to 16 kHz mono (`resampleToSttPcm` / `STT_SAMPLE_RATE`) before IPC; AudioContext rate is not assumed.
+5. **medium — overlapping utterances.** VoiceBridge snapshots PCM in `pcmByUtterance` per id until that id’s `final`. Sidecar keeps a session map; a new `start` does not abort a prior utterance still awaiting `end`/`final`.
+6. **low — ws Host allowlist.** `isLoopbackWsHost` is exact `127.0.0.1` / `localhost` or those names with a port — not `startsWith`.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

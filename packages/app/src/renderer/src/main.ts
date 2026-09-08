@@ -168,7 +168,7 @@ function renderChatMessage(
     edit.className = 'retract';
     edit.textContent = 'Edit';
     edit.addEventListener('click', () => {
-      const next = window.prompt('Corriger la dictée', message.text);
+      const next = window.prompt('Corriger la dictée', message.transcript ?? message.text);
       if (next !== null && next.trim().length > 0) {
         void api.voice.edit(message.eventId, next.trim());
       }

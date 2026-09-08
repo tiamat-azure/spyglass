@@ -23,7 +23,8 @@ export async function startSidecarServer(
   env: NodeJS.ProcessEnv = process.env,
   engine: SttEngine = createEngineFromEnv(env)
 ): Promise<SidecarHandle> {
-  let session: Session | undefined;
+  const sessions = new Map<string, Session>();
+  let current: Session | undefined;
 
   const server: LocalWsServer = await listenLocalWs({
     onConnection: (connection) => {
@@ -51,43 +52,47 @@ export async function startSidecarServer(
             return;
           }
           if (message.type === 'abort') {
-            if (session !== undefined) {
+            for (const session of sessions.values()) {
               engine.abort(session.utteranceId);
-              session = undefined;
             }
+            sessions.clear();
+            current = undefined;
             return;
           }
           if (message.type === 'start') {
-            if (session !== undefined) {
-              engine.abort(session.utteranceId);
-            }
-            session = { utteranceId: message.utteranceId, startTs: message.startTs };
+            // Keep prior utterance PCM in the engine until its own `end`/`final`.
+            // Do not abort or reuse a shared session into the next begin.
+            current = { utteranceId: message.utteranceId, startTs: message.startTs };
+            sessions.set(message.utteranceId, current);
             engine.begin(message.utteranceId);
             return;
           }
           if (message.type === 'end') {
-            const current = session;
-            session = undefined;
-            if (current === undefined) {
+            const currentEnd = sessions.get(message.utteranceId);
+            sessions.delete(message.utteranceId);
+            if (current?.utteranceId === message.utteranceId) {
+              current = undefined;
+            }
+            if (currentEnd === undefined) {
               return;
             }
-            void engine.finalize(current.utteranceId).then((finalText) => {
+            void engine.finalize(currentEnd.utteranceId).then((finalText) => {
               send(connection, {
                 type: 'final',
-                utteranceId: current.utteranceId,
+                utteranceId: currentEnd.utteranceId,
                 text: finalText,
-                startTs: current.startTs,
+                startTs: currentEnd.startTs,
                 endTs: message.endTs
               });
             });
           }
         },
         onBinary: (payload) => {
-          if (session === undefined) {
+          if (current === undefined) {
             return;
           }
-          const utteranceId = session.utteranceId;
-          const startTs = session.startTs;
+          const utteranceId = current.utteranceId;
+          const startTs = current.startTs;
           engine.pushPcm(utteranceId, payload, (partial) => {
             send(connection, {
               type: 'partial',
@@ -98,10 +103,11 @@ export async function startSidecarServer(
           });
         },
         onClose: () => {
-          if (session !== undefined) {
-            engine.abort(session.utteranceId);
-            session = undefined;
+          for (const open of sessions.values()) {
+            engine.abort(open.utteranceId);
           }
+          sessions.clear();
+          current = undefined;
         }
       };
     }

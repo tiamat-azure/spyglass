@@ -91,6 +91,15 @@ export class ObserverAgent {
       issuedAt,
       retractable: event.kind.startsWith('dom.')
     };
+    if (
+      event.kind === 'voice.partial' ||
+      event.kind === 'voice.final' ||
+      event.kind === 'voice.edited'
+    ) {
+      if (event.voice?.text !== undefined) {
+        message.transcript = event.voice.text;
+      }
+    }
     if (event.stepIndex !== undefined) {
       message.stepIndex = event.stepIndex;
     }

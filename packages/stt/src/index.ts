@@ -55,7 +55,7 @@ export {
   whisperCandidateModels
 } from './whisper-engine.ts';
 export type { LocalWsConnection, LocalWsServer } from './ws-localhost.ts';
-export { decodeWsFrames, encodeWsFrame, listenLocalWs } from './ws-localhost.ts';
+export { decodeWsFrames, encodeWsFrame, isLoopbackWsHost, listenLocalWs } from './ws-localhost.ts';
 
 export function sidecarStatus(): 'ready' {
   return 'ready';

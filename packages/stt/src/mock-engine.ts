@@ -22,13 +22,18 @@ export function createMockEngine(transcripts: string[] = [...DEFAULT_MOCK_TRANSC
     name: 'mock',
     model: 'mock-offline',
     begin(utteranceId: string): void {
-      assigned.set(utteranceId, nextPhrase());
       open.set(utteranceId, { bytes: 0, lastPartialAt: 0 });
     },
     pushPcm(utteranceId: string, pcm: Buffer, onPartial): void {
       const state = open.get(utteranceId);
+      if (state === undefined) {
+        return;
+      }
+      if (!assigned.has(utteranceId)) {
+        assigned.set(utteranceId, nextPhrase());
+      }
       const phrase = assigned.get(utteranceId);
-      if (state === undefined || phrase === undefined) {
+      if (phrase === undefined) {
         return;
       }
       state.bytes += pcm.length;
@@ -42,9 +47,13 @@ export function createMockEngine(transcripts: string[] = [...DEFAULT_MOCK_TRANSC
       onPartial(words.slice(0, shown).join(' '));
     },
     finalize(utteranceId: string): Promise<string> {
-      const phrase = assigned.get(utteranceId) ?? phrases[0] ?? DEFAULT_MOCK_TRANSCRIPTS[0];
+      const state = open.get(utteranceId);
+      const phrase = assigned.get(utteranceId);
       open.delete(utteranceId);
       assigned.delete(utteranceId);
+      if (state === undefined || state.bytes === 0 || phrase === undefined) {
+        return Promise.resolve('');
+      }
       return Promise.resolve(phrase);
     },
     abort(utteranceId: string): void {

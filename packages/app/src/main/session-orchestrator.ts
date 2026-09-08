@@ -19,6 +19,7 @@ import {
   pcm16ToWav
 } from '@spyglass/stt';
 import type { NavState, RecorderState } from '../shared/ipc.ts';
+import { asEditedVoiceTranscript } from '../shared/voice-transcript.ts';
 import type { BrowserPane } from './browser-pane.ts';
 import {
   asProbeWireEvent,
@@ -425,6 +426,9 @@ export class SessionOrchestrator {
       if (this.state !== 'recording' || this.sessionId === undefined) {
         return undefined;
       }
+      if (input.text.trim().length === 0) {
+        return undefined;
+      }
       await this.flushPendingClick();
       // C2b: flush first so a click that landed after speech start is the next
       // stable capture. correlateVoiceSegment then prefers `before` when
@@ -482,7 +486,7 @@ export class SessionOrchestrator {
       const id = this.nextId();
       const voice: VoiceCapture = {
         ...source.voice,
-        text,
+        text: asEditedVoiceTranscript(text),
         editedFrom: eventId,
         audioRef: source.voice.audioRef ?? null
       };
