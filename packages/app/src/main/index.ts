@@ -451,6 +451,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         state: 'stopping'
       });
     }
+    voiceBridge?.invalidateCapture();
     await voiceBridge?.stopCapture();
     return await requireSession().stop();
   });
@@ -831,7 +832,10 @@ void (async () => {
           console.error('[stt]', message);
         }
       },
-      sttEnv
+      sttEnv,
+      {
+        canCapture: () => activeSession?.snapshot().state === 'recording'
+      }
     );
     pane.webContents.on('did-navigate', () => {
       void activeSession?.recordNav('nav.load', pane.snapshot());

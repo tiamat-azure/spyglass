@@ -190,5 +190,11 @@ describe('packaged Observe', () => {
     expect(inProcess).toContain('engine.dispose?.()');
     expect(bridge).toContain('this.inProcess?.abort()');
     expect(whisper).toContain('killJobs(utteranceId)');
+    expect(voiceUi).toContain('await api.voice.abort()');
+    expect(bridge).toContain('captureEpoch');
+    expect(bridge).toContain('invalidateCapture');
+    expect(bridge).toContain('canCapture');
+    expect(main).toContain('invalidateCapture');
+    expect(main).toContain('canCapture');
   });
 });

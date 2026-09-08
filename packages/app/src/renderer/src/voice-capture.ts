@@ -152,6 +152,7 @@ export function attachVoiceCapture(
     }
     if (!stillLive()) {
       stopGraph();
+      await api.voice.abort();
       return false;
     }
     options.liveEl.hidden = false;
@@ -161,6 +162,7 @@ export function attachVoiceCapture(
       pumpFake();
       if (!stillLive()) {
         stopGraph();
+        await api.voice.abort();
         return false;
       }
       return true;
@@ -169,6 +171,7 @@ export function attachVoiceCapture(
       const micOk = await pumpMic();
       if (!micOk || !stillLive()) {
         stopGraph();
+        await api.voice.abort();
         return false;
       }
       return true;

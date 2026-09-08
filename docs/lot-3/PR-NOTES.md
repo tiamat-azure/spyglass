@@ -161,6 +161,12 @@ Applied on tip `cd6fe10`. V1a energy VAD and C2b `before`-on-overlap are unchang
 2. **P5-N2 medium — dropUtterance aborts in-process.** Empty-hold / mode-switch `dropUtterance` restores `inProcess.abort()` so engine `open` maps for the dropped live utterance are cleared. `abort()` is per-live (or pending finalize id), not `dispose()` of the whole engine.
 3. **P5-N3 medium — whisper killJobs is per-utterance.** `transcribe` calls `killJobs(utteranceId)` so a new utterance’s partials do not SIGKILL a prior utterance’s in-flight finalize. Continuous VAD can overlap finalize(utt1) with utt2 partials.
 
+### Adversarial pass 6 (auto-fixes)
+
+Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **P6-N1 high — mid-begin Stop vs late startCapture.** `begin()` / `toggleContinuous` call `api.voice.abort()` when `!stillLive()` after `voice.start` / `getUserMedia`, so a cold `startCapture` that resumes after Stop cannot leave `capturing=true`. `setArmed(false)` still does not abort: an already-armed utterance’s flush is preserved. Main `captureEpoch` / `invalidateCapture()` + `canCapture` (session still `recording`) refuse to set `capturing=true` if Stop ran or the session is sealed. `abort()` is a no-op against in-flight `pendingFinals`.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

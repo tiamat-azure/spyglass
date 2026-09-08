@@ -351,6 +351,110 @@ describe('VoiceBridge', () => {
       await bridge.dispose();
     }
   });
+
+  it('late startCapture after Stop does not leave capturing true', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: (payload) => {
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '0',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'late-arm'
+      }
+    );
+    try {
+      const started = bridge.startCapture('hold');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await bridge.stopCapture();
+      await started;
+      expect(bridge.isCapturing()).toBe(false);
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(finals).toEqual([]);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('startCapture refuses to arm when the session is no longer recording', async () => {
+    const finals: string[] = [];
+    let recording = true;
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: (payload) => {
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'sealed'
+      },
+      {
+        canCapture: () => recording
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      expect(bridge.isCapturing()).toBe(true);
+      recording = false;
+      await bridge.startCapture('hold');
+      expect(bridge.isCapturing()).toBe(false);
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(finals).toEqual([]);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('abort during an active flush does not drop the in-flight final', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: async (payload) => {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 80);
+          });
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'keep-flush'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      const flushing = bridge.stopCapture();
+      bridge.abort();
+      await flushing;
+      expect(finals).toEqual(['keep-flush']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
 });
 
 function pcmFilled(sample: number, samples = 1600): Buffer {

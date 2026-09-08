@@ -91,6 +91,7 @@ export class VoiceBridge {
   private starting: Promise<VoiceBridgeStatus> | undefined;
   private disposed = false;
   private capturing = false;
+  private captureEpoch = 0;
   private captureMode: VoiceMode = 'hold';
   private vad: VadState = createVadState();
   private utteranceSeq = 0;
@@ -99,7 +100,8 @@ export class VoiceBridge {
 
   constructor(
     private readonly handlers: VoiceBridgeHandlers,
-    private readonly env: NodeJS.ProcessEnv = process.env
+    private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly options: { canCapture?: () => boolean } = {}
   ) {
     this.status.fakeCapture = env.SPYGLASS_VOICE_FAKE === '1' || env.CI === 'true';
   }
@@ -108,8 +110,27 @@ export class VoiceBridge {
     return this.status;
   }
 
+  isCapturing(): boolean {
+    return this.capturing;
+  }
+
+  /** Invalidate in-flight startCapture so a late resume cannot re-arm after Stop. */
+  invalidateCapture(): void {
+    this.captureEpoch += 1;
+    this.capturing = false;
+  }
+
+  private allowsCapture(): boolean {
+    return this.options.canCapture?.() !== false;
+  }
+
   async startCapture(mode: VoiceMode): Promise<VoiceBridgeStatus> {
+    const epoch = this.captureEpoch;
     const status = await this.ensureStarted();
+    if (this.disposed || this.captureEpoch !== epoch || !this.allowsCapture()) {
+      this.capturing = false;
+      return status;
+    }
     this.capturing = true;
     this.captureMode = mode;
     this.vad = createVadState();
@@ -132,7 +153,7 @@ export class VoiceBridge {
   }
 
   async stopCapture(): Promise<void> {
-    this.capturing = false;
+    this.invalidateCapture();
     if (this.live !== undefined) {
       if (this.pcmBytes(this.live.id) === 0) {
         this.dropUtterance(this.live.id);
@@ -432,7 +453,11 @@ export class VoiceBridge {
   }
 
   abort(): void {
-    this.capturing = false;
+    this.invalidateCapture();
+    // An active flush (Stop of an already-armed utterance) must not be dropped.
+    if (this.pendingFinals.length > 0) {
+      return;
+    }
     const live = this.live;
     this.live = undefined;
     this.vad = createVadState();
