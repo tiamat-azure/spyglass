@@ -1,3 +1,4 @@
+import { isStaleCeilingRaiseCta } from '../../shared/ceiling-cta.ts';
 import type {
   ChatMessagePayload,
   ConfigGetResponse,
@@ -182,8 +183,11 @@ function applyUsage(
   if (limit instanceof HTMLInputElement && document.activeElement !== limit) {
     limit.value = String(usage.ceiling);
   }
-  if (usage.halt !== 'ceiling') {
-    for (const button of log.querySelectorAll<HTMLButtonElement>('button.chat-action')) {
+  for (const item of log.querySelectorAll<HTMLLIElement>('li.chat-msg')) {
+    if (!isStaleCeilingRaiseCta(usage.halt, item.dataset.banner)) {
+      continue;
+    }
+    for (const button of item.querySelectorAll<HTMLButtonElement>('button.chat-action')) {
       button.disabled = true;
     }
   }

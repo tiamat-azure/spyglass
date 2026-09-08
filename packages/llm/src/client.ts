@@ -11,7 +11,13 @@ import {
   LLM_SMART_PROVIDER_DEFAULT,
   LLM_SMART_TIMEOUT_MS_DEFAULT
 } from './constants.ts';
-import { assertNoLeak, type ExpurgatedEvent, expurgateBatch } from './expurgate.ts';
+import {
+  assertNoLeak,
+  type ExpurgatedEvent,
+  expurgateBatch,
+  secretLikeTokens,
+  sensitiveQueryValues
+} from './expurgate.ts';
 import { buildNarrationMessages, type NarrationItem, parseNarrationResponse } from './narration.ts';
 
 export type LlmProfileName = 'fast' | 'smart';
@@ -385,27 +391,49 @@ function parseProviderBody(raw: string, anthropic: boolean): TransportResult {
   };
 }
 
+/**
+ * Tokens that must not appear uncleansed after expurgation: masked secret refs
+ * (shouldMaskField), SECRET_LIKE hits, and sensitive query-param values.
+ * Ordinary form input ("input", "test", "Email") is not forbidden against the
+ * system prompt — those values are still dropped from the expurgated batch.
+ */
 function collectForbidden(events: readonly RawEvent[]): string[] {
-  const tokens: string[] = [];
+  const tokens = new Set<string>();
+  const add = (value: string | undefined): void => {
+    const token = value?.trim();
+    if (token !== undefined && token.length >= 4) {
+      tokens.add(token);
+    }
+  };
+  const addSecretLike = (value: string | undefined): void => {
+    if (value === undefined || value.length === 0) {
+      return;
+    }
+    for (const match of secretLikeTokens(value)) {
+      add(match);
+    }
+  };
+
   for (const event of events) {
-    if (event.value?.masked === false && event.value.text.length > 0) {
-      tokens.push(event.value.text);
-    }
     if (event.value?.masked === true) {
-      tokens.push(event.value.secretRef);
+      add(event.value.secretRef);
+    } else if (event.value?.masked === false) {
+      addSecretLike(event.value.text);
     }
-    const url = event.page?.url;
-    if (typeof url === 'string' && url.includes('?')) {
-      const query = url.slice(url.indexOf('?') + 1);
-      for (const part of query.split('&')) {
-        const eq = part.indexOf('=');
-        if (eq !== -1) {
-          tokens.push(decodeURIComponent(part.slice(eq + 1)));
-        }
+    addSecretLike(event.page?.title);
+    if (typeof event.page?.url === 'string') {
+      addSecretLike(event.page.url);
+      for (const value of sensitiveQueryValues(event.page.url)) {
+        add(value);
       }
     }
+    if (event.target !== undefined) {
+      addSecretLike(event.target.accessibleName);
+      addSecretLike(event.target.text);
+      addSecretLike(event.target.name);
+    }
   }
-  return tokens.filter((token) => token.length >= 4);
+  return [...tokens];
 }
 
 function assertNoLeaksFromSource(
@@ -415,13 +443,6 @@ function assertNoLeaksFromSource(
   const blob = JSON.stringify(clean);
   for (const event of source) {
     if (event.value?.masked === true && blob.includes(event.value.secretRef)) {
-      throw new Error('expurgation leak');
-    }
-    if (
-      event.value?.masked === false &&
-      event.value.text.length >= 4 &&
-      blob.includes(event.value.text)
-    ) {
       throw new Error('expurgation leak');
     }
   }

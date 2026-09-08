@@ -48,7 +48,9 @@ export {
   expurgatePage,
   expurgateTarget,
   redactUrl,
-  scrubText
+  scrubText,
+  secretLikeTokens,
+  sensitiveQueryValues
 } from './expurgate.ts';
 export type { GabaritInput, GabaritTarget, GabaritValue } from './gabarits.ts';
 export { elementLabel, gabaritText, isEnrichableKind, quotedLabel } from './gabarits.ts';

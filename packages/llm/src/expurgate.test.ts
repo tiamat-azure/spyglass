@@ -7,7 +7,8 @@ import {
   expurgatePage,
   expurgateTarget,
   redactUrl,
-  scrubText
+  scrubText,
+  sensitiveQueryValues
 } from './expurgate.ts';
 
 function event(overrides: Partial<RawEvent> = {}): RawEvent {
@@ -108,6 +109,17 @@ describe('expurgation filter (6.9)', () => {
   it('handles malformed URLs without throwing', () => {
     expect(redactUrl('not a url?token=abcd1234')).not.toContain('abcd1234');
     expect(redactUrl('')).toBe('');
+  });
+
+  it('extracts sensitive query values without URIError on bad percent-encoding', () => {
+    expect(sensitiveQueryValues('https://app.example/login?token=%E0%A4%A')).toEqual(
+      expect.arrayContaining(['%E0%A4%A'])
+    );
+    expect(sensitiveQueryValues('https://app.example/login?token=abcd1234&q=ok')).toEqual(
+      expect.arrayContaining(['abcd1234'])
+    );
+    expect(sensitiveQueryValues('https://app.example/login?q=input')).not.toContain('input');
+    expect(() => sensitiveQueryValues('not a url?token=%E0%A4%A')).not.toThrow();
   });
 
   it('covers empty targets, pages, and whitespace labels', () => {

@@ -165,6 +165,24 @@ plafond ».
 - **N5:** `configure()` sets `halt='ceiling'` immediately when usage already
   exceeds the new limit.
 
+### Adversarial pass 4 (auto-fix)
+
+Applied on this branch without a PR. **T1a locked.**
+
+- **F1:** `collectForbidden` / `assertNoLeak` no longer treat every ≥4-char
+  unmasked field value as forbidden against the whole outbound prompt (system
+  prompt contains `string`; kinds contain `input`; labels contain `Email`).
+  Leak checks cover masked `secretRef`, `SECRET_LIKE` hits, and sensitive
+  query-param values only. Unmasked form text is still dropped by expurgation.
+  Tests: `"input"` / `"test"` narrate successfully; `SECRET_PASSWORD` and
+  `token=abcd1234` still must not appear outbound.
+- **F2:** `sensitiveQueryValues` wraps `decodeURIComponent` in try/catch (and
+  parses via `URLSearchParams` like `redactUrl`). Malformed `%E0%A4%A` must
+  not `URIError` → `halt=error`.
+- **F3:** `applyUsage` disables stale « Relever le plafond » only on
+  `li[data-banner="danger"]` when `halt !== 'ceiling'`. Warn-threshold raise
+  stays clickable.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

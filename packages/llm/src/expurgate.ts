@@ -124,6 +124,69 @@ export function redactUrl(raw: string): string {
   }
 }
 
+/**
+ * Cleartext values of cookie/token-like query params. Malformed percent-encoding
+ * must not throw URIError — callers use this in the LLM leak choke point.
+ */
+export function sensitiveQueryValues(raw: string): string[] {
+  const values: string[] = [];
+  const add = (value: string): void => {
+    if (value.length > 0) {
+      values.push(value);
+    }
+  };
+  const consumeParams = (params: URLSearchParams): void => {
+    params.forEach((value, key) => {
+      if (!isSensitiveQueryKey(key) || value.length === 0) {
+        return;
+      }
+      add(value);
+    });
+  };
+  const consumeRawQuery = (query: string): void => {
+    for (const part of query.split('&')) {
+      if (part.length === 0) {
+        continue;
+      }
+      const eq = part.indexOf('=');
+      const rawKey = eq === -1 ? part : part.slice(0, eq);
+      const rawValue = eq === -1 ? '' : part.slice(eq + 1);
+      let key = rawKey;
+      try {
+        key = decodeURIComponent(rawKey.replace(/\+/g, ' '));
+      } catch {
+        // keep the raw key when percent-encoding is malformed
+      }
+      if (!isSensitiveQueryKey(key) || rawValue.length === 0) {
+        continue;
+      }
+      add(rawValue);
+      try {
+        add(decodeURIComponent(rawValue.replace(/\+/g, ' ')));
+      } catch {
+        // malformed percent-encoding — raw value is enough for leak checks
+      }
+    }
+  };
+  try {
+    consumeParams(new URL(raw).searchParams);
+  } catch {
+    const queryAt = raw.indexOf('?');
+    if (queryAt !== -1) {
+      consumeRawQuery(raw.slice(queryAt + 1));
+    }
+  }
+  if (raw.includes('?')) {
+    consumeRawQuery(raw.slice(raw.indexOf('?') + 1));
+  }
+  return values;
+}
+
+/** Distinct SECRET_LIKE matches (API keys, Bearer, JWT, SECRET_* refs). */
+export function secretLikeTokens(value: string): string[] {
+  return Array.from(value.matchAll(new RegExp(SECRET_LIKE.source, 'gi')), (match) => match[0]);
+}
+
 export function scrubText(value: string | undefined): string | undefined {
   if (value === undefined) {
     return undefined;

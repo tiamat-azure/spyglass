@@ -8,6 +8,26 @@ import {
 } from './constants.ts';
 import { parseNarrationResponse } from './narration.ts';
 
+function fieldEvent(text: string, overrides: Partial<RawEvent> = {}): RawEvent {
+  return {
+    schemaVersion: 1,
+    id: 'evt_000124',
+    sessionId: 'ses_test',
+    ts: 2,
+    kind: 'dom.input',
+    target: {
+      tag: 'input',
+      name: 'email',
+      accessibleName: 'Email',
+      framePath: ['main'],
+      shadowPath: []
+    },
+    value: { masked: false, text },
+    page: { url: 'https://exemple.fr/signup', title: 'Inscription' },
+    ...overrides
+  };
+}
+
 function clickEvent(): RawEvent {
   return {
     schemaVersion: 1,
@@ -82,6 +102,110 @@ describe('llm gateway', () => {
     const blob = JSON.stringify(seen);
     expect(blob).not.toContain('should-not-leak');
     expect(blob).not.toContain('abcd1234');
+  });
+
+  it('does not treat ordinary form values like "input" or "test" as outbound leaks', async () => {
+    const seen: unknown[] = [];
+    const inner = createMockTransport({ delayMs: 1 });
+    const gateway = new LlmGateway({
+      transport: {
+        complete: async (request) => {
+          seen.push(request.body);
+          return inner.complete(request);
+        }
+      },
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: LLM_FAST_MODEL_DEFAULT,
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5-20250929',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        }
+      })
+    });
+    const input = await gateway.narrate([fieldEvent('input')]);
+    const test = await gateway.narrate([fieldEvent('test')]);
+    expect(input.ok).toBe(true);
+    expect(test.ok).toBe(true);
+    const blob = JSON.stringify(seen);
+    expect(blob).not.toContain('"text":"input"');
+    expect(blob).not.toContain('"text":"test"');
+  });
+
+  it('still forbids masked secrets and sensitive query tokens in the outbound prompt', async () => {
+    const seen: unknown[] = [];
+    const inner = createMockTransport({ delayMs: 1 });
+    const gateway = new LlmGateway({
+      transport: {
+        complete: async (request) => {
+          seen.push(request.body);
+          return inner.complete(request);
+        }
+      },
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: LLM_FAST_MODEL_DEFAULT,
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5-20250929',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        }
+      })
+    });
+    const result = await gateway.narrate([
+      {
+        ...clickEvent(),
+        value: { masked: true, secretRef: 'SECRET_PASSWORD' },
+        page: { url: 'https://exemple.fr/login?token=abcd1234', title: 'Connexion' }
+      }
+    ]);
+    expect(result.ok).toBe(true);
+    const blob = JSON.stringify(seen);
+    expect(blob).not.toContain('SECRET_PASSWORD');
+    expect(blob).not.toContain('abcd1234');
+  });
+
+  it('does not URIError-halt on a malformed sensitive query value', async () => {
+    const gateway = new LlmGateway({
+      transport: createMockTransport({ delayMs: 1 }),
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: LLM_FAST_MODEL_DEFAULT,
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5-20250929',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test',
+          timeoutMs: 200
+        }
+      })
+    });
+    const result = await gateway.narrate([
+      fieldEvent('input', {
+        page: { url: 'https://app.example/login?token=%E0%A4%A', title: 'Login' }
+      })
+    ]);
+    expect(result.ok).toBe(true);
   });
 
   it('treats transport failure as profile unavailability, not a partial parse', async () => {
