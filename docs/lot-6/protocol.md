@@ -16,6 +16,10 @@ Un **corpus local immuable** de 10 pages (`/site-01` … `/site-10`, servi par
 `startFixtureServer`) valide le même protocole en CI **sans réseau sortant et
 sans clés d'API**.
 
+`w3.org` n'expose pas « W3C » dans le `innerText` du `body` (titre / meta
+seulement). Pour cet hôte, l'étape 1 est `elementVisible` sur `body`
+(`requireText: false`) plus `urlMatches` exact.
+
 ## Vague J+0
 
 1. Pour chaque site, scénario smoke : `startUrl` → `wait` body/h1 →

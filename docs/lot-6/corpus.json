@@ -31,7 +31,8 @@
       "id": "w3c",
       "name": "w3.org",
       "startUrl": "https://www.w3.org/",
-      "text": "W3C"
+      "text": "W3C",
+      "requireText": false
     },
     {
       "id": "rfc-editor",

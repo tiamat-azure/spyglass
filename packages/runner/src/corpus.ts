@@ -12,6 +12,8 @@ export type CorpusSite = {
   startUrl: string;
   text: string;
   urlGlob: string;
+  /** When false, first step only checks that body is visible (JS-heavy homepages). */
+  requireText?: boolean;
 };
 
 /**
@@ -52,7 +54,8 @@ export const PUBLIC_CORPUS: readonly CorpusSite[] = [
     name: 'w3.org',
     startUrl: 'https://www.w3.org/',
     text: 'W3C',
-    urlGlob: 'https://www.w3.org/'
+    urlGlob: 'https://www.w3.org/',
+    requireText: false
   },
   {
     id: 'rfc-editor',
@@ -115,7 +118,31 @@ export type MeasuredRates = {
   notes: string[];
 };
 
-export function waitStep(index: number, expectedText: string): RefinedStep {
+export function waitStep(index: number, expectedText: string, requireText = true): RefinedStep {
+  if (!requireText) {
+    return {
+      index,
+      intent: 'Je vérifie que la page a chargé',
+      action: {
+        type: 'wait',
+        descriptor: {
+          type: 'wait',
+          selector: 'body',
+          selectorStrategy: 'css',
+          description: 'Wait for document',
+          arguments: ['8000']
+        }
+      },
+      verification: {
+        type: 'elementVisible',
+        expected: 'body',
+        strength: 'strong',
+        confirmedByUser: true,
+        timeoutMs: 12_000
+      },
+      sourceEvents: [`evt_${String(index + 1).padStart(6, '0')}`]
+    };
+  }
   return {
     index,
     intent: `Je vérifie que la page affiche « ${expectedText} »`,
@@ -123,7 +150,7 @@ export function waitStep(index: number, expectedText: string): RefinedStep {
       type: 'wait',
       descriptor: {
         type: 'wait',
-        selector: 'h1, body',
+        selector: 'body',
         selectorStrategy: 'css',
         description: 'Wait for document',
         arguments: ['8000']
@@ -141,7 +168,7 @@ export function waitStep(index: number, expectedText: string): RefinedStep {
 }
 
 export function publicSiteScenario(site: CorpusSite, sessionId: string): Scenario {
-  const wait = waitStep(0, site.text);
+  const wait = waitStep(0, site.text, site.requireText !== false);
   const urlCheck: RefinedStep = {
     index: 1,
     intent: `Je confirme l'URL de ${site.name}`,

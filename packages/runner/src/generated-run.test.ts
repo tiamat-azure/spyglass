@@ -128,7 +128,14 @@ describe('Lot 6 generated script outside Electron (CA-10 / CA-11)', () => {
       delete env.ANTHROPIC_API_KEY;
       const { stdout } = await execFileAsync(
         process.execPath,
-        ['scenario.ts', '--headless', '--no-ai', '--timeout', '12000'],
+        [
+          '--experimental-transform-types',
+          'scenario.ts',
+          '--headless',
+          '--no-ai',
+          '--timeout',
+          '12000'
+        ],
         { cwd: paths.dir, env, timeout: 45_000 }
       );
       const line = stdout.trim().split('\n').at(-1) ?? '';

@@ -155,8 +155,8 @@ export function generatedPackageManifest(
     type: 'module',
     engines: { node: '24.20.0' },
     scripts: {
-      start: 'node scenario.ts --no-ai',
-      headless: 'node scenario.ts --headless --no-ai'
+      start: 'node --experimental-transform-types scenario.ts --no-ai',
+      headless: 'node --experimental-transform-types scenario.ts --headless --no-ai'
     },
     dependencies: {
       [RUNNER_PACKAGE]: runnerVersion
@@ -189,25 +189,27 @@ Depuis le monorepo Spyglass :
 
 \`\`\`bash
 pnpm add ${RUNNER_PACKAGE}@file:../../packages/runner
-node scenario.ts --no-ai
+node --experimental-transform-types scenario.ts --no-ai
 \`\`\`
 
 Hors Spyglass, une fois le paquet publié :
 
 \`\`\`bash
 pnpm add ${RUNNER_PACKAGE}
-node scenario.ts --no-ai
+node --experimental-transform-types scenario.ts --no-ai
 \`\`\`
 
-Windows : même commande (\`node scenario.ts\`). Pas de chemins POSIX hardcodés.
+Windows : même commande. v1 exporte le runner en TypeScript ; Node 24.20.0
+requiert \`--experimental-transform-types\` (propriétés de constructeur).
+\`pnpm start\` / \`pnpm headless\` passent déjà ce flag.
 
 ## Exécution — visible par défaut (F-45)
 
 Le navigateur est **visible** sauf si vous passez \`--headless\`.
 
 \`\`\`bash
-node scenario.ts --no-ai
-node scenario.ts --headless --no-ai
+node --experimental-transform-types scenario.ts --no-ai
+node --experimental-transform-types scenario.ts --headless --no-ai
 \`\`\`
 
 \`--no-ai\` désactive tout rattrapage LLM : **aucune clé d'API n'est requise**.
