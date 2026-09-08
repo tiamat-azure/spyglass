@@ -34,10 +34,11 @@ export {
 export { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
 export type { SidecarHandle } from './sidecar.ts';
 export { runSidecarMain, startSidecarServer } from './sidecar.ts';
-export type { VadState } from './vad.ts';
+export type { VadState, VadUtteranceGate } from './vad.ts';
 export {
   createVadState,
   frameDurationMs,
+  gateVadUtterance,
   pcmRms,
   pushVad,
   VAD_HANGOVER_MS,

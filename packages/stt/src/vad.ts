@@ -56,3 +56,27 @@ export function frameDurationMs(sampleCount: number, sampleRate: number): number
   }
   return (sampleCount / sampleRate) * 1000;
 }
+
+export type VadUtteranceGate = {
+  rms: number;
+  speaking: boolean;
+  startUtterance: boolean;
+  sendFrame: boolean;
+  endUtterance: boolean;
+};
+
+/** Map one PCM frame onto utterance start / send / end for continuous capture. */
+export function gateVadUtterance(
+  state: VadState,
+  pcm: Int16Array,
+  frameMs: number
+): VadUtteranceGate {
+  const step = pushVad(state, pcm, frameMs);
+  return {
+    rms: step.rms,
+    speaking: step.speaking,
+    startUtterance: step.started,
+    sendFrame: step.started || step.speaking || step.ended,
+    endUtterance: step.ended
+  };
+}

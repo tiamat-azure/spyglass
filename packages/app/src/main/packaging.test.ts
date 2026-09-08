@@ -133,6 +133,8 @@ describe('packaged Observe', () => {
     expect(orch).toContain('audioRef: null');
     const bridge = readFileSync(join(appRoot, 'src/main/voice-bridge.ts'), 'utf8');
     expect(bridge).toContain('ws://127.0.0.1');
+    expect(bridge).toContain('gateVadUtterance');
+    expect(bridge).toContain('createVadState');
     expect(voiceUi).not.toMatch(/catch\s*\{[\s\S]{0,80}pumpFake\(\)/);
     expect(voiceUi).toContain('createGain');
     expect(voiceUi).toContain('gain.value = 0');

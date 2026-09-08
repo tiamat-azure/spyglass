@@ -79,8 +79,11 @@ export function attachVoiceCapture(
   };
 
   const pumpFake = (): void => {
+    let tick = 0;
     fakeTimer = setInterval(() => {
-      api.voice.frame(int16FrameFromSine(phase));
+      tick += 1;
+      const silent = mode === 'continuous' && tick % 16 >= 8;
+      api.voice.frame(silent ? new Int16Array(FRAME_SAMPLES).buffer : int16FrameFromSine(phase));
     }, 100);
   };
 
@@ -116,7 +119,7 @@ export function attachVoiceCapture(
       return false;
     }
     options.liveEl.hidden = false;
-    options.liveEl.textContent = 'Dictée en cours…';
+    options.liveEl.textContent = mode === 'continuous' ? "À l'écoute (VAD)…" : 'Dictée en cours…';
     options.liveEl.dataset.kind = 'voice.partial';
     if (result.fakeCapture) {
       pumpFake();

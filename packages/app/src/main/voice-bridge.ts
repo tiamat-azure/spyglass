@@ -3,6 +3,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   createInProcessStt,
+  createVadState,
+  frameDurationMs,
+  gateVadUtterance,
   type InProcessStt,
   parseServerMessage,
   pcmRms,
@@ -10,7 +13,9 @@ import {
   type SidecarHandle,
   STT_SAMPLE_RATE,
   type SttEngineName,
-  startSidecarServer
+  startSidecarServer,
+  type VadState,
+  type VoiceMode
 } from '@spyglass/stt';
 
 export type VoiceBridgeHandlers = {
@@ -84,6 +89,9 @@ export class VoiceBridge {
   private utterancePcm: Buffer[] = [];
   private starting: Promise<VoiceBridgeStatus> | undefined;
   private disposed = false;
+  private captureMode: VoiceMode = 'hold';
+  private vad: VadState = createVadState();
+  private utteranceSeq = 0;
 
   constructor(
     private readonly handlers: VoiceBridgeHandlers,
@@ -94,6 +102,28 @@ export class VoiceBridge {
 
   snapshot(): VoiceBridgeStatus {
     return this.status;
+  }
+
+  async startCapture(mode: VoiceMode): Promise<VoiceBridgeStatus> {
+    const status = await this.ensureStarted();
+    this.captureMode = mode;
+    this.vad = createVadState();
+    if (mode === 'hold') {
+      this.beginUtterance(this.nextUtteranceId(), Date.now());
+    }
+    return status;
+  }
+
+  stopCapture(): void {
+    if (this.live !== undefined) {
+      this.endUtterance(Date.now());
+    }
+    this.vad = createVadState();
+  }
+
+  private nextUtteranceId(): string {
+    this.utteranceSeq += 1;
+    return `utt_${String(Date.now())}_${String(this.utteranceSeq)}`;
   }
 
   private preferInProcess(): boolean {
@@ -223,9 +253,34 @@ export class VoiceBridge {
   }
 
   sendFrame(pcm: Buffer): void {
+    const samples = new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2));
+    if (this.captureMode === 'continuous') {
+      const gate = gateVadUtterance(
+        this.vad,
+        samples,
+        frameDurationMs(samples.length, STT_SAMPLE_RATE)
+      );
+      this.handlers.onLevel(gate.rms);
+      if (gate.startUtterance) {
+        this.beginUtterance(this.nextUtteranceId(), Date.now());
+      }
+      if (gate.sendFrame && this.live !== undefined) {
+        this.deliverFrame(pcm);
+      }
+      if (gate.endUtterance) {
+        this.endUtterance(Date.now());
+      }
+      return;
+    }
+    this.handlers.onLevel(pcmRms(samples));
+    if (this.live === undefined) {
+      return;
+    }
+    this.deliverFrame(pcm);
+  }
+
+  private deliverFrame(pcm: Buffer): void {
     this.utterancePcm.push(pcm);
-    const rms = pcmRms(new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2)));
-    this.handlers.onLevel(rms);
     const live = this.live;
     if (this.inProcess !== undefined && live !== undefined) {
       this.inProcess.pushPcm(pcm, (text) => {
@@ -272,6 +327,7 @@ export class VoiceBridge {
   abort(): void {
     this.utterancePcm = [];
     this.live = undefined;
+    this.vad = createVadState();
     this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
   }

@@ -627,8 +627,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       };
     }
     try {
-      const status = await voiceBridge.ensureStarted();
-      voiceBridge.beginUtterance(`utt_${String(Date.now())}`, Date.now());
+      const status = await voiceBridge.startCapture(payload.mode);
       return {
         ok: true,
         mode: payload.mode,
@@ -655,7 +654,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (!parseEmptyPayload(raw)) {
       return { ok: false };
     }
-    voiceBridge?.endUtterance(Date.now());
+    voiceBridge?.stopCapture();
     return { ok: true };
   });
 

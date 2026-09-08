@@ -19,8 +19,12 @@ Lot 3 (Voix) only. Lots 0–2 (Electron security, capture, observer
 gabarits/enrichment) are unchanged.
 
 The chrome renderer captures the microphone (**hold-to-talk** or **continuous
-VAD**) as PCM 16 kHz mono and sends frames over IPC `spyglass:voice:frame`.
-The **main** process is the only WebSocket client: it owns a localhost sidecar
+energy VAD**) as PCM 16 kHz mono and sends frames over IPC
+`spyglass:voice:frame`. **Hold** begins/ends one utterance from pointer
+down/up. **Continuous** (`#voice-mode` → VAD) arms capture; `@spyglass/stt`
+`createVadState` / `pushVad` / `gateVadUtterance` in main `VoiceBridge` start
+an STT utterance on speech energy and end it after hangover silence. The
+**main** process is the only WebSocket client: it owns a localhost sidecar
 (`@spyglass/stt`) that never leaves `127.0.0.1` (ADR-0005). The renderer does
 not open STT sockets.
 
@@ -56,8 +60,8 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (195 passed, 1 skipped),
-`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**9 passed**, Lots 0–3) on
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (197 passed, 1 skipped),
+`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**10 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
 stub binary** unit test that writes a `.txt` transcript with no HTTP.
@@ -78,6 +82,12 @@ stub binary** unit test that writes a `.txt` transcript with no HTTP.
    meter stays offline, `raw.jsonl` still has voice events and no `"mode": "llm"`.
    Mock/whisper engines never call `fetch`.
 
+**V1a (captain):** continuous energy VAD is wired, not a label. Unit tests
+`gates continuous utterances` and `continuous energy VAD starts and ends
+utterances from RMS`; e2e `continuous energy VAD starts and ends utterances`
+listens in VAD mode and gets two `voice.final` rows from speech/silence
+energy cycles without hold-to-talk. **C2** correlation policy is unchanged.
+
 ### Residuals / not in this lot
 
 - Real `ggml-small-q5_1.bin` (~190 MB) is **not** in git or CI. Run
@@ -86,6 +96,8 @@ stub binary** unit test that writes a `.txt` transcript with no HTTP.
 - F-36 reserved voice commands and F-38/F-39 model upgrade are Lot 3+ later
   (P2). Segment **edit** (F-33 P1) is wired (`spyglass:voice:edit` →
   `voice.edited`).
+- **C2** correlation policy (8s after-preferring / pending-click flush) is
+  still pending captain — not changed in V1a.
 - Live French quality of whisper `small` was not baked off here (no GPU, no
   weights). ADR-0017 remains the upgrade path.
 
@@ -111,7 +123,7 @@ stub binary** unit test that writes a `.txt` transcript with no HTTP.
 | [`screenshots/hold-vad-ui.png`](screenshots/hold-vad-ui.png) | Mic + Hold/VAD toggle in the composer |
 | [`screenshots/partial-to-final.png`](screenshots/partial-to-final.png) | Live transcript + chat gabarit after hold-to-talk |
 | [`screenshots/before-after-correlation.png`](screenshots/before-after-correlation.png) | Chat: dictation before, click, dictation after |
-| [`screenshots/offline-dictation.png`](screenshots/offline-dictation.png) | Dictation with LLM offline / network cut |
+| [`screenshots/continuous-vad.png`](screenshots/continuous-vad.png) | Continuous VAD: two energy-segmented finals without hold |
 
 Absolute paths in this checkout:
 
@@ -119,6 +131,7 @@ Absolute paths in this checkout:
 - `/workspace/docs/lot-3/screenshots/partial-to-final.png`
 - `/workspace/docs/lot-3/screenshots/before-after-correlation.png`
 - `/workspace/docs/lot-3/screenshots/offline-dictation.png`
+- `/workspace/docs/lot-3/screenshots/continuous-vad.png`
 
 Parent remounts copies to
 `/home/box/agent-data/grok-ship/reports/spyglass-screenshots/FM-spyglass-lot-3-20260908/`

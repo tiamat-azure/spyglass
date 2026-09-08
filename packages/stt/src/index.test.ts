@@ -9,7 +9,7 @@ import { createMockEngine } from './mock-engine.ts';
 import { parseAudioRetention, parseClientMessage, parseMockTranscripts } from './protocol.ts';
 import { resolveSttEngineName } from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
-import { createVadState, pcmRms, pushVad } from './vad.ts';
+import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
 import { createWhisperEngine, runWhisperCli, whisperAvailable } from './whisper-engine.ts';
 
@@ -75,6 +75,29 @@ describe('@spyglass/stt', () => {
       }
     }
     expect(ended).toBe(true);
+  });
+
+  it('gates continuous utterances: silence is dropped, speech starts, hangover ends', () => {
+    const state = createVadState();
+    const loud = Int16Array.from({ length: 1600 }, () => 4000);
+    const quiet = Int16Array.from({ length: 1600 }, () => 0);
+    const frameMs = frameDurationMs(1600, 16_000);
+    expect(gateVadUtterance(state, quiet, frameMs).sendFrame).toBe(false);
+    const start = gateVadUtterance(state, loud, frameMs);
+    expect(start.startUtterance).toBe(true);
+    expect(start.sendFrame).toBe(true);
+    expect(gateVadUtterance(state, loud, frameMs).startUtterance).toBe(false);
+    let ended = false;
+    for (let i = 0; i < 10; i += 1) {
+      const step = gateVadUtterance(state, quiet, frameMs);
+      if (step.endUtterance) {
+        ended = true;
+        expect(step.sendFrame).toBe(true);
+        break;
+      }
+    }
+    expect(ended).toBe(true);
+    expect(gateVadUtterance(state, quiet, frameMs).sendFrame).toBe(false);
   });
 
   it('writes a valid PCM16 WAV header', () => {

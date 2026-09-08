@@ -222,4 +222,39 @@ test.describe('Lot 3 voice', () => {
       await closeElectron(electronApp);
     }
   });
+
+  test('continuous energy VAD starts and ends utterances', async () => {
+    test.setTimeout(120_000);
+    const env = await launchEnv();
+    const electronApp = await electron.launch({
+      cwd: appDir,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
+      timeout: 45_000,
+      env
+    });
+    try {
+      const chrome = await chromeWindow(electronApp);
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i, { timeout: 15_000 });
+      await chrome.locator('#voice-mode').click();
+      await expect(chrome.locator('#voice-mode')).toHaveText(/VAD/i);
+      await chrome.locator('#mic-btn').click();
+      await expect(chrome.locator('#mic-btn')).toHaveAttribute('aria-pressed', 'true');
+      await expect(chrome.locator('#voice-live')).toBeVisible({ timeout: 10_000 });
+      await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(1, {
+        timeout: 15_000
+      });
+      await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(2, {
+        timeout: 15_000
+      });
+      await chrome.screenshot({ path: join(shotDir, 'continuous-vad.png') });
+      await chrome.locator('#mic-btn').click();
+      await expect(chrome.locator('#mic-btn')).toHaveAttribute('aria-pressed', 'false');
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
+    } finally {
+      await closeElectron(electronApp);
+    }
+  });
 });
