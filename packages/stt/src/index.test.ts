@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { correlateVoiceSegment } from './correlate.ts';
+import { createInProcessStt } from './in-process.ts';
 import { STT_PACKAGE, sidecarStatus } from './index.ts';
 import { createMockEngine } from './mock-engine.ts';
 import { parseAudioRetention, parseClientMessage, parseMockTranscripts } from './protocol.ts';
@@ -95,6 +96,21 @@ describe('@spyglass/stt', () => {
     expect(partials[0]?.startsWith('bonjour')).toBe(true);
   });
 
+  it('in-process session streams a final without opening a socket', async () => {
+    const session = createInProcessStt(
+      { SPYGLASS_STT_ENGINE: 'mock' },
+      createMockEngine(['hors ligne'])
+    );
+    const partials: string[] = [];
+    session.begin('u1', 1);
+    session.pushPcm(Buffer.alloc(4000, 1), (text) => {
+      partials.push(text);
+    });
+    const final = await session.end(2);
+    expect(final?.text).toBe('hors ligne');
+    expect(partials[0]?.startsWith('hors')).toBe(true);
+  });
+
   it('serves streaming transcripts over localhost WebSocket only', async () => {
     const handle = await startSidecarServer(
       { SPYGLASS_STT_ENGINE: 'mock', SPYGLASS_STT_MOCK_TRANSCRIPTS: 'hors ligne' },
@@ -128,7 +144,9 @@ describe('@spyglass/stt', () => {
       expect(messages.some((row) => row.includes('hors ligne'))).toBe(true);
       expect(handle.engine).toBe('mock');
     } finally {
+      const started = Date.now();
       await handle.close();
+      expect(Date.now() - started).toBeLessThan(2000);
     }
   });
 

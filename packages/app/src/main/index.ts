@@ -655,7 +655,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (!parseEmptyPayload(raw)) {
       return { ok: false };
     }
-    voiceBridge?.endUtterance(`utt_${String(Date.now())}`, Date.now());
+    voiceBridge?.endUtterance(Date.now());
     return { ok: true };
   });
 
@@ -884,6 +884,10 @@ void (async () => {
 })().catch((error: unknown) => {
   console.error('Failed to start Spyglass:', error);
   app.exit(1);
+});
+
+app.on('before-quit', () => {
+  void voiceBridge?.dispose();
 });
 
 app.on('window-all-closed', () => {

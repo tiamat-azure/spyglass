@@ -25,6 +25,7 @@ async function launchEnv(overrides: NodeJS.ProcessEnv = {}): Promise<NodeJS.Proc
   env.SPYGLASS_LLM_TRANSPORT = 'mock';
   env.SPYGLASS_STT_ENGINE = 'mock';
   env.SPYGLASS_VOICE_FAKE = '1';
+  env.SPYGLASS_STT_IN_PROCESS = '1';
   env.SPYGLASS_STT_MOCK_TRANSCRIPTS = "Je vais cliquer sur Démarrer|J'ai validé l'étape";
   env.AUDIO_RETENTION = 'none';
   Object.assign(env, overrides);
@@ -79,11 +80,36 @@ async function latestSessionDir(sessionsDir: string): Promise<string> {
   return join(sessionsDir, sessionId);
 }
 
+async function closeElectron(
+  electronApp: Awaited<ReturnType<typeof electron.launch>>
+): Promise<void> {
+  try {
+    await Promise.race([
+      electronApp.close(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('electron close timeout')), 12_000);
+      })
+    ]);
+  } catch {
+    electronApp.process()?.kill('SIGKILL');
+  }
+}
+
 async function holdMic(chrome: Page, ms: number): Promise<void> {
   const mic = chrome.locator('#mic-btn');
-  await mic.dispatchEvent('pointerdown');
+  await mic.scrollIntoViewIfNeeded();
+  const box = await mic.boundingBox();
+  if (box === null) {
+    throw new Error('#mic-btn has no box');
+  }
+  await chrome.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await chrome.mouse.down();
+  await expect(chrome.locator('#voice-live')).toBeVisible({ timeout: 15_000 });
   await chrome.waitForTimeout(ms);
-  await mic.dispatchEvent('pointerup');
+  await chrome.mouse.up();
+  await expect(chrome.locator('#voice-live')).toHaveAttribute('data-kind', 'voice.final', {
+    timeout: 10_000
+  });
 }
 
 test.describe('Lot 3 voice', () => {
@@ -151,7 +177,7 @@ test.describe('Lot 3 voice', () => {
       const names = await readdir(sessionDir);
       expect(names).not.toContain('audio');
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -193,7 +219,7 @@ test.describe('Lot 3 voice', () => {
       expect(raw).toContain('"kind":"voice.final"');
       expect(raw).not.toMatch(/"mode": "llm"/);
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

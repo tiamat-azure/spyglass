@@ -2,6 +2,8 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  createInProcessStt,
+  type InProcessStt,
   parseServerMessage,
   pcmRms,
   type ServerMessage,
@@ -28,6 +30,11 @@ export type VoiceBridgeStatus = {
   engine: SttEngineName;
   model: string;
   fakeCapture: boolean;
+};
+
+type LiveUtterance = {
+  id: string;
+  startTs: number;
 };
 
 function sidecarScriptPath(): string | undefined {
@@ -71,9 +78,12 @@ export class VoiceBridge {
   private sidecar: SidecarHandle | undefined;
   private child: ChildProcess | undefined;
   private socket: WebSocket | undefined;
+  private inProcess: InProcessStt | undefined;
+  private live: LiveUtterance | undefined;
   private status: VoiceBridgeStatus = { engine: 'mock', model: 'mock-offline', fakeCapture: false };
   private utterancePcm: Buffer[] = [];
   private starting: Promise<VoiceBridgeStatus> | undefined;
+  private disposed = false;
 
   constructor(
     private readonly handlers: VoiceBridgeHandlers,
@@ -86,7 +96,23 @@ export class VoiceBridge {
     return this.status;
   }
 
+  private preferInProcess(): boolean {
+    if (this.env.SPYGLASS_STT_IN_PROCESS === '0') {
+      return false;
+    }
+    if (this.env.SPYGLASS_STT_IN_PROCESS === '1' || this.env.CI === 'true') {
+      return true;
+    }
+    return sidecarScriptPath() === undefined;
+  }
+
   async ensureStarted(): Promise<VoiceBridgeStatus> {
+    if (this.disposed) {
+      throw new Error('STT bridge disposed');
+    }
+    if (this.inProcess !== undefined) {
+      return this.status;
+    }
     if (this.socket !== undefined && this.socket.readyState === WebSocket.OPEN) {
       return this.status;
     }
@@ -102,6 +128,15 @@ export class VoiceBridge {
   }
 
   private async connect(): Promise<VoiceBridgeStatus> {
+    if (this.preferInProcess()) {
+      this.inProcess = createInProcessStt(this.env);
+      this.status = {
+        engine: this.inProcess.engine === 'whisper' ? 'whisper' : 'mock',
+        model: this.inProcess.model,
+        fakeCapture: this.env.SPYGLASS_VOICE_FAKE === '1' || this.env.CI === 'true'
+      };
+      return this.status;
+    }
     const ready = await this.bootSidecar();
     this.status = {
       engine: ready.engine,
@@ -129,14 +164,6 @@ export class VoiceBridge {
   }
 
   private async bootSidecar(): Promise<{ port: number; engine: SttEngineName; model: string }> {
-    if (this.env.SPYGLASS_STT_IN_PROCESS === '1') {
-      this.sidecar = await startSidecarServer(this.env);
-      return {
-        port: this.sidecar.port,
-        engine: this.sidecar.engine as SttEngineName,
-        model: this.sidecar.model
-      };
-    }
     const script = sidecarScriptPath();
     if (script === undefined) {
       this.sidecar = await startSidecarServer(this.env);
@@ -155,7 +182,7 @@ export class VoiceBridge {
       this.child = child;
       let stdout = '';
       const timer = setTimeout(() => {
-        child.kill();
+        child.kill('SIGKILL');
         reject(new Error('STT sidecar did not become ready'));
       }, 10_000);
       child.stdout?.on('data', (chunk: Buffer) => {
@@ -186,7 +213,12 @@ export class VoiceBridge {
   }
 
   beginUtterance(utteranceId: string, startTs: number): void {
+    this.live = { id: utteranceId, startTs };
     this.utterancePcm = [];
+    if (this.inProcess !== undefined) {
+      this.inProcess.begin(utteranceId, startTs);
+      return;
+    }
     this.socket?.send(JSON.stringify({ type: 'start', utteranceId, startTs }));
   }
 
@@ -194,28 +226,77 @@ export class VoiceBridge {
     this.utterancePcm.push(pcm);
     const rms = pcmRms(new Int16Array(pcm.buffer, pcm.byteOffset, Math.floor(pcm.byteLength / 2)));
     this.handlers.onLevel(rms);
+    const live = this.live;
+    if (this.inProcess !== undefined && live !== undefined) {
+      this.inProcess.pushPcm(pcm, (text) => {
+        this.handlers.onPartial({
+          utteranceId: live.id,
+          text,
+          startTs: live.startTs
+        });
+      });
+      return;
+    }
     if (this.socket !== undefined && this.socket.readyState === WebSocket.OPEN) {
       const copy = pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.byteLength);
       this.socket.send(copy);
     }
   }
 
-  endUtterance(utteranceId: string, endTs: number): void {
-    this.socket?.send(JSON.stringify({ type: 'end', utteranceId, endTs }));
+  endUtterance(endTs: number): void {
+    const live = this.live;
+    this.live = undefined;
+    if (live === undefined) {
+      return;
+    }
+    if (this.inProcess !== undefined) {
+      const pcm = Buffer.concat(this.utterancePcm);
+      this.utterancePcm = [];
+      void this.inProcess.end(endTs).then((result) => {
+        if (result === undefined) {
+          return;
+        }
+        this.handlers.onFinal({
+          utteranceId: result.utteranceId,
+          text: result.text,
+          startTs: result.startTs,
+          endTs: result.endTs,
+          pcm
+        });
+      });
+      return;
+    }
+    this.socket?.send(JSON.stringify({ type: 'end', utteranceId: live.id, endTs }));
   }
 
   abort(): void {
     this.utterancePcm = [];
+    this.live = undefined;
+    this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
   }
 
   async dispose(): Promise<void> {
-    this.socket?.close();
+    this.disposed = true;
+    this.abort();
+    try {
+      this.socket?.close();
+    } catch {
+      // already closed
+    }
     this.socket = undefined;
-    this.child?.kill();
-    this.child = undefined;
-    await this.sidecar?.close();
+    if (this.child !== undefined) {
+      this.child.kill('SIGKILL');
+      this.child.unref();
+      this.child = undefined;
+    }
+    const closing = this.sidecar?.close();
     this.sidecar = undefined;
+    this.inProcess = undefined;
+    if (closing === undefined) {
+      return;
+    }
+    await Promise.race([closing.catch(() => undefined), sleep(400)]);
   }
 
   private onSocketMessage(data: unknown): void {
@@ -255,4 +336,10 @@ export class VoiceBridge {
       this.handlers.onError(message.message);
     }
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

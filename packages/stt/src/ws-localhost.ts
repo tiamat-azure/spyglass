@@ -154,7 +154,18 @@ export function listenLocalWs(options: {
       res.statusCode = 404;
       res.end();
     });
+    const sockets = new Set<Socket>();
+    httpServer.on('connection', (socket: Socket) => {
+      sockets.add(socket);
+      socket.on('close', () => {
+        sockets.delete(socket);
+      });
+    });
     httpServer.on('upgrade', (req: IncomingMessage, socket: Socket, _head: Buffer) => {
+      sockets.add(socket);
+      socket.on('close', () => {
+        sockets.delete(socket);
+      });
       const key = req.headers['sec-websocket-key'];
       if (typeof key !== 'string' || req.headers.upgrade?.toLowerCase() !== 'websocket') {
         socket.end();
@@ -188,7 +199,18 @@ export function listenLocalWs(options: {
         port: address.port,
         close: () =>
           new Promise((closeResolve, closeReject) => {
+            for (const socket of sockets) {
+              socket.destroy();
+            }
+            sockets.clear();
+            if (typeof httpServer.closeAllConnections === 'function') {
+              httpServer.closeAllConnections();
+            }
+            const timer = setTimeout(() => {
+              closeResolve();
+            }, 500);
             httpServer.close((error) => {
+              clearTimeout(timer);
               if (error) {
                 closeReject(error);
                 return;

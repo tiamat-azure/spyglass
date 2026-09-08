@@ -129,6 +129,7 @@ export async function runSidecarMain(env: NodeJS.ProcessEnv = process.env): Prom
   );
   const shutdown = (): void => {
     void handle.close().finally(() => process.exit(0));
+    setTimeout(() => process.exit(0), 400).unref();
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);

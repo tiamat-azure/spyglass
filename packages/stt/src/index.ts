@@ -6,6 +6,8 @@ export const STT_PACKAGE = '@spyglass/stt' as const;
 
 export { correlateVoiceSegment } from './correlate.ts';
 export type { SttEngine } from './engine.ts';
+export type { InProcessFinal, InProcessStt } from './in-process.ts';
+export { createInProcessStt } from './in-process.ts';
 export { createMockEngine } from './mock-engine.ts';
 export type {
   AudioRetention,

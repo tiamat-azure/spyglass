@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { VoiceBridge } from './voice-bridge.ts';
 
 describe('VoiceBridge', () => {
-  it('relays PCM over a localhost sidecar WebSocket and returns a mock final', async () => {
+  it('relays PCM through the in-process mock engine and returns a final', async () => {
     const partials: string[] = [];
     const finals: string[] = [];
     const bridge = new VoiceBridge(
@@ -29,7 +29,7 @@ describe('VoiceBridge', () => {
       expect(status.engine).toBe('mock');
       bridge.beginUtterance('u1', 1);
       bridge.sendFrame(Buffer.alloc(4000, 1));
-      bridge.endUtterance('u1', 2);
+      bridge.endUtterance(2);
       await expect.poll(() => finals.at(0)).toBe('hors ligne');
     } finally {
       await bridge.dispose();

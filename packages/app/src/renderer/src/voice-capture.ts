@@ -165,6 +165,9 @@ export function attachVoiceCapture(
       holding = true;
       setMicState('holding');
       await begin();
+      if (!holding) {
+        await end();
+      }
     },
     endHold: async () => {
       if (!holding) {

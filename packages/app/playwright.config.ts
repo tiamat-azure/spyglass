@@ -4,6 +4,7 @@ const config: PlaywrightTestConfig = defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   fullyParallel: false,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI === 'true' ? 1 : 0,
   use: {
