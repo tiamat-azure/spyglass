@@ -2,6 +2,7 @@ import { access, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
+import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
 import {
   generatedReadme,
@@ -84,6 +85,14 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.dependencies[RUNNER_PACKAGE]).toBe('0.0.0');
     expect(npmPackageNameForSession('ses_Lot 6!')).toBe('spyglass-scenario-ses-lot-6');
+  });
+
+  it('Lot 6 capture evidence HTML labels runScenario not runGeneratedScript (L6-015)', async () => {
+    const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
+    expect(capture).toContain("import { runScenario } from '@spyglass/runner'");
+    expect(capture).toContain('@spyglass/runner runScenario');
+    expect(capture).not.toContain("import { runGeneratedScript } from '@spyglass/runner'");
+    expect(capture).not.toContain('@spyglass/runner runGeneratedScript');
   });
 
   it('is visible by default and wires F-58 flags; CI does not force headless', () => {

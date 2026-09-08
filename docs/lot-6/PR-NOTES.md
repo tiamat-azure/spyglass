@@ -76,7 +76,7 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 
 | File | What it shows |
 | --- | --- |
-| [`screenshots/generated-script-tree.png`](screenshots/generated-script-tree.png) | `generated/` tree (json/ts/README/package.json) |
+| [`screenshots/generated-script-tree.png`](screenshots/generated-script-tree.png) | `generated/` tree (json/ts importing `runScenario`) |
 | [`screenshots/headed-run.png`](screenshots/headed-run.png) | Visible fixture after generated-script click (`#done`) |
 | [`screenshots/headless-run.png`](screenshots/headless-run.png) | `--headless --no-ai` exit 0, no keys, outside Electron |
 | [`screenshots/corpus-protocol-snippet.png`](screenshots/corpus-protocol-snippet.png) | Protocol + first published rates |
@@ -201,6 +201,18 @@ Applied on tip `aad8027192f4cd234aff9609fb2d9978e14c5511`. Product decisions
   rejection.
 
 Unit tests after this pass: **363 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 6 (auto-fix)
+
+Applied on tip `9be988d9ed1ad536ccf91a3cf5b63cdde5e650e4`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-015** `scripts/capture-lot-6.mjs` tree HTML and headless footer label
+  `runScenario` (ADR-0006). Regenerated
+  `docs/lot-6/screenshots/generated-script-tree.png` and `headless-run.png`.
+
+Unit tests after this pass: **364 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals

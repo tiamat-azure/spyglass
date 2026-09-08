@@ -49,6 +49,13 @@ const scenario = {
 };
 
 const paths = await writeGeneratedPackage({ sessionDir, scenario });
+const generatedTs = await readFile(paths.scenarioTs, 'utf8');
+if (!generatedTs.includes("import { runScenario } from '@spyglass/runner'")) {
+  throw new Error('generated scenario.ts must import runScenario (ADR-0006)');
+}
+if (generatedTs.includes('runGeneratedScript')) {
+  throw new Error('generated scenario.ts must not import runGeneratedScript');
+}
 const treeHtml = `<!doctype html>
 <html lang="en">
   <head>
@@ -66,7 +73,7 @@ const treeHtml = `<!doctype html>
   package.json     dependencies: @spyglass/runner
   README.md        mode d'emploi (F-45 / F-58)
   scenario.json    source de vérité
-  scenario.ts      import { runGeneratedScript } from '@spyglass/runner'</pre>
+  scenario.ts      import { runScenario } from '@spyglass/runner'</pre>
   </body>
 </html>`;
 await writeFile(join(shotDir, 'tree.html'), treeHtml, 'utf8');
@@ -135,7 +142,7 @@ const headlessHtml = `<!doctype html>
   <body>
     <h1>node --experimental-transform-types scenario.ts --headless --no-ai</h1>
     <p>exitCode: 0 · no API keys · outside Electron</p>
-    <p>CI=1 · @spyglass/runner runGeneratedScript</p>
+    <p>CI=1 · @spyglass/runner runScenario</p>
   </body>
 </html>`;
 await writeFile(join(shotDir, 'headless.html'), headlessHtml, 'utf8');
