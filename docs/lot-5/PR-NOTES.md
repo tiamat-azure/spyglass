@@ -56,7 +56,7 @@ F-59: in-app **Rejouer** in the embedded guest, step list + chat
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (**322 passed, 1 skipped**, 44
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (**332 passed, 1 skipped**, 45
 files), `pnpm test:schemas` (2 passed), and `xvfb-run pnpm test:e2e`
 (**15 passed**, Lots 0–5) on this branch. CI uses the mock LLM transport
 (no live keys).
@@ -132,6 +132,20 @@ locked **A5a** by captain.
   instead of the LLM patch. `observeUsed` is true only in that case. Score
   <80 (description-only or none) may use the LLM patch, still under ADV-01
   gates, and must not claim `observeUsed`.
+
+## Adversarial pass 2 (auto-fixes on `a8534e0`)
+
+I-05, Lot 4 R3c, and A5a remain locked.
+
+- **L5-ADV-06.** Navigate recovery does not coerce CSS/observe selectors into
+  `https://` hosts. `normalizeHttpOrHttpsUrl` accepts only already-absolute
+  `http:`/`https:` URLs (no schemeless prepend). `button#confirm`, `div.foo`,
+  `role=button`, `#id`, `.class`, and bare tags are rejected. A5a does not
+  treat navigate URL hashes as CSS `id:` keys, so `button#confirm` cannot
+  score ≥80 against `https://host/app#confirm`. Playwright and Electron
+  `goto` reject those selectors rather than `goto('https://button/')`.
+- **L5-ADV-03b.** `urlMatches` also rejects near-universal globs (`**/*`,
+  `**/**`, `*/*`, and equivalents that match any hierarchical URL).
 
 ## Residuals
 

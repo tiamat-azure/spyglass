@@ -1,3 +1,4 @@
+import { resolveReplayGotoUrl } from '@spyglass/llm';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import type { PageDriver, PageSnapshot } from './driver.ts';
 
@@ -21,7 +22,11 @@ export class PlaywrightPageDriver implements PageDriver {
   ) {}
 
   async goto(url: string): Promise<void> {
-    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    const allowed = resolveReplayGotoUrl(url);
+    if (allowed === undefined) {
+      throw new Error('goto rejected disallowed URL');
+    }
+    await this.page.goto(allowed, { waitUntil: 'domcontentloaded' });
   }
 
   async url(): Promise<string> {

@@ -20,8 +20,9 @@ describe('@spyglass/llm public API', () => {
     expect(pinSmartModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
   });
 
-  it('exports the chrome http(s) URL gate used by recovery sanitize', () => {
+  it('exports the recovery http(s) URL gate (absolute URLs only)', () => {
     expect(normalizeHttpOrHttpsUrl('https://exemple.test')).toBe('https://exemple.test/');
     expect(normalizeHttpOrHttpsUrl('javascript:alert(1)')).toBeUndefined();
+    expect(normalizeHttpOrHttpsUrl('button#confirm')).toBeUndefined();
   });
 });

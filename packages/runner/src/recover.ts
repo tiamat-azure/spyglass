@@ -2,6 +2,7 @@ import type { RefinedStep, ReplayDescriptor, Scenario } from '@spyglass/contract
 import {
   bestCorrelatedObservation,
   type LlmGateway,
+  normalizeHttpOrHttpsUrl,
   type ObserveCandidate,
   type RecoveryPatchProposal
 } from '@spyglass/llm';
@@ -93,6 +94,12 @@ export class LlmRecoverer implements Recoverer {
         selector === undefined ||
         selector.length === 0 ||
         match.score < OBSERVE_PREFER_MIN_SCORE
+      ) {
+        return undefined;
+      }
+      if (
+        context.step.action.type === 'navigate' &&
+        normalizeHttpOrHttpsUrl(selector) === undefined
       ) {
         return undefined;
       }

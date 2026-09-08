@@ -154,6 +154,27 @@ describe('smart recovery prompt contract', () => {
       expect(jsNav.patch.descriptor.selector).toBe('javascript:alert(1)');
     }
 
+    const cssNav = parseRecoverResponse(
+      JSON.stringify({
+        diagnosis: 'click it',
+        patch: {
+          scope: 'action.descriptor',
+          descriptor: {
+            type: 'navigate',
+            selector: 'button#confirm',
+            arguments: ['button#confirm']
+          }
+        },
+        confidence: 1
+      })
+    );
+    expect('error' in cssNav).toBe(false);
+    if (!('error' in cssNav)) {
+      expect(cssNav.patch.descriptor.arguments).toBeUndefined();
+      expect(cssNav.patch.descriptor.selector).toBe('button#confirm');
+      expect(JSON.stringify(cssNav)).not.toMatch(/https:\/\/button/i);
+    }
+
     const httpsNav = parseRecoverResponse(
       JSON.stringify({
         diagnosis: 'open next page',

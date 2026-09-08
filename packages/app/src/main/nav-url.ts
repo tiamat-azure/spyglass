@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { looksLikeCssSelector } from '@spyglass/llm';
 
 const ALLOWED_USER_PROTOCOLS = new Set(['http:', 'https:']);
 const ALLOWED_GUEST_PROTOCOLS = new Set(['http:', 'https:', 'file:']);
@@ -180,11 +181,14 @@ export function resolveDriverGotoUrl(
   requested: string,
   resourcesDir: string
 ): string | undefined {
+  const trimmed = requested.trim();
+  if (looksLikeCssSelector(trimmed)) {
+    return undefined;
+  }
   const http = normalizeGotoUrl(requested);
   if (http !== undefined) {
     return http;
   }
-  const trimmed = requested.trim();
   if (!isFileUrl(trimmed)) {
     return undefined;
   }

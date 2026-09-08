@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryPageDriver } from './memory-driver.ts';
-import { verifyStep } from './verify.ts';
+import { isDegenerateUrlPattern, verifyStep } from './verify.ts';
 
 describe('urlMatches (L5-ADV-03)', () => {
   it('rejects empty, star-only, and globstar-only patterns', async () => {
@@ -133,5 +133,41 @@ describe('urlMatches (L5-ADV-03)', () => {
       1
     );
     expect(host.ok).toBe(false);
+  });
+
+  it('rejects near-universal globs (L5-ADV-03b)', async () => {
+    const driver = new MemoryPageDriver({ url: 'https://exemple.test/app/page' });
+    const patterns = ['**/*', '**/**', '*/*/*', '**/*.*', '  **/*  '];
+    for (const expected of patterns) {
+      const result = await verifyStep(
+        driver,
+        {
+          index: 0,
+          intent: 'nav',
+          action: { type: 'navigate', descriptor: { type: 'navigate', selector: 'x' } },
+          verification: {
+            type: 'urlMatches',
+            expected,
+            strength: 'strong',
+            confirmedByUser: true,
+            timeoutMs: 1
+          },
+          sourceEvents: ['evt_000001']
+        },
+        1
+      );
+      expect(result.ok, expected).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toMatch(/degenerate|urlMatches/i);
+      }
+    }
+  });
+
+  it('flags **/* family as degenerate without matching a specific fixture glob', () => {
+    expect(isDegenerateUrlPattern('**/*')).toBe(true);
+    expect(isDegenerateUrlPattern('**/**')).toBe(true);
+    expect(isDegenerateUrlPattern('*/*')).toBe(true);
+    expect(isDegenerateUrlPattern('**/lot1-fixture.html')).toBe(false);
+    expect(isDegenerateUrlPattern('https://exemple.test/**')).toBe(false);
   });
 });

@@ -9,15 +9,30 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${withSingles}$`);
 }
 
-/** `*`, `**`, empty, or any pattern that is only wildcards. */
+/** `*`, `**`, empty, separator-only wildcards, or globs that match any hierarchical URL. */
 export function isDegenerateUrlPattern(expected: string): boolean {
   const trimmed = expected.trim();
   if (trimmed.length === 0) {
     return true;
   }
   const stripped = trimmed.replaceAll('*', '').replaceAll(/\s/g, '');
-  return stripped.length === 0;
+  if (stripped.length === 0) {
+    return true;
+  }
+  const leftover = stripped.replaceAll(/[/:.]/g, '');
+  if (leftover.length === 0) {
+    return true;
+  }
+  const re = globToRegExp(trimmed);
+  return NEAR_UNIVERSAL_URL_PROBES.every((url) => re.test(url));
 }
+
+const NEAR_UNIVERSAL_URL_PROBES = [
+  'https://exemple.test/login',
+  'https://other.example.org/a/b/c?q=1',
+  'http://localhost:3000/path',
+  'file:///tmp/workspace/page.html'
+] as const;
 
 export async function verifyStep(
   driver: PageDriver,

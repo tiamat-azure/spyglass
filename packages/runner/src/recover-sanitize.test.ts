@@ -68,4 +68,22 @@ describe('sanitizeRecoveredDescriptor (L5-ADV-01)', () => {
     );
     expect(sanitized.arguments).toEqual(['https://exemple.test/']);
   });
+
+  it('does not coerce CSS selectors into https hosts (L5-ADV-06)', () => {
+    const original = {
+      type: 'navigate' as const,
+      selector: 'https://exemple.test/start',
+      arguments: ['https://exemple.test/start']
+    };
+    for (const poison of ['button#confirm', 'div.foo', 'role=button', '#id', '.class', 'button']) {
+      const sanitized = sanitizeRecoveredDescriptor(original, {
+        type: 'navigate',
+        selector: poison,
+        arguments: [poison]
+      });
+      expect(sanitized.arguments, poison).toEqual(['https://exemple.test/start']);
+      expect(sanitized.selector, poison).toBe('https://exemple.test/start');
+      expect(JSON.stringify(sanitized), poison).not.toMatch(/https:\/\/button/i);
+    }
+  });
 });

@@ -180,6 +180,42 @@ describe('LlmRecoverer observe() R3c', () => {
     expect(result?.observeUsed).toBe(false);
   });
 
+  it('does not apply observe CSS as a navigate target when URL hash matches an id (L5-ADV-06)', async () => {
+    const step: RefinedStep = {
+      index: 0,
+      intent: 'Je navigue',
+      action: {
+        type: 'navigate',
+        descriptor: {
+          type: 'navigate',
+          selector: 'https://exemple.test/app#confirm',
+          arguments: ['https://exemple.test/app#confirm']
+        }
+      },
+      verification: {
+        type: 'urlMatches',
+        expected: 'https://exemple.test/ok',
+        strength: 'strong',
+        confirmedByUser: true
+      },
+      sourceEvents: ['evt_000001']
+    };
+    const recoverer = new LlmRecoverer(mockGateway(), async () => ({
+      ok: true,
+      observations: [{ selector: 'button#confirm' }]
+    }));
+    const result = await recoverer.recover({
+      scenario: scenarioFor(step),
+      step,
+      attempt: 1,
+      error: 'urlMatches failed',
+      multimodal: false
+    });
+    expect(observeMatchScore({ selector: 'button#confirm' }, step)).toBeLessThan(80);
+    expect(result?.observeUsed).toBe(false);
+    expect(result?.descriptor.selector).not.toBe('button#confirm');
+  });
+
   it('never sets screenshotIncluded unless image bytes are attached (L5-ADV-02)', async () => {
     const captured: TransportRequest[] = [];
     const inner = createMockTransport({ delayMs: 1, recoverSelector: '#from-llm' });
@@ -308,6 +344,55 @@ describe('recoverStep sanitizes LLM descriptors before acting (L5-ADV-01)', () =
     expect(result.exitCode).toBe(1);
     expect(driver.urlValue).toBe('https://exemple.test/start');
     expect(driver.urlValue).not.toMatch(/^file:/);
+  });
+
+  it('fails navigate recovery rather than goto https://button/ (L5-ADV-06)', async () => {
+    const driver = new MemoryPageDriver({ url: 'https://exemple.test/app#confirm' });
+    const step: RefinedStep = {
+      index: 0,
+      intent: 'Je navigue',
+      action: {
+        type: 'navigate',
+        descriptor: {
+          type: 'navigate',
+          selector: 'https://exemple.test/app#confirm',
+          arguments: ['https://exemple.test/app#confirm']
+        }
+      },
+      verification: {
+        type: 'urlMatches',
+        expected: 'https://exemple.test/ok',
+        strength: 'strong',
+        confirmedByUser: true,
+        timeoutMs: 40
+      },
+      sourceEvents: ['evt_000001']
+    };
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/app#confirm',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        env: {},
+        recoverer: new StaticRecoverer(
+          {
+            type: 'navigate',
+            selector: 'button#confirm',
+            arguments: ['button#confirm']
+          },
+          'observe css'
+        )
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(driver.urlValue).not.toMatch(/https:\/\/button/i);
+    expect(driver.urlValue).not.toBe('button#confirm');
+    expect(driver.urlValue).toBe('https://exemple.test/app#confirm');
   });
 
   it('fills the recorded value, not an LLM-injected password', async () => {

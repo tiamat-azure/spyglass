@@ -234,4 +234,14 @@ describe('resolveDriverGotoUrl (L5-ADV-01 Electron goto)', () => {
       resolveDriverGotoUrl('https://exemple.test/', resourceFileUrl('lot1-fixture.html'), resources)
     ).toBeUndefined();
   });
+
+  it('rejects CSS selectors instead of coercing them to https hosts (L5-ADV-06)', () => {
+    expect(
+      resolveDriverGotoUrl('https://exemple.test/', 'button#confirm', resources)
+    ).toBeUndefined();
+    expect(resolveDriverGotoUrl('https://exemple.test/', 'div.foo', resources)).toBeUndefined();
+    expect(resolveDriverGotoUrl('https://exemple.test/', 'role=button', resources)).toBeUndefined();
+    expect(resolveDriverGotoUrl('https://exemple.test/', '#id', resources)).toBeUndefined();
+    expect(resolveDriverGotoUrl('https://exemple.test/', 'button', resources)).toBeUndefined();
+  });
 });

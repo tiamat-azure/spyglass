@@ -1,4 +1,5 @@
 import type { RefinedStep } from '@spyglass/contracts';
+import { normalizeHttpOrHttpsUrl } from './http-url.ts';
 import { isReplayDescriptorSufficient } from './refine.ts';
 
 /** Structural Stagehand observe() row. Shared by Lot 4 refine and Lot 5 recovery. */
@@ -24,6 +25,10 @@ export function stableObserveKeys(selector: string): Set<string> {
     }
   };
   const raw = selector.trim();
+  // L5-ADV-06: URL hashes are not CSS ids (`https://host/app#confirm` vs `button#confirm`).
+  if (isAbsoluteWebOrFileUrl(raw)) {
+    return keys;
+  }
   for (const match of raw.matchAll(/\[data-testid\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s\]]+))\]/giu)) {
     add('testid', match[1] ?? match[2] ?? match[3]);
   }
@@ -34,6 +39,15 @@ export function stableObserveKeys(selector: string): Set<string> {
     add('id', match[1]);
   }
   return keys;
+}
+
+function isAbsoluteWebOrFileUrl(input: string): boolean {
+  try {
+    const url = new URL(input);
+    return url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'file:';
+  } catch {
+    return false;
+  }
 }
 
 function tokenSetEqual(left: string, right: string): boolean {
@@ -62,18 +76,35 @@ export function observeMatchScore(observation: ObserveCandidate, step: RefinedSt
     step.action.descriptor.selector,
     ...(step.action.descriptor.fallbackSelectors ?? [])
   ].filter((value) => value.trim().length > 0);
+  const navigate = step.action.type === 'navigate' || step.action.descriptor.type === 'navigate';
   if (obsSel.length > 0) {
-    const obsNorm = normalizeObserveSelector(obsSel);
-    if (candidates.some((candidate) => normalizeObserveSelector(candidate) === obsNorm)) {
-      return 100;
-    }
-    const obsKeys = stableObserveKeys(obsSel);
-    if (obsKeys.size > 0) {
-      for (const candidate of candidates) {
-        const stepKeys = stableObserveKeys(candidate);
-        for (const key of obsKeys) {
-          if (stepKeys.has(key)) {
-            return 80;
+    if (navigate) {
+      const obsUrl = normalizeHttpOrHttpsUrl(obsSel);
+      if (obsUrl !== undefined) {
+        const sameUrl = candidates.some((candidate) => {
+          const gated = normalizeHttpOrHttpsUrl(candidate);
+          return gated !== undefined && gated === obsUrl;
+        });
+        if (sameUrl) {
+          return 100;
+        }
+      }
+    } else {
+      const obsNorm = normalizeObserveSelector(obsSel);
+      if (candidates.some((candidate) => normalizeObserveSelector(candidate) === obsNorm)) {
+        return 100;
+      }
+      const obsKeys = stableObserveKeys(obsSel);
+      if (obsKeys.size > 0) {
+        for (const candidate of candidates) {
+          if (isAbsoluteWebOrFileUrl(candidate)) {
+            continue;
+          }
+          const stepKeys = stableObserveKeys(candidate);
+          for (const key of obsKeys) {
+            if (stepKeys.has(key)) {
+              return 80;
+            }
           }
         }
       }
