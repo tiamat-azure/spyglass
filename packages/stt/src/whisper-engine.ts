@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
-import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE } from './protocol.ts';
+import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
 import { pcm16ToWav } from './wav.ts';
 
 export type WhisperPaths = {
@@ -256,7 +256,7 @@ export function createWhisperEngine(options: {
   timeoutMs?: number;
 }): SttEngine {
   const language = options.language ?? 'fr';
-  const timeoutMs = options.timeoutMs ?? 8_000;
+  const timeoutMs = options.timeoutMs ?? WHISPER_TIMEOUT_MS_DEFAULT;
   const open = new Map<string, Utterance>();
   const controllers = new Map<string, AbortController>();
   const jobs = new Set<WhisperJob>();

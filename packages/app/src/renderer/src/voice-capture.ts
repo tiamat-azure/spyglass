@@ -40,6 +40,12 @@ function int16FrameFromSine(phase: { n: number }): ArrayBuffer {
   return samples.buffer;
 }
 
+function stopTracks(media: MediaStream | undefined): void {
+  media?.getTracks().forEach((track) => {
+    track.stop();
+  });
+}
+
 export function attachVoiceCapture(
   api: VoiceApi,
   options: {
@@ -47,16 +53,25 @@ export function attachVoiceCapture(
     modeButton: HTMLButtonElement;
     liveEl: HTMLElement;
     levelEl: HTMLElement;
+    getUserMedia?: () => Promise<MediaStream>;
   }
 ): VoiceController {
   let mode: 'hold' | 'continuous' = 'hold';
   let holding = false;
+  let armed = !options.micButton.disabled;
   let fakeTimer: ReturnType<typeof setInterval> | undefined;
   let stream: MediaStream | undefined;
   let audioContext: AudioContext | undefined;
   let processor: ScriptProcessorNode | undefined;
   let muteGain: GainNode | undefined;
   const phase = { n: 0 };
+  const acquireMedia =
+    options.getUserMedia ??
+    (() =>
+      navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: SAMPLE_RATE, echoCancellation: true },
+        video: false
+      }));
 
   const setMicState = (state: string): void => {
     options.micButton.dataset.state = state;
@@ -65,6 +80,8 @@ export function attachVoiceCapture(
       state === 'holding' || state === 'listening' ? 'true' : 'false'
     );
   };
+
+  const stillLive = (): boolean => armed && holding;
 
   const stopGraph = (): void => {
     if (fakeTimer !== undefined) {
@@ -77,9 +94,7 @@ export function attachVoiceCapture(
     muteGain = undefined;
     void audioContext?.close();
     audioContext = undefined;
-    stream?.getTracks().forEach((track) => {
-      track.stop();
-    });
+    stopTracks(stream);
     stream = undefined;
   };
 
@@ -92,11 +107,13 @@ export function attachVoiceCapture(
     }, 100);
   };
 
-  const pumpMic = async (): Promise<void> => {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, sampleRate: SAMPLE_RATE, echoCancellation: true },
-      video: false
-    });
+  const pumpMic = async (): Promise<boolean> => {
+    const late = await acquireMedia();
+    if (!stillLive()) {
+      stopTracks(late);
+      return false;
+    }
+    stream = late;
     audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     const source = audioContext.createMediaStreamSource(stream);
     processor = audioContext.createScriptProcessor(4096, 1, 1);
@@ -116,13 +133,26 @@ export function attachVoiceCapture(
     muteGain.gain.value = 0;
     processor.connect(muteGain);
     muteGain.connect(audioContext.destination);
+    if (!stillLive()) {
+      stopGraph();
+      return false;
+    }
+    return true;
   };
 
   const begin = async (): Promise<boolean> => {
+    if (!stillLive()) {
+      return false;
+    }
     const result = await api.voice.start(mode);
     if (!result.ok) {
       options.liveEl.hidden = false;
       options.liveEl.textContent = result.error ?? 'dictée indisponible';
+      return false;
+    }
+    if (!stillLive()) {
+      stopGraph();
+      await api.voice.abort();
       return false;
     }
     options.liveEl.hidden = false;
@@ -130,10 +160,20 @@ export function attachVoiceCapture(
     options.liveEl.dataset.kind = 'voice.partial';
     if (result.fakeCapture) {
       pumpFake();
+      if (!stillLive()) {
+        stopGraph();
+        await api.voice.abort();
+        return false;
+      }
       return true;
     }
     try {
-      await pumpMic();
+      const micOk = await pumpMic();
+      if (!micOk || !stillLive()) {
+        stopGraph();
+        await api.voice.abort();
+        return false;
+      }
       return true;
     } catch (error) {
       const message =
@@ -185,9 +225,10 @@ export function attachVoiceCapture(
       options.micButton.title = next === 'hold' ? 'Hold to talk' : 'Click for continuous VAD';
       void api.voice.setMode(next);
     },
-    setArmed: (armed) => {
-      options.micButton.disabled = !armed;
-      if (armed) {
+    setArmed: (next) => {
+      armed = next;
+      options.micButton.disabled = !next;
+      if (next) {
         return;
       }
       holding = false;
@@ -197,7 +238,7 @@ export function attachVoiceCapture(
     },
     holding: () => holding,
     startHold: async () => {
-      if (holding || options.micButton.disabled) {
+      if (holding || !armed || options.micButton.disabled) {
         return;
       }
       holding = true;
@@ -209,8 +250,10 @@ export function attachVoiceCapture(
         await abort();
         return;
       }
-      if (!holding) {
-        await end();
+      if (!stillLive()) {
+        holding = false;
+        setMicState('idle');
+        await abort();
       }
     },
     endHold: async () => {
@@ -222,7 +265,7 @@ export function attachVoiceCapture(
       await end();
     },
     toggleContinuous: async () => {
-      if (mode !== 'continuous' || options.micButton.disabled) {
+      if (mode !== 'continuous' || !armed || options.micButton.disabled) {
         return;
       }
       if (holding) {
@@ -235,6 +278,12 @@ export function attachVoiceCapture(
       setMicState('listening');
       const started = await begin();
       if (!started) {
+        holding = false;
+        setMicState('idle');
+        await abort();
+        return;
+      }
+      if (!stillLive()) {
         holding = false;
         setMicState('idle');
         await abort();

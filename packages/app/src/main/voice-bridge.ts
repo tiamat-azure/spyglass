@@ -15,6 +15,7 @@ import {
   type SttEngineName,
   startSidecarServer,
   type VadState,
+  VOICE_FLUSH_MS,
   type VoiceMode
 } from '@spyglass/stt';
 
@@ -140,7 +141,7 @@ export class VoiceBridge {
       }
     }
     this.vad = createVadState();
-    await Promise.race([Promise.all(this.pendingFinals), sleep(4_000)]);
+    await Promise.race([Promise.all(this.pendingFinals), sleep(VOICE_FLUSH_MS)]);
   }
 
   private nextUtteranceId(): string {
@@ -180,7 +181,7 @@ export class VoiceBridge {
   }
 
   private async connect(): Promise<VoiceBridgeStatus> {
-    this.releaseSidecarTransport();
+    await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
       this.inProcess = createInProcessStt(this.env);
       this.status = {
@@ -216,28 +217,59 @@ export class VoiceBridge {
     return this.status;
   }
 
-  /** Kill a previous sidecar child and close a half-open socket before spawn/reconnect. */
-  private releaseSidecarTransport(): void {
+  /**
+   * SIGTERM the sidecar so it can dispose the whisper engine (kill detached
+   * whisper-cli grandchildren), then SIGKILL the process group. SIGKILL of
+   * the Node child alone leaves whisper-cli running.
+   */
+  private async releaseSidecarTransport(): Promise<void> {
     try {
       this.socket?.close();
     } catch {
       // already closed
     }
     this.socket = undefined;
-    if (this.child !== undefined) {
-      this.child.kill('SIGKILL');
-      this.child.unref();
-      this.child = undefined;
-    }
     const closing = this.sidecar?.close();
     this.sidecar = undefined;
+    const child = this.child;
+    this.child = undefined;
+    if (child !== undefined) {
+      const pid = child.pid;
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // already dead
+      }
+      if (child.exitCode === null && child.signalCode === null) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            child.once('exit', () => {
+              resolve();
+            });
+          }),
+          sleep(400)
+        ]);
+      }
+      if (pid !== undefined) {
+        try {
+          process.kill(-pid, 'SIGKILL');
+        } catch {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // already dead
+          }
+        }
+      }
+      child.unref();
+    }
     if (closing !== undefined) {
-      void closing.catch(() => undefined);
+      await closing.catch(() => undefined);
     }
   }
 
   private async bootSidecar(): Promise<{ port: number; engine: SttEngineName; model: string }> {
-    this.releaseSidecarTransport();
+    await this.releaseSidecarTransport();
     const script = sidecarScriptPath();
     if (script === undefined) {
       this.sidecar = await startSidecarServer(this.env);
@@ -251,12 +283,19 @@ export class VoiceBridge {
       const childEnv: NodeJS.ProcessEnv = { ...this.env, ELECTRON_RUN_AS_NODE: '1' };
       const child = spawn(process.execPath, [script], {
         env: childEnv,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true
       });
       this.child = child;
       let stdout = '';
       const timer = setTimeout(() => {
-        child.kill('SIGKILL');
+        try {
+          if (child.pid !== undefined) {
+            process.kill(-child.pid, 'SIGKILL');
+          }
+        } catch {
+          child.kill('SIGKILL');
+        }
         reject(new Error('STT sidecar did not become ready'));
       }, 10_000);
       child.stdout?.on('data', (chunk: Buffer) => {
@@ -387,7 +426,7 @@ export class VoiceBridge {
     this.trackFinal(
       new Promise<void>((resolve) => {
         this.finalWaiters.set(live.id, resolve);
-        setTimeout(resolve, 4_000);
+        setTimeout(resolve, VOICE_FLUSH_MS);
       })
     );
   }
@@ -415,7 +454,6 @@ export class VoiceBridge {
       this.live = undefined;
     }
     this.resolveFinalWaiter(utteranceId);
-    this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
   }
 
@@ -449,7 +487,7 @@ export class VoiceBridge {
     this.abort();
     this.inProcess?.dispose?.();
     this.inProcess = undefined;
-    this.releaseSidecarTransport();
+    await this.releaseSidecarTransport();
   }
 
   private onSocketMessage(data: unknown): void {
@@ -477,21 +515,23 @@ export class VoiceBridge {
       const chunks = this.pcmByUtterance.get(message.utteranceId) ?? [];
       this.pcmByUtterance.delete(message.utteranceId);
       const pcm = Buffer.concat(chunks);
-      this.resolveFinalWaiter(message.utteranceId);
       if (pcm.length === 0 || message.text.trim().length === 0) {
+        this.resolveFinalWaiter(message.utteranceId);
         return;
       }
-      this.trackFinal(
-        Promise.resolve(
-          this.handlers.onFinal({
-            utteranceId: message.utteranceId,
-            text: message.text,
-            startTs: message.startTs,
-            endTs: message.endTs,
-            pcm
-          })
-        )
+      const journal = Promise.resolve(
+        this.handlers.onFinal({
+          utteranceId: message.utteranceId,
+          text: message.text,
+          startTs: message.startTs,
+          endTs: message.endTs,
+          pcm
+        })
       );
+      this.trackFinal(journal);
+      void journal.finally(() => {
+        this.resolveFinalWaiter(message.utteranceId);
+      });
       return;
     }
     if (message.type === 'error') {

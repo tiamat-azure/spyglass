@@ -1,6 +1,9 @@
 export const STT_SAMPLE_RATE = 16_000;
 export const STT_CHANNELS = 1;
 export const PARTIAL_WINDOW_MS = 400;
+export const WHISPER_TIMEOUT_MS_DEFAULT = 8_000;
+/** stopCapture flush: whisper timeout plus journal settle. Must be ≥ whisper timeout. */
+export const VOICE_FLUSH_MS = WHISPER_TIMEOUT_MS_DEFAULT + 2_000;
 export const VOICE_CORRELATION_MS_DEFAULT = 8_000;
 export const DEFAULT_MOCK_TRANSCRIPTS = [
   'Je vais cliquer sur Démarrer',

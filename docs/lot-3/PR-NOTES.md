@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (214 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (221 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**11 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
@@ -142,6 +142,16 @@ Applied on tip `b6867f8`. V1a energy VAD and C2b `before`-on-overlap are unchang
 2. **N2 medium — sidecar reconnect.** `releaseSidecarTransport` closes a half-open socket and `SIGKILL`s the previous `stt-sidecar` child before spawn/reconnect.
 3. **N3 medium — whisper-cli overlap.** At most one in-flight `whisper-cli`; a new transcribe cancels the previous. `abort` / `dispose` `SIGKILL` children, not only Map entries.
 4. **N4 low — Hold↔VAD mid-capture.** `spyglass:voice:mode` updates main `captureMode` (and resets VAD) without requiring a capture restart.
+
+### Adversarial pass 4 (auto-fixes)
+
+Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **P3-N1 high — mic race.** `begin()` / `toggleContinuous` re-validate `armed`/`holding` after `voice.start` and `getUserMedia`. If Stop/`setArmed(false)` raced mid-begin, any late `MediaStream` is stopped and the graph is torn down; main is aborted so the mic is not left hot.
+2. **P3-N1 high — flush budget.** `stopCapture` flush wait is `VOICE_FLUSH_MS` (`WHISPER_TIMEOUT_MS_DEFAULT` + 2s = 10s), not 4s. Aligns with whisper timeout so a slow final is not dropped. Wait covers `onFinal`/journal completion.
+3. **P3-N1 medium — WS waiter.** Sidecar `final` adopts `trackFinal(journal)` **before** resolving `finalWaiter`; `resolveFinalWaiter` runs in `journal.finally` so `Promise.all(pendingFinals)` cannot finish before the journal promise is in the wait set.
+4. **P3-N2 medium — sidecar grandchildren.** Sidecar `close` calls `engine.dispose()` (kills detached `whisper-cli` process groups). Spawn uses `detached: true`. `releaseSidecarTransport` SIGTERMs the sidecar (so dispose runs) then SIGKILLs the process group — not only the Node child.
+5. **P3-N3 medium — InProcessStt.abort.** `abort` calls `engine.dispose()` even when `live` was already cleared by `end()`, so in-flight `finalize` / `killJobs` is cancelled. `dispose` delegates to `abort`.
 
 ## Screenshots (committed)
 

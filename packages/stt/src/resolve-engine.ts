@@ -1,6 +1,10 @@
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
-import { parseMockTranscripts, type SttEngineName } from './protocol.ts';
+import {
+  parseMockTranscripts,
+  type SttEngineName,
+  WHISPER_TIMEOUT_MS_DEFAULT
+} from './protocol.ts';
 import { createWhisperEngine, resolveWhisperPaths, whisperAvailable } from './whisper-engine.ts';
 
 export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttEngineName {
@@ -26,12 +30,15 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
       env.STT_LANGUAGE === undefined || env.STT_LANGUAGE.length === 0 ? 'fr' : env.STT_LANGUAGE;
     const timeoutRaw = env.STT_MAX_LATENCY_MS;
     const timeoutMs =
-      timeoutRaw === undefined || timeoutRaw.length === 0 ? 8_000 : Number.parseInt(timeoutRaw, 10);
+      timeoutRaw === undefined || timeoutRaw.length === 0
+        ? WHISPER_TIMEOUT_MS_DEFAULT
+        : Number.parseInt(timeoutRaw, 10);
     return createWhisperEngine({
       bin: paths.bin,
       model: paths.model,
       language,
-      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 8_000
+      timeoutMs:
+        Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
     });
   }
   return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));

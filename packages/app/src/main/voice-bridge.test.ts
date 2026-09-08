@@ -212,6 +212,76 @@ describe('VoiceBridge', () => {
       await bridge.dispose();
     }
   });
+
+  it('stopCapture waits for a slow onFinal journal, not only the sidecar message', async () => {
+    const finals: string[] = [];
+    let journalDone = false;
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: async (payload) => {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 80);
+          });
+          journalDone = true;
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'slow-journal'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await bridge.stopCapture();
+      expect(journalDone).toBe(true);
+      expect(finals).toEqual(['slow-journal']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('WS stopCapture waits for onFinal before resolving the sidecar waiter', async () => {
+    const finals: string[] = [];
+    let journalDone = false;
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: async (payload) => {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 80);
+          });
+          journalDone = true;
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '0',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'ws-flush'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await bridge.stopCapture();
+      expect(journalDone).toBe(true);
+      expect(finals).toEqual(['ws-flush']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
 });
 
 function pcmFilled(sample: number, samples = 1600): Buffer {

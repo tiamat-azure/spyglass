@@ -3,10 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { correlateVoiceSegment } from './correlate.ts';
+import type { SttEngine } from './engine.ts';
 import { createInProcessStt } from './in-process.ts';
 import { STT_PACKAGE, sidecarStatus } from './index.ts';
 import { createMockEngine } from './mock-engine.ts';
-import { parseAudioRetention, parseClientMessage, parseMockTranscripts } from './protocol.ts';
+import {
+  parseAudioRetention,
+  parseClientMessage,
+  parseMockTranscripts,
+  VOICE_FLUSH_MS,
+  WHISPER_TIMEOUT_MS_DEFAULT
+} from './protocol.ts';
 import { resolveSttEngineName } from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
@@ -174,6 +181,69 @@ describe('@spyglass/stt', () => {
     const final = await session.end(2);
     expect(final?.text).toBe('hors ligne');
     expect(partials[0]?.startsWith('hors')).toBe(true);
+  });
+
+  it('flush wait is at least the whisper timeout', () => {
+    expect(WHISPER_TIMEOUT_MS_DEFAULT).toBe(8_000);
+    expect(VOICE_FLUSH_MS).toBeGreaterThanOrEqual(WHISPER_TIMEOUT_MS_DEFAULT);
+  });
+
+  it('abort after end still disposes in-flight finalize jobs', async () => {
+    let disposed = false;
+    let finalizeStarted = false;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const engine: SttEngine = {
+      name: 'mock',
+      model: 'mock-offline',
+      begin: () => undefined,
+      pushPcm: () => undefined,
+      abort: () => undefined,
+      finalize: async () => {
+        finalizeStarted = true;
+        await gate;
+        return 'should-not-require-live';
+      },
+      dispose: () => {
+        disposed = true;
+      }
+    };
+    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    session.begin('u1', 1);
+    session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
+    const ending = session.end(2);
+    await expect.poll(() => finalizeStarted).toBe(true);
+    session.abort();
+    expect(disposed).toBe(true);
+    release?.();
+    await ending;
+  });
+
+  it('sidecar close disposes the whisper engine', async () => {
+    let disposed = false;
+    const inner = createMockEngine(['x']);
+    const engine: SttEngine = {
+      name: inner.name,
+      model: inner.model,
+      begin: (id) => {
+        inner.begin(id);
+      },
+      pushPcm: (id, pcm, onPartial) => {
+        inner.pushPcm(id, pcm, onPartial);
+      },
+      abort: (id) => {
+        inner.abort(id);
+      },
+      finalize: async (id) => await inner.finalize(id),
+      dispose: () => {
+        disposed = true;
+      }
+    };
+    const handle = await startSidecarServer({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    await handle.close();
+    expect(disposed).toBe(true);
   });
 
   it('keeps PCM per utterance when the next start arrives before the prior final', async () => {

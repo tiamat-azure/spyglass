@@ -117,7 +117,10 @@ export async function startSidecarServer(
     port: server.port,
     engine: engine.name,
     model: engine.model,
-    close: server.close
+    close: async () => {
+      engine.dispose?.();
+      await server.close();
+    }
   };
 }
 

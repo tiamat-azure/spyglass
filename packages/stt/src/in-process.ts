@@ -65,13 +65,11 @@ export function createInProcessStt(
         engine.abort(live.utteranceId);
         live = undefined;
       }
+      // end() clears live before awaiting finalize; still cancel in-flight jobs.
+      engine.dispose?.();
     },
     dispose(): void {
-      if (live !== undefined) {
-        engine.abort(live.utteranceId);
-        live = undefined;
-      }
-      engine.dispose?.();
+      this.abort();
     }
   };
 }

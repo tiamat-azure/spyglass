@@ -312,4 +312,42 @@ test.describe('Lot 3 voice', () => {
       await closeElectron(electronApp);
     }
   });
+
+  test('Stop while holding disarms the mic and still journals voice.final', async () => {
+    test.setTimeout(120_000);
+    const env = await launchEnv();
+    const electronApp = await electron.launch({
+      cwd: appDir,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
+      timeout: 45_000,
+      env
+    });
+    try {
+      const chrome = await chromeWindow(electronApp);
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i, { timeout: 15_000 });
+      await beginHoldMic(chrome);
+      await chrome.waitForTimeout(700);
+      await chrome.locator('#record-btn').evaluate((el) => {
+        (el as HTMLElement).click();
+      });
+      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
+      await expect(chrome.locator('#mic-btn')).toBeDisabled();
+      await expect(chrome.locator('#mic-btn')).toHaveAttribute('aria-pressed', 'false');
+      await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(1, {
+        timeout: 10_000
+      });
+      const sessionsDir = env.SESSIONS_DIR;
+      if (sessionsDir === undefined) {
+        throw new Error('SESSIONS_DIR missing');
+      }
+      const sessionDir = await latestSessionDir(sessionsDir);
+      const raw = await readFile(join(sessionDir, 'raw.jsonl'), 'utf8');
+      expect(raw).toContain('"kind":"voice.final"');
+      expect(raw).toContain('Je vais cliquer sur Démarrer');
+    } finally {
+      await closeElectron(electronApp);
+    }
+  });
 });
