@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (250 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (252 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -106,7 +106,7 @@ on this branch. CI uses the mock LLM transport (no live keys).
 
 | Relative path | What it shows |
 | --- | --- |
-| [`screenshots/refine-ui-estimate.png`](screenshots/refine-ui-estimate.png) | Sealed session, smart estimate 1338 tokens, confirm checkbox, Raffiner |
+| [`screenshots/refine-ui-estimate.png`](screenshots/refine-ui-estimate.png) | Sealed session, smart estimate 1344 tokens, confirm checkbox, Raffiner |
 | [`screenshots/strong-weak-badges.png`](screenshots/strong-weak-badges.png) | Refined steps with WEAK badges, intent, action, edit |
 | [`screenshots/blocked-finalize.png`](screenshots/blocked-finalize.png) | Finaliser disabled + « Finalisation bloquée » + weak list |
 | [`screenshots/raw-id-traceability.png`](screenshots/raw-id-traceability.png) | `sourceEvents evt_000002` |

@@ -121,6 +121,10 @@ test.describe('Lot 4 refine', () => {
         .screenshot({
           path: join(shotDir, 'raw-id-traceability.png')
         });
+      await chrome.locator('#refine-weaks').scrollIntoViewIfNeeded();
+      await chrome.locator('#refine-weaks').screenshot({
+        path: join(shotDir, 'weak-confirm-routine-doubtful.png')
+      });
       const routineBtn = chrome.locator('#refine-confirm-routine');
       if (await routineBtn.isEnabled()) {
         await routineBtn.click();
@@ -137,10 +141,6 @@ test.describe('Lot 4 refine', () => {
           .first()
           .click();
       }
-      await chrome.locator('#refine-weaks').scrollIntoViewIfNeeded();
-      await chrome.locator('#refine-weaks').screenshot({
-        path: join(shotDir, 'weak-confirm-routine-doubtful.png')
-      });
       await expect(chrome.locator('#refine-finalize')).toBeEnabled({ timeout: 10_000 });
       await chrome.locator('#refine-finalize').click();
       await expect(chrome.locator('#refine-status')).toContainText(/finalisé/i, {
