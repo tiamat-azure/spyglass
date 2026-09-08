@@ -10,6 +10,8 @@ import {
   generateFromSessionDir,
   loadFinalizedScenarioForGenerate,
   npmPackageNameForSession,
+  readSessionStartUrl,
+  writeGeneratedFromRevision,
   writeGeneratedPackage
 } from './generate.ts';
 import { runGenerateCli } from './generate-cli.ts';
@@ -61,6 +63,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const ts = await readFile(paths.scenarioTs, 'utf8');
     expect(ts).toContain("from '@spyglass/runner'");
     expect(ts).toContain('runScenario');
+    expect(ts.startsWith('#!/usr/bin/env -S node --experimental-transform-types\n')).toBe(true);
+    expect(ts).not.toMatch(/^#!\/usr\/bin\/env node$/m);
     expect(ts).toMatch(/import \{ runScenario \} from '@spyglass\/runner'/);
     expect(ts).not.toContain('runGeneratedScript');
     expect(ts).toContain('scenario.json');
@@ -164,7 +168,11 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(screenshotFileName(1, 'fail')).toBe('step-1-fail.jpg');
     expect(traceFileName()).toBe('trace.zip');
     expect(generatedScenarioTsSource()).toContain("join(here, 'scenario.json')");
+    expect(generatedScenarioTsSource()).toContain(
+      '#!/usr/bin/env -S node --experimental-transform-types'
+    );
     expect(generatedReadme('ses_x')).toMatch(/Windows/);
+    expect(generatedReadme('ses_x')).toContain('env -S node --experimental-transform-types');
   });
 
   it('runScenario without a driver prints F-58 help and needs no API keys', async () => {
@@ -208,6 +216,11 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-cli-fail-'));
     const { mkdir, writeFile } = await import('node:fs/promises');
     await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
     await writeFile(
       join(sessionDir, 'refined', 'rev-1.json'),
       JSON.stringify({
@@ -334,5 +347,41 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     await mkdir(join(sessionDir, 'generated', 'package.json'), { recursive: true });
     await expect(writeGeneratedPackage({ sessionDir, scenario: scenario() })).rejects.toThrow();
     await expect(access(join(sessionDir, 'generated'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('generated scenario.ts shebang uses env -S transform-types (L6-023)', () => {
+    const source = generatedScenarioTsSource();
+    expect(source.startsWith('#!/usr/bin/env -S node --experimental-transform-types\n')).toBe(true);
+    expect(source).not.toMatch(/^#!\/usr\/bin\/env node\n/u);
+  });
+
+  it('readSessionStartUrl fails closed without embedding exemple.test (L6-024)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-nourl-'));
+    await expect(readSessionStartUrl(sessionDir)).rejects.toThrow(/missing startUrl/);
+    await expect(
+      writeGeneratedFromRevision(sessionDir, {
+        sessionId: 'ses_lot6_gen',
+        steps: scenario().steps
+      })
+    ).rejects.toThrow(/missing startUrl/);
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'generated'), { recursive: true });
+    await writeFile(join(sessionDir, 'meta.json'), '{', 'utf8');
+    await expect(readSessionStartUrl(sessionDir)).rejects.toThrow();
+    await writeFile(join(sessionDir, 'meta.json'), JSON.stringify({ startUrl: '' }), 'utf8');
+    await expect(readSessionStartUrl(sessionDir)).rejects.toThrow(/missing startUrl/);
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://captured.test/app' }),
+      'utf8'
+    );
+    expect(await readSessionStartUrl(sessionDir)).toBe('https://captured.test/app');
+    const paths = await writeGeneratedFromRevision(sessionDir, {
+      sessionId: 'ses_lot6_gen',
+      steps: scenario().steps
+    });
+    const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
+    expect(json.startUrl).toBe('https://captured.test/app');
+    expect(json.startUrl).not.toBe('https://exemple.test/start');
   });
 });

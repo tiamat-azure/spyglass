@@ -142,21 +142,25 @@ export async function loadFinalizedScenarioForGenerate(sessionDir: string): Prom
 }
 
 export async function readSessionStartUrl(sessionDir: string): Promise<string> {
+  let raw: string;
   try {
-    const meta = JSON.parse(await readFile(join(sessionDir, 'meta.json'), 'utf8')) as {
-      startUrl?: string;
-    };
-    if (typeof meta.startUrl === 'string' && meta.startUrl.length > 0) {
-      return meta.startUrl;
+    raw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      throw error;
     }
-  } catch {
-    // unit tests may omit meta.json
+    throw new Error('session meta.json is missing startUrl');
   }
-  return 'https://exemple.test/start';
+  const meta = JSON.parse(raw) as { startUrl?: string };
+  if (typeof meta.startUrl === 'string' && meta.startUrl.length > 0) {
+    return meta.startUrl;
+  }
+  throw new Error('session meta.json is missing startUrl');
 }
 
 export function generatedScenarioTsSource(): string {
-  return `#!/usr/bin/env node
+  return `#!/usr/bin/env -S node --experimental-transform-types
 /**
  * Spyglass generated runner (ADR-0006 / F-45 / PRD §6.12).
  * scenario.json is the source of truth. This file is a thin executable that
@@ -238,7 +242,9 @@ node --experimental-transform-types scenario.ts --no-ai
 
 Windows : même commande. v1 exporte le runner en TypeScript ; Node 24.20.0
 requiert \`--experimental-transform-types\` (propriétés de constructeur).
-\`pnpm start\` / \`pnpm headless\` passent déjà ce flag.
+\`pnpm start\` / \`pnpm headless\` passent déjà ce flag. Le shebang de
+\`scenario.ts\` est \`#!/usr/bin/env -S node --experimental-transform-types\`
+pour \`./scenario.ts\` (même flag).
 
 ## Exécution — visible par défaut (F-45)
 

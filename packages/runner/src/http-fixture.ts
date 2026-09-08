@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LOCAL_CORPUS_SIZE } from './corpus.ts';
 
@@ -65,15 +65,46 @@ async function handle(
   }
   const ext = extname(url.pathname);
   if (ext === '.html') {
-    try {
-      const body = await readFile(join(RUNNER_FIXTURES_DIR, url.pathname.slice(1)), 'utf8');
-      send(response, 200, 'text/html; charset=utf-8', body);
-      return;
-    } catch {
-      // fall through
+    const candidate = resolveFixtureHtmlPath(url.pathname);
+    if (candidate !== undefined) {
+      try {
+        const body = await readFile(candidate, 'utf8');
+        send(response, 200, 'text/html; charset=utf-8', body);
+        return;
+      } catch {
+        // fall through
+      }
     }
   }
   send(response, 404, 'text/plain; charset=utf-8', 'not found');
+}
+
+/** Absolute path under the fixtures dir, or undefined for traversal / escape (L6-025). */
+export function resolveFixtureHtmlPath(pathname: string): string | undefined {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return undefined;
+  }
+  if (decoded.includes('\0') || decoded.includes('\\')) {
+    return undefined;
+  }
+  const segments = decoded.split(/[/\\]/u).filter((part) => part.length > 0);
+  if (segments.some((part) => part === '.' || part === '..')) {
+    return undefined;
+  }
+  const fixturesRoot = resolve(RUNNER_FIXTURES_DIR);
+  const candidate = resolve(fixturesRoot, ...segments);
+  if (!isInsideResolvedDir(fixturesRoot, candidate)) {
+    return undefined;
+  }
+  return candidate;
+}
+
+function isInsideResolvedDir(dir: string, targetPath: string): boolean {
+  const rel = relative(dir, targetPath);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 export function localSiteHtml(index: number): string {

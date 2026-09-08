@@ -127,6 +127,15 @@ async function makeSession(events: RawEvent[]): Promise<FakeSession> {
   const dir = await mkdtemp(join(tmpdir(), 'spyglass-refine-'));
   const sessionDir = join(dir, 'ses_lot4');
   await mkdir(sessionDir, { recursive: true });
+  const startUrl = events.find((event) => typeof event.page?.url === 'string')?.page?.url;
+  if (startUrl === undefined || startUrl.length === 0) {
+    throw new Error('test session events need page.url for meta.json startUrl');
+  }
+  await writeFile(
+    join(sessionDir, 'meta.json'),
+    `${JSON.stringify({ startUrl }, null, 2)}\n`,
+    'utf8'
+  );
   await writeFile(
     join(sessionDir, 'raw.jsonl'),
     `${events.map((event) => JSON.stringify(event)).join('\n')}\n`,

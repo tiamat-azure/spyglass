@@ -292,6 +292,23 @@ Applied on tip `eee887c1d8c62f469a87ad795b3b83d442ec2519`. Product decisions
 Unit tests after this pass: **372 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 11 (auto-fix)
+
+Applied on tip `4d07de3ffd83e08d4b6181211b261a1d7292e8e0`. Product decisions
+1–5, J1c, J8c, and A19a are unchanged.
+
+- **L6-023** Generated `scenario.ts` shebang is
+  `#!/usr/bin/env -S node --experimental-transform-types` so `./scenario.ts`
+  matches package scripts / README.
+- **L6-024** `readSessionStartUrl` / `writeGeneratedFromRevision` rethrow
+  non-ENOENT IO and JSON errors and throw if `startUrl` is missing. No
+  `https://exemple.test/start` fallback in generated artifacts.
+- **L6-025** Fixture `*.html` files are resolved under
+  `resolve(RUNNER_FIXTURES_DIR)`; `..` traversal and escaped paths 404.
+
+Unit tests after this pass: **376 passed, 1 skipped**, 51 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
