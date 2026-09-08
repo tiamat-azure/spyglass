@@ -112,6 +112,17 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 8. **D35b / L6-035.** `createPlaywrightDriver` is **headed unless
    `headless === true`**. Visible first (F-45); `--headless` to hide.
    `spyglass-run` CI default headless (product note 1) is unchanged.
+9. **R42a / L6-042.** Finalize `persistRevision` failure still calls
+   `abortFinalizeAfterGenerate(..., persistReviewing: true)` with aggregated
+   errors (R33a). Do not leave disk `finalized` vs memory `reviewing`
+   without attempting the reviewing rollback persist.
+10. **E43a / L6-043.** `packages/app/e2e/lot6-script.spec.ts` is CI-safe:
+    headed only when a display is present and `CI` is unset; screenshot dir
+    defaults to a temp path, not tracked `docs/lot-6/screenshots/`
+    (`SPYGLASS_E2E_SCREENSHOT_DIR` override for capture).
+11. **S44b / L6-044.** Omitting `driver` in `runScenario` launches a real
+    standalone Playwright Chromium (generated script / CLI). In-app callers
+    (`ReplayEngine`) must pass an explicit driver. Do not invert this.
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -396,6 +407,23 @@ Applied on tip `ddffb3cd462ea03854da8ff65af0f61b9c765829`. Product decisions
 
 Unit tests after this pass: **392 passed, 1 skipped**, 53 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 15 (Captain locks)
+
+Applied on tip `0e9063d9116e9e8f9a3f2428c2ebe16b9c5d5559`. Product decisions
+1–8, J1c, J8c, A19a, H29a, D35b, O34a, C36a, F37a, and R33a are unchanged.
+Locks **R42a**, **E43a**, and **S44b** (product notes 9–11).
+
+- **L6-042 / R42a** Finalize: if persisting `status: 'finalized'` throws,
+  still `abortFinalizeAfterGenerate` with `persistReviewing: true` and
+  aggregated persist errors (same R33a combine). Memory + attempted disk
+  rollback stay `reviewing`.
+- **L6-043 / E43a** Lot 6 e2e: headed only with `DISPLAY` and not `CI`;
+  proof screenshots go to temp (or `SPYGLASS_E2E_SCREENSHOT_DIR`), not
+  tracked `docs/lot-6/screenshots/` by default.
+- **L6-044 / S44b** Keep optional-driver → standalone Chromium in
+  `runScenario`. Documented in JSDoc, root README, generated README, and
+  this file. In-app `ReplayEngine` still passes `driver: this.deps.driver()`.
 
 ## Residuals
 

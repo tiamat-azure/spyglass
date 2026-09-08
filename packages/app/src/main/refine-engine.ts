@@ -355,7 +355,7 @@ export class RefineEngine {
       return await this.abortFinalizeAfterGenerate(
         sessionDir,
         file,
-        false,
+        true,
         error instanceof Error ? error.message : String(error)
       );
     }
@@ -384,6 +384,8 @@ export class RefineEngine {
   /**
    * L6-001 keeps status `reviewing` + `canFinalize`. L6-004 also deletes the
    * generate-first `generated/` so CLI cannot treat leftovers as truth.
+   * R42a: persistReviewing is also true when the finalized persistRevision
+   * throws, so disk cannot stay `finalized` while memory is `reviewing`.
    */
   private async abortFinalizeAfterGenerate(
     sessionDir: string,

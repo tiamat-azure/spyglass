@@ -527,6 +527,56 @@ describe('RefineEngine', () => {
     expect(session.state).toBe('reviewing');
   });
 
+  it('rolls back reviewing on persistRevision failure after generate (R42a / L6-042)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const revPath = join(sessionDir, 'refined', `rev-${String(file.revision)}.json`);
+        unlinkSync(revPath);
+        mkdirSync(revPath);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/EISDIR|illegal operation on a directory/i);
+      expect(failed.error).toMatch(/failed to persist reviewing rollback/i);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+  });
+
   it('requires explicit confirm above the per-operation smart threshold', async () => {
     const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
     const engine = engineFor(session, { threshold: 1 });

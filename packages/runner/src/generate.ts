@@ -230,7 +230,7 @@ Session \`${sessionId}\`. Artefact **hybride** (ADR-0006, PRD §6.12) :
 | Fichier | Rôle |
 | --- | --- |
 | \`scenario.json\` | source de vérité du scénario raffiné |
-| \`scenario.ts\` | script mince : importe \`${RUNNER_PACKAGE}\` \`runScenario\` |
+| \`scenario.ts\` | script mince : importe \`${RUNNER_PACKAGE}\` \`runScenario\` **sans** \`driver\` (Chromium Playwright autonome ; l'app passe un driver explicite) |
 | \`package.json\` | dépendance déclarée \`${RUNNER_PACKAGE}\` |
 | \`README.md\` | ce mode d'emploi |
 

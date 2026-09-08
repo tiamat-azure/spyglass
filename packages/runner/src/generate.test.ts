@@ -103,6 +103,27 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(capture).not.toContain('@spyglass/runner runGeneratedScript');
   });
 
+  it('lot6 e2e isolates screenshots and skips headed without display/CI (E43a)', async () => {
+    const spec = await readFile(join(repoRoot(), 'packages/app/e2e/lot6-script.spec.ts'), 'utf8');
+    expect(spec).toContain('SPYGLASS_E2E_SCREENSHOT_DIR');
+    expect(spec).toContain('tmpdir()');
+    expect(spec).toContain('headedSafe');
+    expect(spec).toContain('process.env.DISPLAY');
+    expect(spec).not.toContain("join(appDir, '../../docs/lot-6/screenshots')");
+  });
+
+  it('runScenario documents optional driver → standalone Chromium (S44b)', async () => {
+    const runSrc = await readFile(join(repoRoot(), 'packages/runner/src/run.ts'), 'utf8');
+    expect(runSrc).toContain('runScenarioStandalone');
+    expect(runSrc).toContain('launchPlaywrightRun');
+    expect(runSrc).toMatch(/omitting `options\.driver` launches a real standalone Playwright/u);
+    const replaySrc = await readFile(
+      join(repoRoot(), 'packages/app/src/main/replay-engine.ts'),
+      'utf8'
+    );
+    expect(replaySrc).toContain('driver: this.deps.driver()');
+  });
+
   it('Lot 6 capture shows compact published rates, fullPage protocol shot, and unlinks HTML (L6-016 / L6-017)', async () => {
     const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
     expect(capture).toContain('fullPage: true');
@@ -176,6 +197,7 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     );
     expect(generatedReadme('ses_x')).toMatch(/Windows/);
     expect(generatedReadme('ses_x')).toContain('env -S node --experimental-transform-types');
+    expect(generatedReadme('ses_x')).toMatch(/sans.*driver/u);
   });
 
   it('runScenario without a driver prints F-58 help and needs no API keys', async () => {

@@ -231,7 +231,10 @@ unless `headless === true`, D35b). `--base-url` rewrites the origin of
 an absolute http(s) `startUrl` (optional base path prefix); relative URLs
 still resolve with WHATWG. Relative `--report` is resolved from the
 scenario file directory, not `process.cwd()` (A19a). The script runs
-outside Electron; `--no-ai` needs no API key. Measurement protocol for
+outside Electron; `--no-ai` needs no API key. Omitting `driver` in
+`runScenario` launches a real standalone Playwright Chromium (generated
+`scenario.ts` / CLI). In-app replay (`ReplayEngine`) always passes an
+explicit driver bound to the guest window (S44b). Measurement protocol for
 PRD §2.2 non-contractual replay rates:
 10 public sites + local CI corpus, published under
 [`docs/lot-6/`](docs/lot-6/). **J+1 public is N/A / pending** (J1c). When

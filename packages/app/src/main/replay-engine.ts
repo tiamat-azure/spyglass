@@ -29,6 +29,7 @@ export type ReplayStartResponse =
 
 export type ReplayEngineDeps = {
   session: () => SessionOrchestrator;
+  /** S44b: required. In-app replay must not omit `driver` (that launches Chromium). */
   driver: () => PageDriver;
   gateway: () => LlmGateway;
   model: () => string;

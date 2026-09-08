@@ -1,14 +1,24 @@
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
 import { runGeneratedScript, startFixtureServer, writeGeneratedPackage } from '@spyglass/runner';
 
-const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
-const shotDir =
-  process.env.SPYGLASS_E2E_SCREENSHOT_DIR ?? join(appDir, '../../docs/lot-6/screenshots');
+/** E43a: default away from tracked `docs/lot-6/screenshots/` (env override for capture). */
+async function e2eShotDir(): Promise<string> {
+  return (
+    process.env.SPYGLASS_E2E_SCREENSHOT_DIR ??
+    (await mkdtemp(join(tmpdir(), 'spyglass-lot6-e2e-shots-')))
+  );
+}
+
+/** E43a: headed only with a display and not in CI. */
+function headedSafe(): boolean {
+  const ci = process.env.CI === 'true' || process.env.CI === '1';
+  const display = typeof process.env.DISPLAY === 'string' && process.env.DISPLAY.length > 0;
+  return !ci && display;
+}
 
 function lot6Scenario(startUrl: string): Scenario {
   const step: RefinedStep = {
@@ -41,10 +51,11 @@ function lot6Scenario(startUrl: string): Scenario {
 }
 
 test.describe('Lot 6 generated script outside Electron', () => {
-  test('same script headed and --headless with --no-ai (no API keys)', async () => {
+  test('same script headed (when display) and --headless with --no-ai (no API keys)', async () => {
     test.setTimeout(120_000);
     const server = await startFixtureServer();
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-e2e-'));
+    const shotDir = await e2eShotDir();
     try {
       const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
       const paths = await writeGeneratedPackage({ sessionDir, scenario });
@@ -57,16 +68,19 @@ test.describe('Lot 6 generated script outside Electron', () => {
       delete env.LLM_SMART_API_KEY;
       delete env.LLM_FAST_API_KEY;
       delete env.ANTHROPIC_API_KEY;
-      delete env.CI;
 
-      const headedEnv = { ...env, SPYGLASS_PROOF_SCREENSHOT: join(shotDir, 'headed-run.png') };
-      const headed = await runGeneratedScript(
-        scenario,
-        ['--no-ai', '--timeout', '15000'],
-        headedEnv,
-        paths.dir
-      );
-      expect(headed).toBe(0);
+      if (headedSafe()) {
+        const headedEnv = { ...env };
+        delete headedEnv.CI;
+        headedEnv.SPYGLASS_PROOF_SCREENSHOT = join(shotDir, 'headed-run.png');
+        const headed = await runGeneratedScript(
+          scenario,
+          ['--no-ai', '--timeout', '15000'],
+          headedEnv,
+          paths.dir
+        );
+        expect(headed).toBe(0);
+      }
 
       const headless = await runGeneratedScript(
         scenario,
