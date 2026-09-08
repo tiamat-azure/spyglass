@@ -8,3 +8,7 @@ export function runPath(...parts: string[]): string {
 export function screenshotFileName(stepIndex: number, kind: 'fail' | 'recover'): string {
   return `step-${String(stepIndex)}-${kind}.jpg`;
 }
+
+export function traceFileName(): string {
+  return 'trace.zip';
+}

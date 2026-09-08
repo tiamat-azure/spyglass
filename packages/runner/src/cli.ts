@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { isMultimodal } from '@spyglass/llm';
 import { createCliGateway } from './cli-gateway.ts';
 import { parseRunnerArgv } from './options.ts';
-import { runPath } from './paths.ts';
+import { runPath, traceFileName } from './paths.ts';
 import { createPlaywrightDriver } from './playwright-driver.ts';
 import { LlmRecoverer } from './recover.ts';
 import { newRunId, runScenario } from './run.ts';
@@ -38,7 +38,8 @@ export async function runCli(
   }
   const driver = await createPlaywrightDriver({
     headless: parsed.headless,
-    trace: parsed.trace
+    trace: parsed.trace,
+    ...(parsed.trace ? { tracePath: runPath(reportDir, traceFileName()) } : {})
   });
   const gateway = parsed.aiRecovery ? createCliGateway(env) : undefined;
   const recoverer = gateway === undefined ? undefined : new LlmRecoverer(gateway);

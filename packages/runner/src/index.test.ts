@@ -7,6 +7,7 @@ import { runCli } from './cli.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { aiRecoveryEnabled, isCiEnv, parseRunnerArgv, resolveMaxAiRetries } from './options.ts';
 import { RUNNER_PACKAGE, runnerPackageName } from './package-name.ts';
+import { screenshotFileName, traceFileName } from './paths.ts';
 import { StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
@@ -76,6 +77,13 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
     expect(parsed.trace).toBe(true);
     expect(parsed.reportDir).toBe('runs/out');
     expect(parsed.scenarioPath).toBe('scenario.json');
+  });
+
+  it('uses Windows-safe artifact names', () => {
+    expect(screenshotFileName(2, 'fail')).toBe('step-2-fail.jpg');
+    expect(screenshotFileName(0, 'recover')).toBe('step-0-recover.jpg');
+    expect(traceFileName()).toBe('trace.zip');
+    expect(screenshotFileName(1, 'fail')).not.toMatch(/[\\/]/);
   });
 
   it('prints F-58 flags on --help without launching a browser', async () => {
@@ -300,6 +308,31 @@ describe('F-61 multimodal warning', () => {
     expect(result.exitCode).toBe(0);
     expect(result.report.multimodal).toBe(false);
     expect(result.report.warnings.some((line) => line.includes('not multimodal'))).toBe(true);
+  });
+
+  it('journals the text-DOM fallback on each recovery attempt', async () => {
+    const driver = new MemoryPageDriver({
+      elements: [{ selector: '[data-testid="step-1"]', visible: true }]
+    });
+    const step = clickStep(0, '#does-not-exist');
+    step.verification.expected = '[data-testid="step-1"]';
+    step.verification.timeoutMs = 40;
+    const progress: string[] = [];
+    const result = await runScenario(scenario([step]), {
+      driver,
+      aiRecovery: true,
+      smartModel: 'text-only-local',
+      env: {},
+      recoverer: new StaticRecoverer(
+        { type: 'click', selector: '[data-testid="step-1"]' },
+        'testid'
+      ),
+      onProgress: (event) => {
+        progress.push(event.message);
+      }
+    });
+    expect(result.exitCode).toBe(0);
+    expect(progress.some((line) => line.includes('text DOM only (F-61)'))).toBe(true);
   });
 
   it('pins the I-05 smart snapshot by default', async () => {

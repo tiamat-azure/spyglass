@@ -5,6 +5,8 @@ export type PlaywrightLaunchOptions = {
   headless?: boolean;
   baseUrl?: string;
   trace?: boolean;
+  /** Absolute path for Playwright `trace.zip` (F-58). Windows-safe via `runPath`. */
+  tracePath?: string;
   executablePath?: string;
   channel?: string;
   cdpUrl?: string;
@@ -142,8 +144,9 @@ export async function createPlaywrightDriver(
   let stopTrace: (() => Promise<void>) | undefined;
   if (options.trace === true) {
     await context.tracing.start({ screenshots: true, snapshots: true });
+    const tracePath = options.tracePath ?? 'trace.zip';
     stopTrace = async () => {
-      await context.tracing.stop().catch(() => undefined);
+      await context.tracing.stop({ path: tracePath }).catch(() => undefined);
     };
   }
   const page = await context.newPage();

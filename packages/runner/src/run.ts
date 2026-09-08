@@ -280,13 +280,16 @@ async function recoverStep(input: {
   let lastError = input.originalError;
   let screenshotRef: string | undefined;
   for (let attempt = 1; attempt <= input.maxAiRetries; attempt += 1) {
+    const textOnly = input.multimodal
+      ? ''
+      : ' · smart model is not multimodal; text DOM only (F-61)';
     emit(input.onProgress === undefined ? {} : { onProgress: input.onProgress }, {
       runId: input.runId,
       stepIndex: input.step.index,
       status: 'recovering',
       mode: 'AI',
       attempt,
-      message: `AI recovery attempt ${String(attempt)}/${String(input.maxAiRetries)}`
+      message: `AI recovery attempt ${String(attempt)}/${String(input.maxAiRetries)}${textOnly}`
     });
     const afterDom = await input.driver.snapshot();
     screenshotRef = await captureFailure(

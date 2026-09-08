@@ -826,6 +826,15 @@ h1 {
   max-height: 72px;
 }
 
+.chat:has(#replay-panel:not([hidden])) .log {
+  max-height: 30vh;
+  min-height: 120px;
+}
+
+.chat-msg[data-kind="replay.step"] {
+  border-color: var(--sg-accent);
+}
+
 .refine-steps,
 .refine-weaks ol {
   margin: 0;

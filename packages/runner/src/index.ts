@@ -23,6 +23,7 @@ export {
   SMART_MODEL_PIN
 } from './options.ts';
 export { RUNNER_PACKAGE, runnerPackageName } from './package-name.ts';
+export { runPath, screenshotFileName, traceFileName } from './paths.ts';
 export { createPlaywrightDriver, PlaywrightPageDriver } from './playwright-driver.ts';
 export type { Recoverer, RecoveryAttempt, RecoveryContext } from './recover.ts';
 export { LlmRecoverer, StaticRecoverer } from './recover.ts';

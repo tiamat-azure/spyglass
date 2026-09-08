@@ -39,8 +39,10 @@ CLI `spyglass-run`: `--headless`, `--base-url`, `--timeout`,
 `CI=1` defaults recovery off (equiv `--no-ai`); explicit `--ai` forces it;
 `--no-ai` always wins (F-60). Clean deterministic fail needs no API keys.
 
-F-61: `isMultimodal` on the pinned smart snapshot; non-blocking warn;
-text-DOM fallback (screenshots still land on disk for F-56).
+F-61: `isMultimodal` on the pinned smart snapshot; non-blocking warn at
+settings **Test connection** and on each recovery attempt; text-DOM
+fallback (screenshots still land on disk for F-56). `--trace` writes
+`runs/<runId>/trace.zip` with `node:path` (Windows-safe).
 
 F-59: in-app **Rejouer** in the embedded guest, step list + chat
 `replay.step` follow. Checkbox maps to `--ai` / `--no-ai`.

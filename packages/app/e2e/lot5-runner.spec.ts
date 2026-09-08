@@ -143,7 +143,10 @@ test.describe('Lot 5 runner', () => {
       await chrome.locator('#replay-panel').screenshot({
         path: join(shotDir, 'deterministic-replay-success.png')
       });
-      await chrome.locator('#chat').screenshot({
+      const replayChat = chrome.locator('#log li.chat-msg[data-kind="replay.step"]');
+      await expect(replayChat.last()).toBeVisible({ timeout: 10_000 });
+      await expect(replayChat.last()).toContainText(/script · passed/i);
+      await replayChat.last().screenshot({
         path: join(shotDir, 'replay-chat-follow.png')
       });
 
