@@ -188,9 +188,10 @@ describe('@spyglass/stt', () => {
     expect(VOICE_FLUSH_MS).toBeGreaterThanOrEqual(WHISPER_TIMEOUT_MS_DEFAULT);
   });
 
-  it('abort after end still disposes in-flight finalize jobs', async () => {
+  it('abort after end cancels that utterance’s in-flight finalize, not the whole engine', async () => {
     let disposed = false;
     let finalizeStarted = false;
+    const aborted: string[] = [];
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -200,7 +201,9 @@ describe('@spyglass/stt', () => {
       model: 'mock-offline',
       begin: () => undefined,
       pushPcm: () => undefined,
-      abort: () => undefined,
+      abort: (id) => {
+        aborted.push(id);
+      },
       finalize: async () => {
         finalizeStarted = true;
         await gate;
@@ -216,9 +219,45 @@ describe('@spyglass/stt', () => {
     const ending = session.end(2);
     await expect.poll(() => finalizeStarted).toBe(true);
     session.abort();
-    expect(disposed).toBe(true);
+    expect(aborted).toEqual(['u1']);
+    expect(disposed).toBe(false);
     release?.();
     await ending;
+  });
+
+  it('abort of a live utterance does not dispose in-flight finalize of a prior one', async () => {
+    const aborted: string[] = [];
+    let u1FinalizeStarted = false;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const engine: SttEngine = {
+      name: 'mock',
+      model: 'mock-offline',
+      begin: () => undefined,
+      pushPcm: () => undefined,
+      abort: (id) => {
+        aborted.push(id);
+      },
+      finalize: async (id) => {
+        if (id === 'u1') {
+          u1FinalizeStarted = true;
+          await gate;
+        }
+        return id;
+      }
+    };
+    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    session.begin('u1', 1);
+    session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
+    const ending = session.end(2);
+    await expect.poll(() => u1FinalizeStarted).toBe(true);
+    session.begin('u2', 3);
+    session.abort();
+    expect(aborted).toEqual(['u2']);
+    release?.();
+    await expect(ending).resolves.toMatchObject({ utteranceId: 'u1', text: 'u1' });
   });
 
   it('sidecar close disposes the whisper engine', async () => {
@@ -429,6 +468,42 @@ exec sleep 30
     ac.abort();
     await expect(pending).resolves.toBe('');
     expect(Date.now() - started).toBeLessThan(4_000);
+  });
+
+  it('does not SIGKILL another utterance’s in-flight whisper finalize', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-overlap-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    await writeFile(
+      bin,
+      `#!/bin/sh
+set -eu
+out=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -of) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+sleep 0.4
+printf 'transcription locale\\n' > "\${out}.txt"
+`
+    );
+    await chmod(bin, 0o755);
+    const engine = createWhisperEngine({ bin, model, timeoutMs: 8_000 });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const first = engine.finalize('u1');
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await expect(first).resolves.toBe('transcription locale');
+    } finally {
+      engine.dispose?.();
+    }
   });
 
   it('rejects invalid client frames', () => {

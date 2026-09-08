@@ -182,8 +182,13 @@ describe('packaged Observe', () => {
     expect(voiceUi).toContain('stillLive');
     expect(voiceUi).toContain('stopTracks(late)');
     expect(voiceUi).toContain('armed = next');
+    expect(voiceUi).toContain('stopGraph()');
+    expect(renderer).toContain('voice?.setArmed(false)');
+    expect(main).toContain("state: 'stopping'");
     const inProcess = readFileSync(join(appRoot, '../../packages/stt/src/in-process.ts'), 'utf8');
+    expect(inProcess).toContain('pendingFinalizeId');
     expect(inProcess).toContain('engine.dispose?.()');
-    expect(inProcess).toContain('end() clears live');
+    expect(bridge).toContain('this.inProcess?.abort()');
+    expect(whisper).toContain('killJobs(utteranceId)');
   });
 });

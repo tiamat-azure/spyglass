@@ -33,6 +33,7 @@ export function createInProcessStt(
   engine: SttEngine = createEngineFromEnv(env)
 ): InProcessStt {
   let live: LiveUtterance | undefined;
+  let pendingFinalizeId: string | undefined;
   return {
     engine: engine.name,
     model: engine.model,
@@ -52,24 +53,35 @@ export function createInProcessStt(
       if (current === undefined) {
         return undefined;
       }
-      const text = await engine.finalize(current.utteranceId);
-      return {
-        utteranceId: current.utteranceId,
-        text,
-        startTs: current.startTs,
-        endTs
-      };
+      pendingFinalizeId = current.utteranceId;
+      try {
+        const text = await engine.finalize(current.utteranceId);
+        return {
+          utteranceId: current.utteranceId,
+          text,
+          startTs: current.startTs,
+          endTs
+        };
+      } finally {
+        if (pendingFinalizeId === current.utteranceId) {
+          pendingFinalizeId = undefined;
+        }
+      }
     },
     abort(): void {
       if (live !== undefined) {
         engine.abort(live.utteranceId);
         live = undefined;
+        return;
       }
-      // end() clears live before awaiting finalize; still cancel in-flight jobs.
-      engine.dispose?.();
+      if (pendingFinalizeId !== undefined) {
+        engine.abort(pendingFinalizeId);
+        pendingFinalizeId = undefined;
+      }
     },
     dispose(): void {
       this.abort();
+      engine.dispose?.();
     }
   };
 }

@@ -332,9 +332,9 @@ test.describe('Lot 3 voice', () => {
       await chrome.locator('#record-btn').evaluate((el) => {
         (el as HTMLElement).click();
       });
-      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
       await expect(chrome.locator('#mic-btn')).toBeDisabled();
       await expect(chrome.locator('#mic-btn')).toHaveAttribute('aria-pressed', 'false');
+      await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
       await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(1, {
         timeout: 10_000
       });

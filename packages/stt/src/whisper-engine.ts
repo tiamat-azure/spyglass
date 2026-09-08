@@ -290,7 +290,7 @@ export function createWhisperEngine(options: {
     if (pcm.length < 3200) {
       return '';
     }
-    killJobs();
+    killJobs(utteranceId);
     const controller = new AbortController();
     controllers.set(utteranceId, controller);
     const wav = pcm16ToWav(pcm, STT_SAMPLE_RATE);

@@ -444,6 +444,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (!parseEmptyPayload(raw)) {
       return { sessionId: '', eventCount: 0, sizeBytes: 0 };
     }
+    const win = winRef.current;
+    if (win !== undefined && activeSession !== undefined) {
+      emitToChrome(win, IPC.sessionState, {
+        ...activeSession.snapshot(),
+        state: 'stopping'
+      });
+    }
     await voiceBridge?.stopCapture();
     return await requireSession().stop();
   });

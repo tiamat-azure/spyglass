@@ -152,7 +152,6 @@ export function attachVoiceCapture(
     }
     if (!stillLive()) {
       stopGraph();
-      await api.voice.abort();
       return false;
     }
     options.liveEl.hidden = false;
@@ -162,7 +161,6 @@ export function attachVoiceCapture(
       pumpFake();
       if (!stillLive()) {
         stopGraph();
-        await api.voice.abort();
         return false;
       }
       return true;
@@ -171,7 +169,6 @@ export function attachVoiceCapture(
       const micOk = await pumpMic();
       if (!micOk || !stillLive()) {
         stopGraph();
-        await api.voice.abort();
         return false;
       }
       return true;
@@ -234,7 +231,6 @@ export function attachVoiceCapture(
       holding = false;
       setMicState('idle');
       stopGraph();
-      void api.voice.abort();
     },
     holding: () => holding,
     startHold: async () => {
@@ -247,13 +243,17 @@ export function attachVoiceCapture(
       if (!started) {
         holding = false;
         setMicState('idle');
-        await abort();
+        if (armed) {
+          await abort();
+        }
         return;
       }
       if (!stillLive()) {
         holding = false;
         setMicState('idle');
-        await abort();
+        if (armed) {
+          await abort();
+        }
       }
     },
     endHold: async () => {
@@ -280,13 +280,17 @@ export function attachVoiceCapture(
       if (!started) {
         holding = false;
         setMicState('idle');
-        await abort();
+        if (armed) {
+          await abort();
+        }
         return;
       }
       if (!stillLive()) {
         holding = false;
         setMicState('idle');
-        await abort();
+        if (armed) {
+          await abort();
+        }
       }
     },
     dispose: () => {

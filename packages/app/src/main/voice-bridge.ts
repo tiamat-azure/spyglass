@@ -454,6 +454,7 @@ export class VoiceBridge {
       this.live = undefined;
     }
     this.resolveFinalWaiter(utteranceId);
+    this.inProcess?.abort();
     this.socket?.send(JSON.stringify({ type: 'abort' }));
   }
 

@@ -567,6 +567,9 @@ recordBtn.addEventListener('click', () => {
   const recording = recordBtn.dataset.state === 'recording';
   const retrySeal = recordBtn.dataset.state === 'sealed-failed';
   recordBtn.disabled = true;
+  if (recording || retrySeal) {
+    voice?.setArmed(false);
+  }
   const work = recording || retrySeal ? api.session.stop() : api.session.start();
   void work
     .catch((error: unknown) => {

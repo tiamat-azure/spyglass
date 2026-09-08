@@ -50,16 +50,12 @@ describe('attachVoiceCapture', () => {
   it('tears down a late MediaStream when Stop disarms mid-getUserMedia', async () => {
     const { stream, stopped } = fakeStream();
     let releaseMedia: ((media: MediaStream) => void) | undefined;
-    let aborts = 0;
     const voice = attachVoiceCapture(
       {
         voice: {
           start: async () => ({ ok: true, fakeCapture: false }),
           stop: async () => ({ ok: true }),
-          abort: async () => {
-            aborts += 1;
-            return { ok: true };
-          },
+          abort: async () => ({ ok: true }),
           setMode: async () => ({ ok: true }),
           frame: () => undefined,
           onPartial: () => () => undefined,
@@ -85,14 +81,12 @@ describe('attachVoiceCapture', () => {
     releaseMedia?.(stream);
     await hold;
     expect(stopped.n).toBeGreaterThan(0);
-    expect(aborts).toBeGreaterThan(0);
     expect(voice.holding()).toBe(false);
   });
 
   it('does not start the mic if Stop races during voice.start', async () => {
     let resolveStart: ((value: { ok: boolean; fakeCapture: boolean }) => void) | undefined;
     let mediaCalls = 0;
-    let aborts = 0;
     const voice = attachVoiceCapture(
       {
         voice: {
@@ -101,10 +95,7 @@ describe('attachVoiceCapture', () => {
               resolveStart = resolve;
             }),
           stop: async () => ({ ok: true }),
-          abort: async () => {
-            aborts += 1;
-            return { ok: true };
-          },
+          abort: async () => ({ ok: true }),
           setMode: async () => ({ ok: true }),
           frame: () => undefined,
           onPartial: () => () => undefined,
@@ -130,7 +121,48 @@ describe('attachVoiceCapture', () => {
     resolveStart?.({ ok: true, fakeCapture: false });
     await hold;
     expect(mediaCalls).toBe(0);
-    expect(aborts).toBeGreaterThan(0);
     expect(voice.holding()).toBe(false);
+  });
+
+  it('setArmed(false) stops the graph immediately without aborting STT flush', async () => {
+    const mic = mockButton();
+    let aborts = 0;
+    let frames = 0;
+    const voice = attachVoiceCapture(
+      {
+        voice: {
+          start: async () => ({ ok: true, fakeCapture: true }),
+          stop: async () => ({ ok: true }),
+          abort: async () => {
+            aborts += 1;
+            return { ok: true };
+          },
+          setMode: async () => ({ ok: true }),
+          frame: () => {
+            frames += 1;
+          },
+          onPartial: () => () => undefined,
+          onFinal: () => () => undefined,
+          onLevel: () => () => undefined
+        }
+      },
+      {
+        micButton: mic,
+        modeButton: mockButton(false),
+        liveEl: mockLive(),
+        levelEl: mockLevel()
+      }
+    );
+    voice.setArmed(true);
+    await voice.startHold();
+    await expect.poll(() => frames).toBeGreaterThan(0);
+    voice.setArmed(false);
+    const framesAtDisarm = frames;
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(frames).toBe(framesAtDisarm);
+    expect(aborts).toBe(0);
+    expect(voice.holding()).toBe(false);
+    expect(mic.disabled).toBe(true);
+    expect(mic.getAttribute('aria-pressed')).toBe('false');
   });
 });

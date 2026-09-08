@@ -153,6 +153,14 @@ Applied on tip `2b5ab40`. V1a energy VAD and C2b `before`-on-overlap are unchang
 4. **P3-N2 medium — sidecar grandchildren.** Sidecar `close` calls `engine.dispose()` (kills detached `whisper-cli` process groups). Spawn uses `detached: true`. `releaseSidecarTransport` SIGTERMs the sidecar (so dispose runs) then SIGKILLs the process group — not only the Node child.
 5. **P3-N3 medium — InProcessStt.abort.** `abort` calls `engine.dispose()` even when `live` was already cleared by `end()`, so in-flight `finalize` / `killJobs` is cancelled. `dispose` delegates to `abort`.
 
+### Adversarial pass 5 (auto-fixes)
+
+Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **P5-N1 high — Stop tears down the mic before STT flush.** Renderer Stop calls `setArmed(false)` (`stopGraph` / `track.stop`) **before** `session.stop()`. Main emits `stopping` then `await stopCapture()` so the MediaStream is not left hot for the ≤10s flush. `setArmed(false)` does **not** `voice.abort()`, so main can still journal `voice.final` with `capturing=false`.
+2. **P5-N2 medium — dropUtterance aborts in-process.** Empty-hold / mode-switch `dropUtterance` restores `inProcess.abort()` so engine `open` maps for the dropped live utterance are cleared. `abort()` is per-live (or pending finalize id), not `dispose()` of the whole engine.
+3. **P5-N3 medium — whisper killJobs is per-utterance.** `transcribe` calls `killJobs(utteranceId)` so a new utterance’s partials do not SIGKILL a prior utterance’s in-flight finalize. Continuous VAD can overlap finalize(utt1) with utt2 partials.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

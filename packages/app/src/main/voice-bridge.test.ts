@@ -248,6 +248,75 @@ describe('VoiceBridge', () => {
     }
   });
 
+  it('stopCapture disarms capturing before the flush wait completes', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: async (payload) => {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 80);
+          });
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'first|extra'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      const flushing = bridge.stopCapture();
+      for (let i = 0; i < 8; i += 1) {
+        bridge.sendFrame(Buffer.alloc(4000, 2));
+      }
+      await flushing;
+      expect(finals).toEqual(['first']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('empty-hold drop aborts in-process engine so the next utterance is clean', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: (payload) => {
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'kept'
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(0));
+      await bridge.stopCapture();
+      expect(finals).toEqual([]);
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      await bridge.stopCapture();
+      expect(finals).toEqual(['kept']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
   it('WS stopCapture waits for onFinal before resolving the sidecar waiter', async () => {
     const finals: string[] = [];
     let journalDone = false;
