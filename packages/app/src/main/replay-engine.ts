@@ -4,7 +4,9 @@ import type { Scenario } from '@spyglass/contracts';
 import type { LlmGateway } from '@spyglass/llm';
 import {
   aiRecoveryEnabled,
+  generatedScenarioJsonPath,
   LlmRecoverer,
+  loadScenarioFile,
   newRunId,
   type PageDriver,
   type ReplayProgress,
@@ -107,6 +109,11 @@ export class ReplayEngine {
 }
 
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
+  try {
+    return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+  } catch {
+    // Sessions finalized before Lot 6 only have refined/rev-N.json.
+  }
   const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
   const meta = JSON.parse(metaRaw) as { startUrl?: string };
   const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';

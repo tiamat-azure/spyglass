@@ -15,7 +15,7 @@ packages/app/release/
 playwright-report/
 test-results/
 packages/app/test-results/
-packages/app/playwright-report/
+docs/lot-6/corpus-runs/
 vendor/whisper/*.bin
 vendor/whisper/whisper-cli
 vendor/whisper/whisper-cli.exe

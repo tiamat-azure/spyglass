@@ -1,0 +1,156 @@
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { RefinedStep, Scenario } from '@spyglass/contracts';
+import { describe, expect, it } from 'vitest';
+import {
+  generatedReadme,
+  generatedScenarioTsSource,
+  generateFromSessionDir,
+  npmPackageNameForSession,
+  writeGeneratedPackage
+} from './generate.ts';
+import { runGenerateCli } from './generate-cli.ts';
+import { parseGeneratedArgv, parseRunnerArgv } from './options.ts';
+import { RUNNER_PACKAGE } from './package-name.ts';
+import { screenshotFileName, traceFileName } from './paths.ts';
+
+function clickStep(): RefinedStep {
+  return {
+    index: 0,
+    intent: 'Je clique sur Start',
+    action: {
+      type: 'click',
+      descriptor: {
+        type: 'click',
+        selector: '[data-testid="go"]',
+        selectorStrategy: 'testId'
+      }
+    },
+    verification: {
+      type: 'elementVisible',
+      expected: '[data-testid="done"]',
+      strength: 'strong',
+      confirmedByUser: true
+    },
+    sourceEvents: ['evt_000001']
+  };
+}
+
+function scenario(): Scenario {
+  return {
+    schemaVersion: 1,
+    sessionId: 'ses_lot6_gen',
+    startUrl: 'http://127.0.0.1:9/lot6-fixture.html',
+    generatedAt: '2026-09-08T12:00:00.000Z',
+    model: 'claude-sonnet-4-5-20250929',
+    steps: [clickStep()]
+  };
+}
+
+describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
+  it('writes scenario.json, scenario.ts, README.md, package.json with declared runner dep', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-gen-'));
+    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+    const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
+    expect(json.sessionId).toBe('ses_lot6_gen');
+    expect(json.steps).toHaveLength(1);
+    const ts = await readFile(paths.scenarioTs, 'utf8');
+    expect(ts).toContain("from '@spyglass/runner'");
+    expect(ts).toContain('runGeneratedScript');
+    expect(ts).toContain('scenario.json');
+    expect(ts).not.toMatch(/[\\]/);
+    const readme = await readFile(paths.readme, 'utf8');
+    expect(readme).toMatch(/mode d'emploi|Script généré/i);
+    expect(readme).toContain('--headless');
+    expect(readme).toContain('--no-ai');
+    expect(readme).toContain('--base-url');
+    expect(readme).toContain('--timeout');
+    expect(readme).toContain('--max-ai-retries');
+    expect(readme).toContain('--ai');
+    expect(readme).toContain('--report');
+    expect(readme).toContain('--trace');
+    expect(readme).toContain(RUNNER_PACKAGE);
+    const manifest = JSON.parse(await readFile(paths.packageJson, 'utf8')) as {
+      dependencies: Record<string, string>;
+      type: string;
+    };
+    expect(manifest.type).toBe('module');
+    expect(manifest.dependencies[RUNNER_PACKAGE]).toBe('0.0.0');
+    expect(npmPackageNameForSession('ses_Lot 6!')).toBe('spyglass-scenario-ses-lot-6');
+  });
+
+  it('is visible by default and wires F-58 flags; CI does not force headless', () => {
+    const headed = parseGeneratedArgv(['--no-ai', '--timeout', '5000'], { CI: '1' });
+    expect(headed.headless).toBe(false);
+    expect(headed.aiRecovery).toBe(false);
+    expect(headed.timeoutMs).toBe(5000);
+    const headless = parseGeneratedArgv(
+      [
+        '--headless',
+        '--base-url',
+        'https://app.test',
+        '--max-ai-retries',
+        '2',
+        '--trace',
+        '--report',
+        'out'
+      ],
+      {}
+    );
+    expect(headless.headless).toBe(true);
+    expect(headless.baseUrl).toBe('https://app.test');
+    expect(headless.maxAiRetries).toBe(2);
+    expect(headless.trace).toBe(true);
+    expect(headless.reportDir).toBe('out');
+    expect(parseRunnerArgv(['s.json'], { CI: '1' }).headless).toBe(true);
+  });
+
+  it('keeps Windows-safe artifact names in the generated README/help path', () => {
+    expect(screenshotFileName(1, 'fail')).toBe('step-1-fail.jpg');
+    expect(traceFileName()).toBe('trace.zip');
+    expect(generatedScenarioTsSource()).toContain("join(here, 'scenario.json')");
+    expect(generatedReadme('ses_x')).toMatch(/Windows/);
+  });
+
+  it('spyglass-generate prints usage without a session dir', async () => {
+    const chunks: string[] = [];
+    const write = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      expect(await runGenerateCli(['--help'])).toBe(0);
+      expect(chunks.join('')).toMatch(/spyglass-generate/);
+    } finally {
+      process.stdout.write = write;
+    }
+  });
+
+  it('generateFromSessionDir reads a finalized rev-N.json', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-session-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'finalized',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    const paths = await generateFromSessionDir(sessionDir);
+    const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
+    expect(json.startUrl).toBe('https://exemple.test/start');
+  });
+});

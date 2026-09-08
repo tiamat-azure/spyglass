@@ -16,6 +16,7 @@ import {
   unconfirmedWeaks,
   weakGroup
 } from '@spyglass/llm';
+import { generateFromSessionDir } from '@spyglass/runner';
 import type { RefinedStepView, RefineRevisionView } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
@@ -334,6 +335,14 @@ export class RefineEngine {
     await persistRevision(sessionDir, file);
     if ((await rawFingerprint(sessionDir)) !== before) {
       return { ok: false, error: 'raw.jsonl mutated during finalize' };
+    }
+    try {
+      await generateFromSessionDir(sessionDir);
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
     session.finalizeScenario();
     this.current = file;

@@ -287,6 +287,12 @@ describe('RefineEngine', () => {
       expect(canFinalize(engine.currentRevision()?.steps ?? [])).toBe(true);
     }
     expect(session.state).toBe('finalized');
+    const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
+    expect(generated).toContain('runGeneratedScript');
+    const scenarioJson = JSON.parse(
+      await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
+    ) as { sessionId: string };
+    expect(scenarioJson.sessionId).toBe('ses_lot4');
   });
 
   it('requires explicit confirm above the per-operation smart threshold', async () => {

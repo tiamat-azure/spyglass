@@ -57,6 +57,21 @@ describe('ReplayEngine', () => {
     expect(scenario.startUrl).toBe('https://exemple.test/start');
     expect(scenario.steps[0]?.action.descriptor.selector).toBe('#go');
 
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/generated',
+        steps: [clickStep('#from-generated')]
+      }),
+      'utf8'
+    );
+    const preferred = await loadFinalizedScenario(dir);
+    expect(preferred.startUrl).toBe('https://exemple.test/generated');
+    expect(preferred.steps[0]?.action.descriptor.selector).toBe('#from-generated');
+
     const session = {
       snapshot: () => ({ state: 'reviewing', since: 0 }),
       currentSessionDir: () => dir,

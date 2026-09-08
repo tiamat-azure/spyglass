@@ -11,6 +11,7 @@ export type PlaywrightLaunchOptions = {
   executablePath?: string;
   channel?: string;
   cdpUrl?: string;
+  env?: NodeJS.ProcessEnv;
 };
 
 export class PlaywrightPageDriver implements PageDriver {
@@ -122,29 +123,38 @@ export class PlaywrightPageDriver implements PageDriver {
   }
 }
 
+export function chromiumLaunchArgs(env: NodeJS.ProcessEnv = process.env): string[] {
+  const args: string[] = [];
+  const ci = env.CI === '1' || env.CI === 'true' || env.CI === 'yes';
+  if (env.SPYGLASS_NO_SANDBOX === '1' || ci) {
+    args.push('--no-sandbox', '--disable-setuid-sandbox');
+  }
+  if (env.SPYGLASS_DISABLE_GPU === '1') {
+    args.push('--disable-gpu');
+  }
+  return args;
+}
+
 export async function createPlaywrightDriver(
   options: PlaywrightLaunchOptions = {}
 ): Promise<PlaywrightPageDriver> {
   const { chromium } = await import('playwright-core');
+  const env = options.env ?? process.env;
   if (options.cdpUrl !== undefined && options.cdpUrl.length > 0) {
     const browser = await chromium.connectOverCDP(options.cdpUrl);
     const context = browser.contexts()[0] ?? (await browser.newContext());
     const page = context.pages()[0] ?? (await context.newPage());
     return new PlaywrightPageDriver(page, { browser, context });
   }
-  const launch: Parameters<typeof chromium.launch>[0] = {
-    headless: options.headless !== false
-  };
-  if (options.executablePath !== undefined) {
-    launch.executablePath = options.executablePath;
-  } else if (options.channel !== undefined) {
-    launch.channel = options.channel;
-  } else if (process.env.SPYGLASS_CHROME_PATH !== undefined) {
-    launch.executablePath = process.env.SPYGLASS_CHROME_PATH;
-  } else {
-    launch.channel = process.env.SPYGLASS_CHROME_CHANNEL ?? 'chrome';
-  }
-  const browser = await chromium.launch(launch);
+  const headless = options.headless === true;
+  const args = chromiumLaunchArgs(env);
+  const browser = await launchChromium(chromium, {
+    headless,
+    args,
+    env,
+    ...(options.executablePath !== undefined ? { executablePath: options.executablePath } : {}),
+    ...(options.channel !== undefined ? { channel: options.channel } : {})
+  });
   const context = await browser.newContext();
   let stopTrace: (() => Promise<void>) | undefined;
   if (options.trace === true) {
@@ -186,4 +196,47 @@ function locate(page: Page, selector: string) {
     return frame.locator(`xpath=${last.slice('xpath='.length)}`);
   }
   return frame.locator(last);
+}
+
+async function launchChromium(
+  chromium: typeof import('playwright-core').chromium,
+  options: {
+    headless: boolean;
+    args: string[];
+    executablePath?: string;
+    channel?: string;
+    env: NodeJS.ProcessEnv;
+  }
+): Promise<import('playwright-core').Browser> {
+  const attempts: Array<Parameters<typeof chromium.launch>[0]> = [];
+  const base: Parameters<typeof chromium.launch>[0] = {
+    headless: options.headless,
+    args: options.args
+  };
+  if (options.executablePath !== undefined && options.executablePath.length > 0) {
+    attempts.push({ ...base, executablePath: options.executablePath });
+  }
+  const envPath = options.env.SPYGLASS_CHROME_PATH;
+  if (envPath !== undefined && envPath.length > 0) {
+    attempts.push({ ...base, executablePath: envPath });
+  }
+  if (options.channel !== undefined && options.channel.length > 0) {
+    attempts.push({ ...base, channel: options.channel });
+  }
+  const envChannel = options.env.SPYGLASS_CHROME_CHANNEL;
+  if (envChannel !== undefined && envChannel.length > 0) {
+    attempts.push({ ...base, channel: envChannel });
+  }
+  attempts.push({ ...base, channel: 'chrome' });
+  attempts.push({ ...base });
+  let lastError: unknown;
+  for (const launch of attempts) {
+    try {
+      return await chromium.launch(launch);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`failed to launch Chromium: ${detail}`);
 }

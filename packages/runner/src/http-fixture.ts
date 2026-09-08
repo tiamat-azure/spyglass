@@ -1,0 +1,110 @@
+import { readFile } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { dirname, extname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { LOCAL_CORPUS_SIZE } from './corpus.ts';
+
+const here = dirname(fileURLToPath(import.meta.url));
+export const RUNNER_FIXTURES_DIR = join(here, '../fixtures');
+
+export type FixtureServer = {
+  origin: string;
+  port: number;
+  close: () => Promise<void>;
+};
+
+export async function startFixtureServer(host = '127.0.0.1'): Promise<FixtureServer> {
+  const lot6Html = await readFile(join(RUNNER_FIXTURES_DIR, 'lot6-fixture.html'), 'utf8');
+  const server = createServer((request, response) => {
+    void handle(request, response, lot6Html);
+  });
+  await listen(server, host);
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    throw new Error('fixture server has no address');
+  }
+  const origin = `http://${host}:${String(address.port)}`;
+  return {
+    origin,
+    port: address.port,
+    close: async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  };
+}
+
+async function handle(
+  request: IncomingMessage,
+  response: ServerResponse,
+  lot6Html: string
+): Promise<void> {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  if (url.pathname === '/' || url.pathname === '/lot6-fixture.html') {
+    send(response, 200, 'text/html; charset=utf-8', lot6Html);
+    return;
+  }
+  const site = /^\/site-(\d{2})\/?$/u.exec(url.pathname);
+  if (site?.[1] !== undefined) {
+    const index = Number.parseInt(site[1], 10);
+    if (index >= 1 && index <= LOCAL_CORPUS_SIZE) {
+      send(response, 200, 'text/html; charset=utf-8', localSiteHtml(index));
+      return;
+    }
+  }
+  if (url.pathname === '/tree.html') {
+    send(response, 200, 'text/html; charset=utf-8', '<pre id="tree"></pre>');
+    return;
+  }
+  const ext = extname(url.pathname);
+  if (ext === '.html') {
+    try {
+      const body = await readFile(join(RUNNER_FIXTURES_DIR, url.pathname.slice(1)), 'utf8');
+      send(response, 200, 'text/html; charset=utf-8', body);
+      return;
+    } catch {
+      // fall through
+    }
+  }
+  send(response, 404, 'text/plain; charset=utf-8', 'not found');
+}
+
+export function localSiteHtml(index: number): string {
+  const id = String(index).padStart(2, '0');
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Corpus site ${id}</title>
+  </head>
+  <body>
+    <main>
+      <h1 id="title" data-testid="title">Corpus site ${id}</h1>
+      <p>Local protocol fixture. Marker: SPYGLASS_CORPUS_${id}</p>
+    </main>
+  </body>
+</html>
+`;
+}
+
+function send(response: ServerResponse, status: number, type: string, body: string): void {
+  response.writeHead(status, { 'content-type': type, 'content-length': Buffer.byteLength(body) });
+  response.end(body);
+}
+
+function listen(server: Server, host: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, host, () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+}

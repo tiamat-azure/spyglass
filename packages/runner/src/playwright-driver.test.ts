@@ -1,6 +1,6 @@
 import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
-import { PlaywrightPageDriver } from './playwright-driver.ts';
+import { chromiumLaunchArgs, PlaywrightPageDriver } from './playwright-driver.ts';
 
 describe('PlaywrightPageDriver.goto (L5-ADV-06)', () => {
   function driverWith(): { driver: PlaywrightPageDriver; loaded: string[] } {
@@ -30,5 +30,14 @@ describe('PlaywrightPageDriver.goto (L5-ADV-06)', () => {
     await driver.goto('file:///tmp/page.html');
     expect(loaded[0]).toBe('https://exemple.test/next');
     expect(loaded[1]).toMatch(/^file:/);
+  });
+});
+
+describe('chromiumLaunchArgs (Lot 6 CI / sandbox)', () => {
+  it('adds no-sandbox and disable-gpu from env without path separators', () => {
+    const args = chromiumLaunchArgs({ CI: '1', SPYGLASS_DISABLE_GPU: '1' });
+    expect(args).toContain('--no-sandbox');
+    expect(args).toContain('--disable-gpu');
+    expect(args.every((arg) => !arg.includes('\\') && !arg.includes('/'))).toBe(true);
   });
 });

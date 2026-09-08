@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lot 6 generated-script fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #0b1220;
+        color: #e8eef8;
+      }
+      main {
+        max-width: 36rem;
+        margin: 3rem auto;
+        padding: 1.5rem 2rem;
+        background: #152038;
+        border-radius: 12px;
+      }
+      h1 {
+        margin-top: 0;
+      }
+      button {
+        font: inherit;
+        padding: 0.6rem 1.1rem;
+        border: 0;
+        border-radius: 8px;
+        background: #3d8bfd;
+        color: #fff;
+        cursor: pointer;
+      }
+      #done {
+        display: none;
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #143d2a;
+        border-radius: 8px;
+      }
+      #done.visible {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Lot 6 fixture</h1>
+      <p>Click Start. The generated script should replay this outside Electron.</p>
+      <button type="button" id="go" data-testid="go">Start</button>
+      <p id="done" data-testid="done">Replay target visible</p>
+    </main>
+    <script>
+      document.getElementById("go").addEventListener("click", () => {
+        document.getElementById("done").classList.add("visible");
+      });
+    </script>
+  </body>
+</html>

@@ -203,3 +203,16 @@ export function parseRunnerArgv(
   }
   return parsed;
 }
+
+/**
+ * F-45: generated scripts are headed (visible) unless `--headless` is present.
+ * CI still disables AI recovery (F-60) via `aiRecoveryEnabled`.
+ */
+export function parseGeneratedArgv(
+  argv: readonly string[] = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env
+): ParsedRunnerArgv {
+  const parsed = parseRunnerArgv(argv, env);
+  parsed.headless = argv.includes('--headless');
+  return parsed;
+}

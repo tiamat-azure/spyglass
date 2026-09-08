@@ -2,7 +2,7 @@
   "name": "spyglass",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass monorepo — Lot 5 runner + Lot 4 refine + voice + observer + capture + Electron shell",
+  "description": "Spyglass monorepo — Lot 6 generated script + Lot 5 runner + refine + voice + observer + capture + Electron shell",
   "type": "module",
   "packageManager": "pnpm@10.33.3",
   "engines": {
@@ -24,7 +24,8 @@
     "package": "pnpm --filter @spyglass/app package",
     "capture:shell": "node scripts/capture-empty-shell.mjs",
     "capture:lot0": "node scripts/capture-lot-0.mjs",
-    "observe": "node packages/app/scripts/stagehand-observe.mjs"
+    "observe": "node packages/app/scripts/stagehand-observe.mjs",
+    "measure-corpus": "pnpm --filter @spyglass/runner measure-corpus"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.12",
