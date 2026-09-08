@@ -109,6 +109,9 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
    `packages/runner/src/help-text.ts`. `cli.ts`, `generated-run.ts`, and
    `run.ts` import it (no cycles). Do not duplicate the flag block. Relative
    `--report` wording stays scenario-dir (A19a).
+8. **D35b / L6-035.** `createPlaywrightDriver` is **headed unless
+   `headless === true`**. Visible first (F-45); `--headless` to hide.
+   `spyglass-run` CI default headless (product note 1) is unchanged.
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -353,6 +356,26 @@ Applied on tip `07d6c51174727d3bbcab338b612f3268f1aa1aff`. Product decisions
   not by concatenating `/` onto a raw string that may include query/hash.
 
 Unit tests after this pass: **383 passed, 1 skipped**, 52 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 15 (ask-user locks)
+
+Applied on tip `61af7e5e376c7d57fc6a4789d2cc00f79d606ef2`. Product decisions
+1–5, J1c, J8c, A19a, H29a, and **D35b** are locked.
+
+- **L6-033 / R33a** `abortFinalizeAfterGenerate` aggregates
+  `persistRevision` rollback failures with the original finalize error
+  (no empty catch).
+- **L6-034 / O34a** corpus `--out` must resolve under `repoRoot()`; paths
+  that escape throw (no `/tmp` overwrite).
+- **L6-035 / D35b** `createPlaywrightDriver` headed unless `headless === true`.
+- **L6-036 / C36a** Explicit `executablePath` / `channel` /
+  `SPYGLASS_CHROME_PATH` / `SPYGLASS_CHROME_CHANNEL` fail-fast; failed
+  attempts are written to stderr.
+- **L6-037 / F37a** `@spyglass/runner` keeps public `startFixtureServer` /
+  `FixtureServer` re-exports.
+
+Unit tests after this pass: **388 passed, 1 skipped**, 52 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals

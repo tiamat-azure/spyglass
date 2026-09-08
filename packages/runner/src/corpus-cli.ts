@@ -1,24 +1,38 @@
 import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import type { MeasuredRates } from './corpus.ts';
 import { localCorpusSites, measureCorpus, PUBLIC_CORPUS } from './corpus.ts';
 import { startFixtureServer } from './http-fixture.ts';
 
+function isInsideDir(dir: string, targetPath: string): boolean {
+  const root = resolve(dir);
+  const target = resolve(targetPath);
+  const rel = relative(root, target);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
 export function resolveCorpusOutPath(argv: readonly string[], wave: MeasuredRates['wave']): string {
   const outIndex = argv.indexOf('--out');
   const outArg = outIndex >= 0 ? argv[outIndex + 1] : undefined;
-  if (outArg !== undefined && outArg.length > 0) {
-    return resolve(outArg);
+  const resolved =
+    outArg !== undefined && outArg.length > 0
+      ? resolve(outArg)
+      : resolve(
+          repoRoot(),
+          'docs/lot-6',
+          wave === 'J+1'
+            ? 'measured-rates.j1.json'
+            : wave === 'local-immutable'
+              ? 'measured-rates.local.json'
+              : 'measured-rates.json'
+        );
+  const root = resolve(repoRoot());
+  if (!isInsideDir(root, resolved)) {
+    throw new Error(`--out path escapes the repo: ${resolved}`);
   }
-  const file =
-    wave === 'J+1'
-      ? 'measured-rates.j1.json'
-      : wave === 'local-immutable'
-        ? 'measured-rates.local.json'
-        : 'measured-rates.json';
-  return resolve(repoRoot(), 'docs/lot-6', file);
+  return resolved;
 }
 
 export async function runCorpusCli(

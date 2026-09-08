@@ -392,11 +392,14 @@ export class RefineEngine {
     error: string
   ): Promise<{ ok: false; error: string }> {
     file.status = 'reviewing';
+    let combined = error;
     if (persistReviewing) {
       try {
         await persistRevision(sessionDir, file);
-      } catch {
-        // original finalize error is the one to report
+      } catch (persistError) {
+        const persistDetail =
+          persistError instanceof Error ? persistError.message : String(persistError);
+        combined = `${error}; failed to persist reviewing rollback: ${persistDetail}`;
       }
     }
     try {
@@ -404,7 +407,7 @@ export class RefineEngine {
     } catch {
       // CLI generate still refuses leftover files without a finalized rev
     }
-    return { ok: false, error };
+    return { ok: false, error: combined };
   }
 
   private async writeGeneratedPackage(

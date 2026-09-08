@@ -1,3 +1,4 @@
+import { mkdirSync, unlinkSync } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -476,6 +477,54 @@ describe('RefineEngine', () => {
     await expect(access(join(session.dir, 'generated', 'scenario.json'))).rejects.toMatchObject({
       code: 'ENOENT'
     });
+  });
+
+  it('surfaces persistRevision rollback failure instead of silent diverge (R33a / L6-033)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    session.finalizeScenario = () => {
+      const revPath = join(session.dir, 'refined', 'rev-1.json');
+      unlinkSync(revPath);
+      mkdirSync(revPath);
+      throw new Error('orchestrator explode');
+    };
+    const engine = engineFor(session);
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/orchestrator explode/);
+      expect(failed.error).toMatch(/failed to persist reviewing rollback/i);
+    }
+    expect(session.state).toBe('reviewing');
   });
 
   it('requires explicit confirm above the per-operation smart threshold', async () => {

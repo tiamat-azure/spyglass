@@ -49,6 +49,11 @@ describe('@spyglass/runner package', () => {
     expect(runnerPackageName()).toBe('@spyglass/runner');
     expect(RUNNER_PACKAGE.startsWith('@spyglass/')).toBe(true);
   });
+
+  it('re-exports fixture server APIs (F37a)', async () => {
+    const entry = await import('./index.ts');
+    expect(typeof entry.startFixtureServer).toBe('function');
+  });
 });
 
 describe('F-58 / F-60 CLI flags and CI default', () => {

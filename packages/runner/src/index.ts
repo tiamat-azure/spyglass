@@ -36,6 +36,7 @@ export {
 } from './generate.ts';
 export { generatedHelpText, runGeneratedScript } from './generated-run.ts';
 export type { FixtureServer } from './http-fixture.ts';
+/** F37a: public fixture server API (local corpus / Lot 6 capture). */
 export { startFixtureServer } from './http-fixture.ts';
 export type { LaunchPlaywrightRunInput } from './launch.ts';
 export { launchPlaywrightRun, resolveReportDir } from './launch.ts';

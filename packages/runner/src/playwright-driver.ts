@@ -3,6 +3,7 @@ import type { Browser, BrowserContext, Page } from 'playwright-core';
 import type { PageDriver, PageSnapshot } from './driver.ts';
 
 export type PlaywrightLaunchOptions = {
+  /** D35b / F-45: headed unless this is exactly `true`. Omitted/false stays visible. */
   headless?: boolean;
   baseUrl?: string;
   trace?: boolean;
@@ -161,6 +162,7 @@ export async function createPlaywrightDriver(
     const page = context.pages()[0] ?? (await context.newPage());
     return new PlaywrightPageDriver(page, { browser, context });
   }
+  // D35b: headed by default; only `headless: true` hides the window (F-45).
   const headless = options.headless === true;
   const args = chromiumLaunchArgs(env);
   const browser = await launchChromium(chromium, {
@@ -213,7 +215,67 @@ function locate(page: Page, selector: string) {
   return frame.locator(last);
 }
 
-async function launchChromium(
+export type ChromiumLaunchAttempt = {
+  failFast: boolean;
+  label: string;
+  launch: {
+    headless: boolean;
+    args: string[];
+    executablePath?: string;
+    channel?: string;
+  };
+};
+
+/** Build the Chromium launch cascade (C36a). Explicit path/channel attempts fail-fast. */
+export function chromiumLaunchAttempts(options: {
+  headless: boolean;
+  args: string[];
+  executablePath?: string;
+  channel?: string;
+  env: NodeJS.ProcessEnv;
+}): ChromiumLaunchAttempt[] {
+  const base = { headless: options.headless, args: options.args };
+  const attempts: ChromiumLaunchAttempt[] = [];
+  if (options.executablePath !== undefined && options.executablePath.length > 0) {
+    attempts.push({
+      failFast: true,
+      label: 'executablePath',
+      launch: { ...base, executablePath: options.executablePath }
+    });
+  }
+  const envPath = options.env.SPYGLASS_CHROME_PATH;
+  if (envPath !== undefined && envPath.length > 0) {
+    attempts.push({
+      failFast: true,
+      label: 'SPYGLASS_CHROME_PATH',
+      launch: { ...base, executablePath: envPath }
+    });
+  }
+  if (options.channel !== undefined && options.channel.length > 0) {
+    attempts.push({
+      failFast: true,
+      label: 'channel',
+      launch: { ...base, channel: options.channel }
+    });
+  }
+  const envChannel = options.env.SPYGLASS_CHROME_CHANNEL;
+  if (envChannel !== undefined && envChannel.length > 0) {
+    attempts.push({
+      failFast: true,
+      label: 'SPYGLASS_CHROME_CHANNEL',
+      launch: { ...base, channel: envChannel }
+    });
+  }
+  attempts.push({
+    failFast: false,
+    label: 'channel=chrome',
+    launch: { ...base, channel: 'chrome' }
+  });
+  attempts.push({ failFast: false, label: 'bundled', launch: { ...base } });
+  return attempts;
+}
+
+export async function launchChromium(
   chromium: typeof import('playwright-core').chromium,
   options: {
     headless: boolean;
@@ -223,35 +285,20 @@ async function launchChromium(
     env: NodeJS.ProcessEnv;
   }
 ): Promise<import('playwright-core').Browser> {
-  const attempts: Array<Parameters<typeof chromium.launch>[0]> = [];
-  const base: Parameters<typeof chromium.launch>[0] = {
-    headless: options.headless,
-    args: options.args
-  };
-  if (options.executablePath !== undefined && options.executablePath.length > 0) {
-    attempts.push({ ...base, executablePath: options.executablePath });
-  }
-  const envPath = options.env.SPYGLASS_CHROME_PATH;
-  if (envPath !== undefined && envPath.length > 0) {
-    attempts.push({ ...base, executablePath: envPath });
-  }
-  if (options.channel !== undefined && options.channel.length > 0) {
-    attempts.push({ ...base, channel: options.channel });
-  }
-  const envChannel = options.env.SPYGLASS_CHROME_CHANNEL;
-  if (envChannel !== undefined && envChannel.length > 0) {
-    attempts.push({ ...base, channel: envChannel });
-  }
-  attempts.push({ ...base, channel: 'chrome' });
-  attempts.push({ ...base });
-  let lastError: unknown;
-  for (const launch of attempts) {
+  const attempts = chromiumLaunchAttempts(options);
+  const errors: string[] = [];
+  for (const attempt of attempts) {
     try {
-      return await chromium.launch(launch);
+      return await chromium.launch(attempt.launch);
     } catch (error) {
-      lastError = error;
+      const detail = error instanceof Error ? error.message : String(error);
+      const line = `${attempt.label}: ${detail}`;
+      errors.push(line);
+      process.stderr.write(`warn: Chromium launch failed (${attempt.label}): ${detail}\n`);
+      if (attempt.failFast) {
+        throw new Error(`failed to launch Chromium (${attempt.label}): ${detail}`);
+      }
     }
   }
-  const detail = lastError instanceof Error ? lastError.message : String(lastError);
-  throw new Error(`failed to launch Chromium: ${detail}`);
+  throw new Error(`failed to launch Chromium: ${errors.join('; ')}`);
 }

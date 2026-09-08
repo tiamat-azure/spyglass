@@ -51,9 +51,15 @@ describe('Lot 6 measurement protocol corpus', () => {
     expect(resolveCorpusOutPath([], 'local-immutable')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.local.json')
     );
-    expect(resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).toBe(
-      resolve('/tmp/custom-j1.json')
+    expect(resolveCorpusOutPath(['--out', 'docs/lot-6/custom-j1.json'], 'J+1')).toBe(
+      resolve(repoRoot(), 'docs/lot-6/custom-j1.json')
     );
+    expect(() => resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).toThrow(
+      /escapes the repo/
+    );
+    expect(() =>
+      resolveCorpusOutPath(['--out', resolve(repoRoot(), '..', 'spyglass-out-escape.json')], 'J+0')
+    ).toThrow(/escapes the repo/);
   });
 
   it('measure-corpus script uses --experimental-transform-types (L6-007)', async () => {

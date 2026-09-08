@@ -2,6 +2,8 @@ import type { Page } from 'playwright-core';
 import { describe, expect, it } from 'vitest';
 import {
   chromiumLaunchArgs,
+  chromiumLaunchAttempts,
+  launchChromium,
   PlaywrightPageDriver,
   screenshotFormatForPath
 } from './playwright-driver.ts';
@@ -71,5 +73,78 @@ describe('chromiumLaunchArgs (Lot 6 CI / sandbox)', () => {
     expect(args).toContain('--no-sandbox');
     expect(args).toContain('--disable-gpu');
     expect(args.every((arg) => !arg.includes('\\') && !arg.includes('/'))).toBe(true);
+  });
+});
+
+describe('createPlaywrightDriver headless (D35b)', () => {
+  it('treats omitted and false headless as headed; only true is headless', () => {
+    const src = chromiumLaunchAttempts({ headless: false, args: [], env: {} });
+    expect(src[0]?.launch.headless).toBe(false);
+    expect(chromiumLaunchAttempts({ headless: true, args: [], env: {} })[0]?.launch.headless).toBe(
+      true
+    );
+  });
+});
+
+describe('launchChromium cascade (C36a)', () => {
+  it('fail-fast on SPYGLASS_CHROME_PATH without falling through', async () => {
+    const plan = chromiumLaunchAttempts({
+      headless: true,
+      args: [],
+      env: { SPYGLASS_CHROME_PATH: '/nope/chrome' }
+    });
+    expect(plan[0]).toMatchObject({ failFast: true, label: 'SPYGLASS_CHROME_PATH' });
+    expect(plan.some((row) => row.label === 'bundled')).toBe(true);
+    const launches: unknown[] = [];
+    const chromium = {
+      launch: async (opts: unknown) => {
+        launches.push(opts);
+        throw new Error('missing binary');
+      }
+    };
+    const chunks: string[] = [];
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      chunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await expect(
+        launchChromium(chromium as never, {
+          headless: true,
+          args: [],
+          env: { SPYGLASS_CHROME_PATH: '/nope/chrome' }
+        })
+      ).rejects.toThrow(/SPYGLASS_CHROME_PATH/);
+    } finally {
+      process.stderr.write = write;
+    }
+    expect(launches).toHaveLength(1);
+    expect(chunks.join('')).toMatch(/SPYGLASS_CHROME_PATH/);
+  });
+
+  it('fail-fast on explicit channel', async () => {
+    const launches: unknown[] = [];
+    const chromium = {
+      launch: async (opts: unknown) => {
+        launches.push(opts);
+        throw new Error('no channel');
+      }
+    };
+    const write = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (() => true) as typeof process.stderr.write;
+    try {
+      await expect(
+        launchChromium(chromium as never, {
+          headless: true,
+          args: [],
+          channel: 'chrome-beta',
+          env: {}
+        })
+      ).rejects.toThrow(/channel/);
+    } finally {
+      process.stderr.write = write;
+    }
+    expect(launches).toHaveLength(1);
   });
 });

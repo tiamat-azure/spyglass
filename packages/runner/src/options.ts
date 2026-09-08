@@ -207,6 +207,7 @@ export function parseRunnerArgv(
 /**
  * F-45: generated scripts are headed (visible) unless `--headless` is present.
  * CI still disables AI recovery (F-60) via `aiRecoveryEnabled`.
+ * D35b: `createPlaywrightDriver` also stays headed unless `headless === true`.
  */
 export function parseGeneratedArgv(
   argv: readonly string[] = process.argv.slice(2),
