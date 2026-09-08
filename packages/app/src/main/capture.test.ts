@@ -547,6 +547,7 @@ describe('lot 3 voice journal', () => {
     expect(before?.voice?.relation).toBe('before');
     expect(before?.voice?.audioRef).toBeNull();
     expect(validateRawEvent(before).valid).toBe(true);
+    expect((orch as unknown as { voicePcm: Map<string, Buffer> }).voicePcm.size).toBe(0);
     await (
       orch as unknown as { commitProbeEvent: (wire: Record<string, unknown>) => Promise<void> }
     ).commitProbeEvent({
@@ -568,6 +569,7 @@ describe('lot 3 voice journal', () => {
     });
     expect(after?.voice?.relation).toBe('after');
     expect(after?.voice?.correlatedEventId).toMatch(/^evt_/);
+    expect((orch as unknown as { voicePcm: Map<string, Buffer> }).voicePcm.size).toBe(0);
     await orch.stop();
     const sessions = await readdir(root);
     const sessionDir = join(root, sessions[0] ?? '');

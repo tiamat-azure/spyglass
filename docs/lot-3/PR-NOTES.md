@@ -91,8 +91,13 @@ stub binary** unit test that writes a `.txt` transcript with no HTTP.
 
 ### Adversarial notes
 
-- Guest `WebContentsView` still cannot obtain `media`. Chrome renderer may,
-  for the mic only.
+- Guest `WebContentsView` still cannot obtain `media`. Chrome renderer may
+  obtain **microphone/audio only** (`mediaTypes: ['audio']`); camera or mixed
+  audio+video requests are denied. Blanket `permission === 'media'` without
+  audio-only types is denied.
+- `AUDIO_RETENTION=none` does not keep PCM in `voicePcm` for the session.
+- Real-mic `getUserMedia` failure does not fall back to fake PCM; the live
+  strip shows the error and capture stops.
 - Sidecar binds `127.0.0.1`. Upgrade requests with a non-local Host header are
   dropped.
 - `raw.jsonl` stays append-only. Correlation never rewrites a previous voice

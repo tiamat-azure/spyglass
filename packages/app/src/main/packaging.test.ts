@@ -133,5 +133,11 @@ describe('packaged Observe', () => {
     expect(orch).toContain('audioRef: null');
     const bridge = readFileSync(join(appRoot, 'src/main/voice-bridge.ts'), 'utf8');
     expect(bridge).toContain('ws://127.0.0.1');
+    expect(voiceUi).not.toMatch(/catch\s*\{[\s\S]{0,80}pumpFake\(\)/);
+    expect(voiceUi).toContain('createGain');
+    expect(voiceUi).toContain('gain.value = 0');
+    const install = readFileSync(join(appRoot, 'src/main/web-security-install.ts'), 'utf8');
+    expect(install).toContain('mediaTypes');
+    expect(orch).toContain("this.audioRetention !== 'none'");
   });
 });

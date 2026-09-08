@@ -50,6 +50,7 @@ export function attachVoiceCapture(
   let stream: MediaStream | undefined;
   let audioContext: AudioContext | undefined;
   let processor: ScriptProcessorNode | undefined;
+  let muteGain: GainNode | undefined;
   const phase = { n: 0 };
 
   const setMicState = (state: string): void => {
@@ -67,6 +68,8 @@ export function attachVoiceCapture(
     }
     processor?.disconnect();
     processor = undefined;
+    muteGain?.disconnect();
+    muteGain = undefined;
     void audioContext?.close();
     audioContext = undefined;
     stream?.getTracks().forEach((track) => {
@@ -99,27 +102,36 @@ export function attachVoiceCapture(
       api.voice.frame(pcm.buffer);
     };
     source.connect(processor);
-    processor.connect(audioContext.destination);
+    muteGain = audioContext.createGain();
+    muteGain.gain.value = 0;
+    processor.connect(muteGain);
+    muteGain.connect(audioContext.destination);
   };
 
-  const begin = async (): Promise<void> => {
+  const begin = async (): Promise<boolean> => {
     const result = await api.voice.start(mode);
     if (!result.ok) {
       options.liveEl.hidden = false;
       options.liveEl.textContent = result.error ?? 'dictée indisponible';
-      return;
+      return false;
     }
     options.liveEl.hidden = false;
     options.liveEl.textContent = 'Dictée en cours…';
     options.liveEl.dataset.kind = 'voice.partial';
     if (result.fakeCapture) {
       pumpFake();
-    } else {
-      try {
-        await pumpMic();
-      } catch {
-        pumpFake();
-      }
+      return true;
+    }
+    try {
+      await pumpMic();
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.length > 0 ? error.message : 'micro indisponible';
+      options.liveEl.hidden = false;
+      options.liveEl.dataset.kind = 'voice.error';
+      options.liveEl.textContent = message;
+      return false;
     }
   };
 
@@ -164,7 +176,13 @@ export function attachVoiceCapture(
       }
       holding = true;
       setMicState('holding');
-      await begin();
+      const started = await begin();
+      if (!started) {
+        holding = false;
+        setMicState('idle');
+        await end();
+        return;
+      }
       if (!holding) {
         await end();
       }
@@ -189,7 +207,12 @@ export function attachVoiceCapture(
       }
       holding = true;
       setMicState('listening');
-      await begin();
+      const started = await begin();
+      if (!started) {
+        holding = false;
+        setMicState('idle');
+        await end();
+      }
     },
     dispose: () => {
       stopGraph();

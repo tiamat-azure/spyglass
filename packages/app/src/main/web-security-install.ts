@@ -30,15 +30,21 @@ function hardenSession(ses: Session): void {
     return;
   }
   hardenedSessions.add(ses);
-  ses.setPermissionRequestHandler((contents, permission, callback) => {
+  ses.setPermissionRequestHandler((contents, permission, callback, details) => {
     const isChrome = contents.session === session.defaultSession;
-    callback(allowPermission({ isChrome, permission }));
+    const mediaTypes =
+      'mediaTypes' in details && Array.isArray(details.mediaTypes) ? details.mediaTypes : undefined;
+    callback(allowPermission({ isChrome, permission, mediaTypes }));
   });
-  ses.setPermissionCheckHandler((contents, permission) => {
+  ses.setPermissionCheckHandler((contents, permission, _requestingOrigin, details) => {
     if (contents === undefined || contents === null) {
       return false;
     }
     const isChrome = contents.session === session.defaultSession;
-    return allowPermission({ isChrome, permission: String(permission) });
+    const mediaType =
+      details !== undefined && 'mediaType' in details && typeof details.mediaType === 'string'
+        ? details.mediaType
+        : undefined;
+    return allowPermission({ isChrome, permission: String(permission), mediaType });
   });
 }

@@ -447,7 +447,7 @@ export class SessionOrchestrator {
       if (correlation.correlatedStepIndex !== undefined) {
         voice.correlatedStepIndex = correlation.correlatedStepIndex;
       }
-      if (input.pcm !== undefined && input.pcm.length > 0) {
+      if (input.pcm !== undefined && input.pcm.length > 0 && this.audioRetention !== 'none') {
         this.voicePcm.set(id, input.pcm);
         if (this.audioRetention === 'all' && this.retention !== undefined) {
           voice.audioRef = await this.retention.writeAudio(id, pcm16ToWav(input.pcm));

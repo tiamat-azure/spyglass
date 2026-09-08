@@ -26,8 +26,26 @@ describe('web-security C1 defaults', () => {
 
   it('allows microphone only on the chrome renderer, never the guest', () => {
     expect(isMediaPermission('media')).toBe(true);
-    expect(allowPermission({ isChrome: true, permission: 'media' })).toBe(true);
-    expect(allowPermission({ isChrome: false, permission: 'media' })).toBe(false);
+    expect(allowPermission({ isChrome: true, permission: 'microphone' })).toBe(true);
+    expect(allowPermission({ isChrome: true, permission: 'audioCapture' })).toBe(true);
+    expect(allowPermission({ isChrome: true, permission: 'media', mediaTypes: ['audio'] })).toBe(
+      true
+    );
+    expect(allowPermission({ isChrome: true, permission: 'media', mediaType: 'audio' })).toBe(true);
+    expect(allowPermission({ isChrome: true, permission: 'media' })).toBe(false);
+    expect(allowPermission({ isChrome: true, permission: 'media', mediaTypes: ['video'] })).toBe(
+      false
+    );
+    expect(
+      allowPermission({
+        isChrome: true,
+        permission: 'media',
+        mediaTypes: ['audio', 'video']
+      })
+    ).toBe(false);
+    expect(allowPermission({ isChrome: false, permission: 'media', mediaTypes: ['audio'] })).toBe(
+      false
+    );
     expect(allowPermission({ isChrome: true, permission: 'notifications' })).toBe(false);
   });
 });
