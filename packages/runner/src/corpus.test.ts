@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
 import {
-  LOCAL_CORPUS_SIZE,
   corpusWaveMode,
+  LOCAL_CORPUS_SIZE,
   localCorpusSites,
   measureCorpus,
   PUBLIC_CORPUS
