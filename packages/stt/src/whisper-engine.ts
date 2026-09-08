@@ -1,5 +1,5 @@
-import { type ChildProcess, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
+import { closeSync, existsSync, openSync, readSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -101,6 +101,76 @@ function parseWhisperText(stdout: string, txtFile?: string): string {
   return last.trim();
 }
 
+function readFileHead(path: string, bytes = 80): string {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, 'r');
+    const buf = Buffer.alloc(bytes);
+    const n = readSync(fd, buf, 0, bytes, 0);
+    return buf.subarray(0, n).toString('utf8');
+  } catch {
+    return '';
+  } finally {
+    if (fd !== undefined) {
+      closeSync(fd);
+    }
+  }
+}
+
+function isNodeCliScript(bin: string): boolean {
+  const lower = bin.toLowerCase();
+  if (lower.endsWith('.js') || lower.endsWith('.cjs') || lower.endsWith('.mjs')) {
+    return true;
+  }
+  const line = (readFileHead(bin).split(/\r?\n/u, 1)[0] ?? '').trim();
+  return line.startsWith('#!') && /\bnode\b/iu.test(line);
+}
+
+function isWindowsBatch(bin: string): boolean {
+  const lower = bin.toLowerCase();
+  return lower.endsWith('.cmd') || lower.endsWith('.bat');
+}
+
+function whisperChildEnv(): NodeJS.ProcessEnv {
+  const keys = [
+    'PATH',
+    'HOME',
+    'TMPDIR',
+    'TEMP',
+    'TMP',
+    'USERPROFILE',
+    'SystemRoot',
+    'SYSTEMROOT',
+    'WINDIR',
+    'PATHEXT',
+    'COMSPEC'
+  ] as const;
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
+function spawnWhisperCli(bin: string, args: string[]): ChildProcess {
+  const spawnOpts: SpawnOptions = {
+    env: whisperChildEnv(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
+    windowsHide: true
+  };
+  if (isNodeCliScript(bin)) {
+    return spawn(process.execPath, [bin, ...args], spawnOpts);
+  }
+  if (process.platform === 'win32' && isWindowsBatch(bin)) {
+    return spawn(bin, args, { ...spawnOpts, shell: true });
+  }
+  return spawn(bin, args, spawnOpts);
+}
+
 export async function runWhisperCli(options: {
   bin: string;
   model: string;
@@ -132,15 +202,7 @@ export async function runWhisperCli(options: {
       outBase
     ];
     const text = await new Promise<string>((resolve, reject) => {
-      const child = spawn(options.bin, args, {
-        env: {
-          PATH: process.env.PATH,
-          HOME: process.env.HOME,
-          TMPDIR: process.env.TMPDIR
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        detached: true
-      });
+      const child = spawnWhisperCli(options.bin, args);
       options.onSpawn?.(child);
       let stdout = '';
       let stderr = '';

@@ -1,4 +1,4 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -399,27 +399,9 @@ describe('@spyglass/stt', () => {
   it('whisper engine invokes a local stub binary and never opens a network URL', async () => {
     const dir = join(tmpdir(), `spyglass-whisper-stub-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });
-    const bin = join(dir, 'whisper-cli');
+    const bin = await writeWhisperCliStub(dir);
     const model = join(dir, 'ggml-small-q5_1.bin');
     await writeFile(model, 'fake-weights');
-    await writeFile(
-      bin,
-      `#!/bin/sh
-set -eu
-out=""
-wav=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -of) out="$2"; shift 2 ;;
-    -f) wav="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-echo "whisper stub ran on $wav" >&2
-printf 'transcription locale\\n' > "\${out}.txt"
-`
-    );
-    await chmod(bin, 0o755);
     const engine = createWhisperEngine({ bin, model, timeoutMs: 4000 });
     engine.begin('u1');
     engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
@@ -438,16 +420,9 @@ printf 'transcription locale\\n' > "\${out}.txt"
   it('abort and dispose kill in-flight whisper-cli children', async () => {
     const dir = join(tmpdir(), `spyglass-whisper-abort-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });
-    const bin = join(dir, 'whisper-cli');
+    const bin = await writeWhisperCliStub(dir, { hangMs: 30_000 });
     const model = join(dir, 'ggml-small-q5_1.bin');
     await writeFile(model, 'fake-weights');
-    await writeFile(
-      bin,
-      `#!/bin/sh
-exec sleep 30
-`
-    );
-    await chmod(bin, 0o755);
     const engine = createWhisperEngine({ bin, model, timeoutMs: 40_000 });
     engine.begin('slow');
     const started = Date.now();
@@ -473,25 +448,9 @@ exec sleep 30
   it('does not SIGKILL another utterance’s in-flight whisper finalize', async () => {
     const dir = join(tmpdir(), `spyglass-whisper-overlap-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });
-    const bin = join(dir, 'whisper-cli');
+    const bin = await writeWhisperCliStub(dir, { delayMs: 400 });
     const model = join(dir, 'ggml-small-q5_1.bin');
     await writeFile(model, 'fake-weights');
-    await writeFile(
-      bin,
-      `#!/bin/sh
-set -eu
-out=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -of) out="$2"; shift 2 ;;
-    *) shift ;;
-  esac
-done
-sleep 0.4
-printf 'transcription locale\\n' > "\${out}.txt"
-`
-    );
-    await chmod(bin, 0o755);
     const engine = createWhisperEngine({ bin, model, timeoutMs: 8_000 });
     try {
       engine.begin('u1');
@@ -511,3 +470,52 @@ printf 'transcription locale\\n' > "\${out}.txt"
     expect(parseClientMessage({ type: 'hello', sampleRate: 16000 })?.type).toBe('hello');
   });
 });
+
+/** Portable whisper-cli stub: Node CJS, not a shebang `sh` file Windows cannot spawn. */
+async function writeWhisperCliStub(
+  dir: string,
+  options: { delayMs?: number; hangMs?: number } = {}
+): Promise<string> {
+  const bin = join(dir, 'whisper-cli.cjs');
+  const delayMs = options.delayMs ?? 0;
+  const hangMs = options.hangMs ?? 0;
+  const lines = [
+    "'use strict';",
+    "const { writeFileSync } = require('node:fs');",
+    'const argv = process.argv.slice(2);',
+    "let out = '';",
+    "let wav = '';",
+    'for (let i = 0; i < argv.length; i += 1) {',
+    "  if (argv[i] === '-of' && argv[i + 1] !== undefined) {",
+    '    out = argv[i + 1];',
+    '    i += 1;',
+    '    continue;',
+    '  }',
+    "  if (argv[i] === '-f' && argv[i + 1] !== undefined) {",
+    '    wav = argv[i + 1];',
+    '    i += 1;',
+    '  }',
+    '}',
+    `const delayMs = ${String(delayMs)};`,
+    `const hangMs = ${String(hangMs)};`,
+    'const emit = () => {',
+    '  if (wav.length > 0) {',
+    "    process.stderr.write('whisper stub ran on ' + wav + '\\n');",
+    '  }',
+    "  const text = 'transcription locale\\n';",
+    '  if (out.length > 0) {',
+    "    writeFileSync(out + '.txt', text);",
+    '  }',
+    '  process.stdout.write(text);',
+    '};',
+    'if (hangMs > 0) {',
+    '  setTimeout(() => undefined, hangMs);',
+    '} else if (delayMs > 0) {',
+    '  setTimeout(emit, delayMs);',
+    '} else {',
+    '  emit();',
+    '}'
+  ];
+  await writeFile(bin, `${lines.join('\n')}\n`);
+  return bin;
+}
