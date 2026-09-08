@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { validateRefinedStep } from '@spyglass/contracts';
@@ -43,6 +43,8 @@ export type RefineEngineDeps = {
   confirmThreshold: () => number;
   offline: () => boolean;
   observe?: () => Promise<{ ok: boolean; observations: StagehandObservation[] }>;
+  /** Test seam: invoked after persistRevision, before the ownership check. */
+  afterPersist?: () => void | Promise<void>;
 };
 
 const MIN_OBSERVE_DESCRIPTION = 3;
@@ -72,6 +74,26 @@ export function stableObserveKeys(selector: string): Set<string> {
   return keys;
 }
 
+function tokenSetEqual(left: string, right: string): boolean {
+  const tokensLeft = new Set(left.split(/\s+/u).filter((token) => token.length > 0));
+  const tokensRight = new Set(right.split(/\s+/u).filter((token) => token.length > 0));
+  if (tokensLeft.size === 0 || tokensLeft.size !== tokensRight.size) {
+    return false;
+  }
+  for (const token of tokensLeft) {
+    if (!tokensRight.has(token)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Score an observation against a refined step (LOT4-R3c).
+ * Exact selector / stable id|testid match, or a strict description match
+ * (full equality or whitespace token-set equality). Weak substrings
+ * ("lien" ⊆ "lien vers accueil") score 0 and must not write fallbackSelectors.
+ */
 export function observeMatchScore(observation: StagehandObservation, step: RefinedStep): number {
   const obsSel = observation.selector?.trim() ?? '';
   const candidates = [
@@ -100,9 +122,9 @@ export function observeMatchScore(observation: StagehandObservation, step: Refin
   if (
     obsDesc.length >= MIN_OBSERVE_DESCRIPTION &&
     stepDesc.length >= MIN_OBSERVE_DESCRIPTION &&
-    (obsDesc === stepDesc || obsDesc.includes(stepDesc) || stepDesc.includes(obsDesc))
+    tokenSetEqual(obsDesc, stepDesc)
   ) {
-    return 50;
+    return 40;
   }
   return 0;
 }
@@ -306,7 +328,9 @@ export class RefineEngine {
         steps
       };
       await persistRevision(sessionDir, file);
+      await this.deps.afterPersist?.();
       if (!this.stillOwns(token, sessionId)) {
+        await discardOrphanRevision(sessionDir, file.revision);
         return this.abandonStale(sessionId, hadRevision);
       }
       const afterHash = await rawFingerprint(sessionDir);
@@ -530,14 +554,37 @@ export function toStepView(step: RefinedStep): RefinedStepView {
   return view;
 }
 
+function revisionFileName(revision: number): string {
+  return `rev-${String(revision)}.json`;
+}
+
+function revisionPath(sessionDir: string, revision: number): string {
+  return join(sessionDir, 'refined', revisionFileName(revision));
+}
+
 async function persistRevision(sessionDir: string, file: RefinedRevisionFile): Promise<void> {
   const dir = join(sessionDir, 'refined');
   await mkdir(dir, { recursive: true });
-  const path = join(dir, `rev-${String(file.revision)}.json`);
-  await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, 'utf8');
+  await writeFile(
+    revisionPath(sessionDir, file.revision),
+    `${JSON.stringify(file, null, 2)}\n`,
+    'utf8'
+  );
 }
 
-async function nextRevision(sessionDir: string): Promise<number> {
+/** Drop a late-abort `rev-N.json` so `nextRevision` can reuse N. */
+export async function discardOrphanRevision(sessionDir: string, revision: number): Promise<void> {
+  try {
+    await unlink(revisionPath(sessionDir, revision));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
+export async function nextRevision(sessionDir: string): Promise<number> {
   const dir = join(sessionDir, 'refined');
   try {
     const names = await readdir(dir);

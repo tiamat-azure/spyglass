@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { canFinalize, createMockTransport, LlmGateway, refineFromRaw } from '@spyglass/llm';
 import { describe, expect, it } from 'vitest';
-import { applyCorrelatedObserveEnrichment, RefineEngine } from './refine-engine.ts';
+import {
+  applyCorrelatedObserveEnrichment,
+  nextRevision,
+  observeMatchScore,
+  RefineEngine
+} from './refine-engine.ts';
 import type { RecorderState, SessionOrchestrator } from './session-orchestrator.ts';
 
 type FakeSession = {
@@ -428,6 +433,50 @@ describe('RefineEngine', () => {
     await expect(readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')).rejects.toThrow();
   });
 
+  it('deletes a late-abort rev-N.json so nextRevision does not skip the orphan (P2-3)', async () => {
+    const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
+    const steps = refineFromRaw(session.events, 'balanced');
+    let trip = true;
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps,
+        source: 'smart',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false,
+      afterPersist: async () => {
+        if (trip) {
+          trip = false;
+          engine.reset();
+        }
+      }
+    });
+    const aborted = await engine.run('balanced', false);
+    expect(aborted.ok).toBe(false);
+    if (!aborted.ok) {
+      expect(aborted.error).toMatch(/aborted/);
+    }
+    expect(engine.currentRevision()).toBeUndefined();
+    expect(session.state).toBe('sealed');
+    await expect(readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')).rejects.toThrow();
+    expect(await nextRevision(session.dir)).toBe(1);
+
+    const retry = await engine.run('balanced', false);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) {
+      return;
+    }
+    expect(retry.revision.revision).toBe(1);
+    expect(engine.currentRevision()?.revision).toBe(1);
+    expect(session.state).toBe('reviewing');
+  });
+
   it('rejects sourceEvents that are retracted (LOT4-R4)', async () => {
     const events: RawEvent[] = [
       click('evt_000001', 1, 'https://app.example.test/a', 1),
@@ -557,5 +606,67 @@ describe('applyCorrelatedObserveEnrichment (LOT4-R3c)', () => {
     expect(applied).toBe(1);
     expect(empty.action.descriptor.fallbackSelectors).toBeUndefined();
     expect(later.action.descriptor.fallbackSelectors).toEqual(['#later-weak']);
+  });
+
+  it('does not write fallbackSelectors on a weak description substring (lien ⊆ lien vers accueil)', () => {
+    const step: RefinedStep = {
+      index: 0,
+      intent: 'Je clique sur lien',
+      action: {
+        type: 'click',
+        descriptor: {
+          type: 'click',
+          selector: '',
+          selectorStrategy: 'css',
+          description: 'lien'
+        }
+      },
+      verification: {
+        type: 'elementVisible',
+        expected: '',
+        strength: 'weak',
+        weakReason: 'ambiguous-target',
+        confirmedByUser: false
+      },
+      sourceEvents: ['evt_000001']
+    };
+    expect(
+      observeMatchScore({ selector: '#accueil', description: 'lien vers accueil' }, step)
+    ).toBe(0);
+    const applied = applyCorrelatedObserveEnrichment(
+      [step],
+      [{ selector: '#accueil', description: 'lien vers accueil' }]
+    );
+    expect(applied).toBe(0);
+    expect(step.action.descriptor.fallbackSelectors).toBeUndefined();
+    expect(step.action.descriptor.selector).toBe('');
+  });
+
+  it('still attaches on exact selector or token-set-equal description', () => {
+    const bySelector = weakCssStep(0, '#accueil', 'Je clique sur accueil');
+    expect(observeMatchScore({ selector: '#accueil', description: 'autre texte' }, bySelector)).toBe(
+      100
+    );
+    const byDescription: RefinedStep = {
+      ...weakCssStep(0, '', 'Je clique sur lien'),
+      action: {
+        type: 'click',
+        descriptor: {
+          type: 'click',
+          selector: '',
+          selectorStrategy: 'css',
+          description: 'lien vers accueil'
+        }
+      }
+    };
+    expect(
+      observeMatchScore({ selector: '#accueil', description: 'accueil lien vers' }, byDescription)
+    ).toBe(40);
+    const applied = applyCorrelatedObserveEnrichment(
+      [byDescription],
+      [{ selector: '#accueil', description: 'accueil lien vers' }]
+    );
+    expect(applied).toBe(1);
+    expect(byDescription.action.descriptor.fallbackSelectors).toEqual(['#accueil']);
   });
 });

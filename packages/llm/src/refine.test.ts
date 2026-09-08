@@ -271,6 +271,30 @@ describe('refineFromRaw', () => {
     expect(bound[0]?.verification.weakReason).toBe('observable-state-change');
     expect(bound[0]?.intent).toBe('Je clique sur lot1-link');
   });
+
+  it('ignores model actionType so local action and verification stay paired (P2-2)', () => {
+    const events: RawEvent[] = [fill('evt_000004', 4)];
+    const bound = bindLlmProposal(
+      [
+        {
+          intent: 'Je saisis Ada',
+          actionType: 'click',
+          sourceEvents: ['evt_000004']
+        }
+      ],
+      events,
+      'balanced'
+    );
+    expect('error' in bound).toBe(false);
+    if ('error' in bound) {
+      return;
+    }
+    expect(bound[0]?.action.type).toBe('fill');
+    expect(bound[0]?.action.descriptor.type).toBe('fill');
+    expect(bound[0]?.verification.type).toBe('valueEquals');
+    expect(bound[0]?.verification.weakReason).toBe('value-assertion');
+    expect(bound[0]?.intent).toBe('Je saisis Ada');
+  });
 });
 
 describe('descriptor sufficiency (I-07)', () => {

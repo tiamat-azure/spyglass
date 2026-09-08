@@ -278,10 +278,9 @@ export function bindLlmProposal(
     if (intent.length > 0) {
       local.intent = intent;
     }
-    if (proposal.actionType !== local.action.type) {
-      local.action.type = proposal.actionType;
-      local.action.descriptor = { ...local.action.descriptor, type: proposal.actionType };
-    }
+    // Ignore model actionType. Local action + classifyVerification stay paired
+    // (fill + valueEquals). Overlaying click onto a fill would leave rev-N.json
+    // with a mismatched action/verification pair.
     // F-44 / ADR-0007: verification type, expected, and strength stay local.
     applyStrengthGuard(local, grouped, events);
     if (aggressiveness === 'aggressive' && local.verification.strength === 'weak') {

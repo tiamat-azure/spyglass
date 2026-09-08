@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (262 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (266 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -111,10 +111,16 @@ on this branch. CI uses the mock LLM transport (no live keys).
   `this.current` for a foreign sessionId.
 - **LOT4-R4:** engine F-42 gate uses `allowedRefineIds` (F-19 retracted
   excluded), not every raw id.
-- **LOT4-R3c:** `observe()` enrichment is target-correlated (selector / stable
-  id / testid / description). No array-index assignment. Unmatched steps
-  stay unenriched; a wrong Stagehand selector is never written to
-  `fallbackSelectors` / `rev-N.json`.
+- **LOT4-R3c:** `observe()` enrichment is target-correlated (exact selector /
+  stable id / testid, or description full/token-set equality). No array-index
+  assignment. Weak substrings (`lien` ⊆ `lien vers accueil`) do not write
+  `fallbackSelectors`. Unmatched steps stay unenriched.
+- **P2-1:** `observeMatchScore` no longer treats description substring as a
+  match.
+- **P2-2:** `bindLlmProposal` ignores model `actionType`; local action +
+  `classifyVerification` stay paired in `rev-N.json`.
+- **P2-3:** late abort after `persistRevision` deletes the orphan `rev-N.json`
+  so `nextRevision` reuses N; no reviewing orphan on disk.
 
 ## Screenshots (committed)
 
