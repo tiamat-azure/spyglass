@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
-import { canFinalize, createMockTransport, LlmGateway } from '@spyglass/llm';
+import { canFinalize, createMockTransport, LlmGateway, refineFromRaw } from '@spyglass/llm';
 import { describe, expect, it } from 'vitest';
 import { RefineEngine } from './refine-engine.ts';
 import type { RecorderState, SessionOrchestrator } from './session-orchestrator.ts';
@@ -305,5 +305,127 @@ describe('RefineEngine', () => {
     });
     await skip.run('balanced', true);
     expect(observeCalls).toBe(0);
+  });
+
+  it('surfaces source fallback on the revision view (LOT4-R1)', async () => {
+    const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
+    const steps = refineFromRaw(session.events, 'balanced');
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps,
+        source: 'fallback',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false
+    });
+    const result = await engine.run('balanced', false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.revision.source).toBe('fallback');
+    expect(engine.view()?.source).toBe('fallback');
+  });
+
+  it('ignores a late run after reset / foreign sessionId (LOT4-R2)', async () => {
+    const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
+    const steps = refineFromRaw(session.events, 'balanced');
+    let release: () => void = () => {
+      /* set below */
+    };
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let markStarted: () => void = () => {
+      /* set below */
+    };
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let finishCalls = 0;
+    const originalFinish = session.finishRefineReview;
+    session.finishRefineReview = () => {
+      finishCalls += 1;
+      originalFinish();
+    };
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => {
+        markStarted();
+        await gate;
+        return {
+          ok: true,
+          steps,
+          source: 'smart',
+          inputTokens: 1,
+          outputTokens: 1,
+          latencyMs: 1
+        };
+      },
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false
+    });
+    const pending = engine.run('balanced', false);
+    await started;
+    session.id = 'ses_foreign';
+    session.state = 'recording';
+    engine.reset();
+    release();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/aborted/);
+    }
+    expect(engine.currentRevision()).toBeUndefined();
+    expect(finishCalls).toBe(0);
+    expect(session.state).toBe('recording');
+    await expect(readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')).rejects.toThrow();
+  });
+
+  it('rejects sourceEvents that are retracted (LOT4-R4)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'step.retracted',
+        retracts: 'evt_000001'
+      }
+    ];
+    const session = await makeSession(events);
+    const leaked = refineFromRaw(
+      [click('evt_000001', 1, 'https://app.example.test/a', 1)],
+      'balanced'
+    ).map((step) => ({ ...step, sourceEvents: ['evt_000001'] }));
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps: leaked,
+        source: 'smart',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false
+    });
+    const result = await engine.run('balanced', false);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/traceable/);
+    }
+    expect(engine.currentRevision()).toBeUndefined();
+    expect(session.state).toBe('sealed');
   });
 });

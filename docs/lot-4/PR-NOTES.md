@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (253 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (258 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -104,6 +104,13 @@ on this branch. CI uses the mock LLM transport (no live keys).
 - `raw.jsonl` fingerprint is checked around persist/confirm/edit/finalize.
 - Model-supplied `verification.expected` / type is ignored; local
   classification + `urlGlob` (including Chromium `file://null/…`) win.
+- **LOT4-R1:** `revision.source` is shown in chrome (`#refine-source` +
+  `data-source`). Fallback cannot look like a smart refine.
+- **LOT4-R2:** in-flight `run()` holds a generation token; `reset()` /
+  `session:start` discards late results — no `finishRefineReview` /
+  `this.current` for a foreign sessionId.
+- **LOT4-R4:** engine F-42 gate uses `allowedRefineIds` (F-19 retracted
+  excluded), not every raw id.
 
 ## Screenshots (committed)
 

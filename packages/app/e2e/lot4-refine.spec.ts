@@ -107,6 +107,8 @@ test.describe('Lot 4 refine', () => {
       const steps = chrome.locator('#refine-steps li.refine-step');
       await expect(steps.first()).toBeVisible({ timeout: 20_000 });
       await expect(chrome.locator('#refine-panel')).toHaveAttribute('data-revision', '1');
+      await expect(chrome.locator('#refine-panel')).toHaveAttribute('data-source', 'smart');
+      await expect(chrome.locator('#refine-source')).toContainText(/Profil smart/i);
       await expect(chrome.locator('.strength-badge').first()).toBeVisible();
       await chrome.locator('#refine-steps').scrollIntoViewIfNeeded();
       await chrome

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { refineSourceBanner } from '../shared/ipc.ts';
 import {
   asPcmFrame,
   parseConfigSetPayload,
@@ -189,5 +190,18 @@ describe('withObserveMutex', () => {
       })
     ]);
     expect(order).toEqual([1, 2, 3]);
+  });
+});
+
+describe('refineSourceBanner (LOT4-R1)', () => {
+  it('labels fallback so it cannot be mistaken for smart', () => {
+    const fallback = refineSourceBanner('fallback');
+    expect(fallback.tone).toBe('fallback');
+    expect(fallback.text).toMatch(/repli déterministe/i);
+    expect(fallback.text).toMatch(/pas un raffinement smart/i);
+    const smart = refineSourceBanner('smart');
+    expect(smart.tone).toBe('smart');
+    expect(smart.text).toMatch(/smart/i);
+    expect(smart.text).not.toMatch(/repli/i);
   });
 });

@@ -10,7 +10,7 @@ import type {
   StagehandObserveResponse,
   UsagePayload
 } from '../../shared/ipc.ts';
-import { DEFAULT_SPLIT_RATIO } from '../../shared/ipc.ts';
+import { DEFAULT_SPLIT_RATIO, refineSourceBanner } from '../../shared/ipc.ts';
 import { attachVoiceCapture } from './voice-capture.ts';
 
 const CHAT_MIN_PX = 300;
@@ -288,12 +288,20 @@ function renderRefineRevision(revision: RefineRevisionView | undefined): void {
   refineWeakList.replaceChildren();
   if (revision === undefined) {
     refinePanel.dataset.revision = '';
+    refinePanel.dataset.source = '';
+    refineSource.hidden = true;
+    refineSource.textContent = '';
     refineFinalizeBtn.disabled = true;
     refineBlock.hidden = true;
     refineWeaks.hidden = true;
     return;
   }
   refinePanel.dataset.revision = String(revision.revision);
+  refinePanel.dataset.source = revision.source;
+  const banner = refineSourceBanner(revision.source);
+  refineSource.hidden = false;
+  refineSource.dataset.tone = banner.tone;
+  refineSource.textContent = banner.text;
   for (const step of revision.steps) {
     const item = document.createElement('li');
     item.className = 'refine-step';
@@ -457,6 +465,7 @@ const tokenCounts = requireEl<HTMLElement>('token-counts');
 const tokenHint = requireEl<HTMLElement>('token-hint');
 const refinePanel = requireEl<HTMLElement>('refine-panel');
 const refineStatus = requireEl<HTMLElement>('refine-status');
+const refineSource = requireEl<HTMLElement>('refine-source');
 const refineEstimate = requireEl<HTMLElement>('refine-estimate');
 const refineAggressiveness = requireEl<HTMLSelectElement>('refine-aggressiveness');
 const refineConfirmRow = requireEl<HTMLElement>('refine-confirm-row');

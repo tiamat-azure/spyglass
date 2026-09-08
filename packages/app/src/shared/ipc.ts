@@ -365,6 +365,20 @@ export type RefineRevisionView = {
   canFinalize: boolean;
 };
 
+/** LOT4-R1: chrome must not look like a smart refine when the engine fell back. */
+export function refineSourceBanner(source: 'smart' | 'fallback'): {
+  text: string;
+  tone: 'smart' | 'fallback';
+} {
+  if (source === 'fallback') {
+    return {
+      text: 'Repli déterministe — ce n’est pas un raffinement smart',
+      tone: 'fallback'
+    };
+  }
+  return { text: 'Profil smart', tone: 'smart' };
+}
+
 export type RefineRunResponse =
   | { ok: true; revision: RefineRevisionView }
   | { ok: false; error: string; needsConfirm?: boolean; estimatedTokens?: number };

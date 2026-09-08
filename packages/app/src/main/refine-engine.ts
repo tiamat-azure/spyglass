@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { validateRefinedStep } from '@spyglass/contracts';
 import {
+  allowedRefineIds,
   canFinalize,
   estimateRefineTokens,
   isReplayDescriptorSufficient,
@@ -47,6 +48,7 @@ export type RefineEngineDeps = {
 export class RefineEngine {
   private current: RefinedRevisionFile | undefined;
   private readonly budget = new SmartOperationBudget();
+  private runToken = 0;
 
   constructor(private readonly deps: RefineEngineDeps) {}
 
@@ -135,23 +137,30 @@ export class RefineEngine {
         estimatedTokens
       };
     }
-    const hadRevision = this.current !== undefined;
+    const hadRevision = this.current !== undefined && this.current.sessionId === sessionId;
     session.beginRefine();
+    const token = ++this.runToken;
     this.budget.beginOperation();
     try {
       const result = await this.deps.refine(events, aggressiveness);
+      if (!this.stillOwns(token, sessionId)) {
+        return this.abandonStale(sessionId, hadRevision);
+      }
       if (!result.ok) {
         session.abortRefine(hadRevision);
         return { ok: false, error: result.error };
       }
       this.budget.recordCall(result.inputTokens, result.outputTokens);
-      const ids = new Set(events.map((event) => event.id));
-      if (!sourceEventsAreTraceable(result.steps, ids)) {
+      const allowed = allowedRefineIds(events);
+      if (!sourceEventsAreTraceable(result.steps, allowed)) {
         session.abortRefine(hadRevision);
         return { ok: false, error: 'sourceEvents are not traceable to raw.jsonl' };
       }
       const steps = result.steps.map((step, index) => ({ ...step, index }));
       const observeEnrichment = await this.maybeObserve(steps);
+      if (!this.stillOwns(token, sessionId)) {
+        return this.abandonStale(sessionId, hadRevision);
+      }
       const revision = await nextRevision(sessionDir);
       const file: RefinedRevisionFile = {
         schemaVersion: 1,
@@ -168,6 +177,9 @@ export class RefineEngine {
         steps
       };
       await persistRevision(sessionDir, file);
+      if (!this.stillOwns(token, sessionId)) {
+        return this.abandonStale(sessionId, hadRevision);
+      }
       const afterHash = await rawFingerprint(sessionDir);
       if (afterHash !== beforeHash) {
         session.abortRefine(hadRevision);
@@ -177,6 +189,9 @@ export class RefineEngine {
       session.finishRefineReview();
       return { ok: true, revision: toView(file) };
     } catch (error) {
+      if (!this.stillOwns(token, sessionId)) {
+        return this.abandonStale(sessionId, hadRevision);
+      }
       session.abortRefine(hadRevision);
       return {
         ok: false,
@@ -298,7 +313,23 @@ export class RefineEngine {
   }
 
   reset(): void {
+    this.runToken += 1;
     this.current = undefined;
+  }
+
+  private stillOwns(token: number, sessionId: string): boolean {
+    return this.runToken === token && this.deps.session().currentSessionId() === sessionId;
+  }
+
+  private abandonStale(sessionId: string, hadRevision: boolean): { ok: false; error: string } {
+    const session = this.deps.session();
+    if (session.currentSessionId() === sessionId) {
+      session.abortRefine(hadRevision);
+    }
+    if (this.current?.sessionId !== session.currentSessionId()) {
+      this.current = undefined;
+    }
+    return { ok: false, error: 'refine aborted' };
   }
 
   private async maybeObserve(steps: RefinedStep[]): Promise<boolean> {

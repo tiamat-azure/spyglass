@@ -741,9 +741,18 @@ h1 {
 
 .refine-copy,
 .refine-estimate,
-.refine-block {
+.refine-block,
+.refine-source {
   margin: 0;
   font-size: var(--sg-text-xs);
+  color: var(--sg-text-muted);
+}
+
+.refine-source[data-tone="fallback"] {
+  color: var(--sg-warning);
+}
+
+.refine-source[data-tone="smart"] {
   color: var(--sg-text-muted);
 }
 

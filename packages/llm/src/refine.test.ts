@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockTransport, LlmGateway } from './client.ts';
 import { LLM_FAST_MODEL_DEFAULT, LLM_SMART_MODEL_DEFAULT } from './constants.ts';
 import {
+  allowedRefineIds,
   bindLlmProposal,
   canFinalize,
   collectRetractedIds,
@@ -158,6 +159,19 @@ describe('refineFromRaw', () => {
     const blob = JSON.stringify(steps);
     expect(blob).not.toContain('evt_000005');
     expect(blob).not.toContain('evt_000007');
+  });
+
+  it('F-42 allow-list excludes retracted ids (LOT4-R4)', () => {
+    const events = fixtureRaw();
+    const steps = refineFromRaw(events, 'balanced').map((step) => ({
+      ...step,
+      sourceEvents: ['evt_000005']
+    }));
+    const allIds = new Set(events.map((event) => event.id));
+    expect(allIds.has('evt_000005')).toBe(true);
+    expect(sourceEventsAreTraceable(steps, allIds)).toBe(true);
+    expect(allowedRefineIds(events).has('evt_000005')).toBe(false);
+    expect(sourceEventsAreTraceable(steps, allowedRefineIds(events))).toBe(false);
   });
 
   it('merges consecutive identical clicks when aggressiveness is not conservative', () => {
