@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (252 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (253 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -72,6 +72,9 @@ on this branch. CI uses the mock LLM transport (no live keys).
    click + fill, Stop, estimates tokens, confirms the smart threshold, Raffiner.
    Unit tests `refineFromRaw` / `RefineEngine` assert `sourceEvents` ⊆ raw ids
    and `rev-1.json` / `rev-2.json` versioning with byte-identical `raw.jsonl`.
+   E2E relaunches with **aggressive** after the first balanced pass and asserts
+   `data-revision="2"`, `rev-1.json` remains `reviewing`, `rev-2.json` is
+   `finalized`. Settings `#smart-model` shows the dated I-05 pin.
 2. **Strong vs weak + F-44b.** Fixture without dictation yields weaks.
    Routine (`observable-state-change` on the `#lot1-link` navigation) vs
    doubtful (`no-observable-change` click, `value-assertion` fill). E2E

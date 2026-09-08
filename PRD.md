@@ -717,7 +717,7 @@ et seront tranchés au sein du lot concerné, sans remettre en cause le cadrage.
 | I-04 | Gabarits de narration du mode dégradé : couverture des types d'événements et qualité rédactionnelle | Lot 2 |
 | I-05 | Version exacte du modèle du profil `smart` à figer, après évaluation sur des raffinements et des diagnostics réels. **Figée au lot 4** : `claude-sonnet-4-5-20250929` (dernier identifiant daté Sonnet 4.x). Résiduel : pas d'évaluation live dans cet environnement ; `claude-sonnet-4-6` est un id 4.6 dateless-but-pinned, non retenu. | Lot 4 |
 | I-06 | Format exact de l'instantané DOM allégé, arbitrage entre volume et pouvoir diagnostique | Lot 1 |
-| I-07 | Validation que le descripteur d'action construit localement (F-22) suffit à rejouer l'action via `act()`. **Repli pré-arbitré** en cas d'insuffisance mesurée : enrichissement `observe()` **groupé au raffinement** (un appel par scénario, profil `smart`, lot 4). Ce repli ne rouvre pas d'arbitrage : il préserve l'enregistrement hors ligne et n'ajoute de dépendance réseau qu'au raffinement, qui en a déjà une | Lot 1 |
+| I-07 | Validation que le descripteur d'action construit localement (F-22) suffit à rejouer l'action via `act()`. **Repli pré-arbitré** en cas d'insuffisance mesurée : enrichissement `observe()` **groupé au raffinement** (un appel par scénario, profil `smart`, **livré au lot 4**). Ce repli ne rouvre pas d'arbitrage : il préserve l'enregistrement hors ligne et n'ajoute de dépendance réseau qu'au raffinement, qui en a déjà une | Lot 1 / Lot 4 |
 | I-08 | Détection de la mutation DOM sans action utilisateur déclenchant un instantané supplémentaire (F-17) | Lot 1 |
 
 ## 13. Risques

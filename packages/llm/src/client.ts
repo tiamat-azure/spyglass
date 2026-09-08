@@ -10,7 +10,8 @@ import {
   LLM_SMART_MAX_TOKENS_DEFAULT,
   LLM_SMART_MODEL_DEFAULT,
   LLM_SMART_PROVIDER_DEFAULT,
-  LLM_SMART_TIMEOUT_MS_DEFAULT
+  LLM_SMART_TIMEOUT_MS_DEFAULT,
+  pinSmartModel
 } from './constants.ts';
 import {
   assertNoLeak,
@@ -269,7 +270,8 @@ export function resolveProfile(
   const providerDefault = name === 'fast' ? LLM_FAST_PROVIDER_DEFAULT : LLM_SMART_PROVIDER_DEFAULT;
   const modelDefault = name === 'fast' ? LLM_FAST_MODEL_DEFAULT : LLM_SMART_MODEL_DEFAULT;
   const provider = nonempty(env[`${prefix}_PROVIDER`]) ?? providerDefault;
-  const model = nonempty(env[`${prefix}_MODEL`]) ?? modelDefault;
+  const modelRaw = nonempty(env[`${prefix}_MODEL`]) ?? modelDefault;
+  const model = name === 'smart' ? pinSmartModel(modelRaw) : modelRaw;
   const baseUrl =
     nonempty(env[`${prefix}_BASE_URL`]) ??
     (provider === 'openai' ? DEFAULT_OPENAI_BASE_URL : DEFAULT_FAST_BASE_URL);

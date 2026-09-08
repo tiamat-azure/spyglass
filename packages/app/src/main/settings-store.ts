@@ -7,6 +7,7 @@ import {
   LLM_SMART_PROVIDER_DEFAULT,
   type LlmProfileName,
   type ProfileConfig,
+  pinSmartModel,
   RATE_LIMIT_CALLS_PER_MIN_DEFAULT,
   resolveProfile,
   SESSION_TOKEN_LIMIT_FAST_DEFAULT,
@@ -219,7 +220,8 @@ export class SettingsStore {
     const resolved = resolveProfile(name, this.env);
     const stored = name === 'fast' ? this.disk.fast : this.disk.smart;
     const provider = nonempty(stored?.provider) ?? resolved.provider;
-    const model = nonempty(stored?.model) ?? resolved.model;
+    const modelRaw = nonempty(stored?.model) ?? resolved.model;
+    const model = name === 'smart' ? pinSmartModel(modelRaw) : modelRaw;
     const baseUrl = nonempty(stored?.baseUrl) ?? resolved.baseUrl;
     const key = this.apiKey(name);
     return {

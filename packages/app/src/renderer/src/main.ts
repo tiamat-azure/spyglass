@@ -254,7 +254,11 @@ async function refreshRefinePanel(phase: string): Promise<void> {
   } else if (phase === 'refining') {
     refineStatus.textContent = 'Raffinement en cours (profil smart)…';
   } else if (phase === 'reviewing') {
-    refineStatus.textContent = 'Révision éditable — confirmez les weak avant de finaliser.';
+    const revision = refinePanel.dataset.revision;
+    refineStatus.textContent =
+      revision !== undefined && revision.length > 0
+        ? `Révision ${revision} éditable — confirmez les weak avant de finaliser.`
+        : 'Révision éditable — confirmez les weak avant de finaliser.';
   } else if (phase === 'finalized') {
     refineStatus.textContent = 'Scénario raffiné finalisé — brut inchangé.';
   }
@@ -283,11 +287,13 @@ function renderRefineRevision(revision: RefineRevisionView | undefined): void {
   refineSteps.replaceChildren();
   refineWeakList.replaceChildren();
   if (revision === undefined) {
+    refinePanel.dataset.revision = '';
     refineFinalizeBtn.disabled = true;
     refineBlock.hidden = true;
     refineWeaks.hidden = true;
     return;
   }
+  refinePanel.dataset.revision = String(revision.revision);
   for (const step of revision.steps) {
     const item = document.createElement('li');
     item.className = 'refine-step';

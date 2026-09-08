@@ -8,6 +8,13 @@ export const LLM_FAST_MODEL_DEFAULT = 'claude-haiku-4-5-20251001';
  * later `claude-sonnet-4-6` is a dateless-but-pinned 4.6 id, not adopted.
  */
 export const LLM_SMART_MODEL_DEFAULT = 'claude-sonnet-4-5-20250929';
+/** Undated Anthropic alias; `pinSmartModel` rewrites it to the dated I-05 snapshot. */
+export const LLM_SMART_MODEL_ALIAS = 'claude-sonnet-4-5';
+
+/** I-05: accept the undated 4.5 alias; leave any other id (including 4.6) untouched. */
+export function pinSmartModel(model: string): string {
+  return model === LLM_SMART_MODEL_ALIAS ? LLM_SMART_MODEL_DEFAULT : model;
+}
 
 export const LLM_FAST_PROVIDER_DEFAULT = 'anthropic';
 export const LLM_SMART_PROVIDER_DEFAULT = 'anthropic';

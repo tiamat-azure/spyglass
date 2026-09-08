@@ -3,7 +3,8 @@ import {
   LLM_FAST_MODEL_DEFAULT,
   LLM_PACKAGE,
   LLM_SMART_MODEL_DEFAULT,
-  llmPackageName
+  llmPackageName,
+  pinSmartModel
 } from './index.ts';
 
 describe('@spyglass/llm public API', () => {
@@ -14,5 +15,7 @@ describe('@spyglass/llm public API', () => {
 
   it('pins the smart model to a dated Sonnet snapshot (I-05)', () => {
     expect(LLM_SMART_MODEL_DEFAULT).toBe('claude-sonnet-4-5-20250929');
+    expect(pinSmartModel('claude-sonnet-4-5')).toBe('claude-sonnet-4-5-20250929');
+    expect(pinSmartModel('claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
   });
 });

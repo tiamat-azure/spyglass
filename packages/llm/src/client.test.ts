@@ -265,6 +265,16 @@ describe('resolveProfile', () => {
       LLM_SMART_TIMEOUT_MS_DEFAULT
     );
   });
+
+  it('pins the undated Sonnet 4.5 alias to the dated I-05 snapshot', () => {
+    expect(resolveProfile('smart', {}).model).toBe('claude-sonnet-4-5-20250929');
+    expect(resolveProfile('smart', { LLM_SMART_MODEL: 'claude-sonnet-4-5' }).model).toBe(
+      'claude-sonnet-4-5-20250929'
+    );
+    expect(resolveProfile('smart', { LLM_SMART_MODEL: 'claude-sonnet-4-6' }).model).toBe(
+      'claude-sonnet-4-6'
+    );
+  });
 });
 
 describe('test connection (T1a fail-closed)', () => {

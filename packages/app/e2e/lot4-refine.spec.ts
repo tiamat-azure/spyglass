@@ -82,6 +82,10 @@ test.describe('Lot 4 refine', () => {
     try {
       const chrome = await chromeWindow(electronApp);
       const guest = await guestWindow(electronApp);
+      await chrome.locator('#tab-settings').click();
+      await expect(chrome.locator('#settings-panel')).toBeVisible();
+      await expect(chrome.locator('#smart-model')).toHaveValue(/claude-sonnet-4-5-20250929/);
+      await chrome.locator('#tab-browser').click();
       await chrome.locator('#record-btn').click();
       await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i, { timeout: 15_000 });
       await guest.locator('#lot1-link').click();
@@ -102,6 +106,7 @@ test.describe('Lot 4 refine', () => {
       await chrome.locator('#refine-run').click();
       const steps = chrome.locator('#refine-steps li.refine-step');
       await expect(steps.first()).toBeVisible({ timeout: 20_000 });
+      await expect(chrome.locator('#refine-panel')).toHaveAttribute('data-revision', '1');
       await expect(chrome.locator('.strength-badge').first()).toBeVisible();
       await chrome.locator('#refine-steps').scrollIntoViewIfNeeded();
       await chrome
@@ -124,6 +129,13 @@ test.describe('Lot 4 refine', () => {
       await chrome.locator('#refine-weaks').scrollIntoViewIfNeeded();
       await chrome.locator('#refine-weaks').screenshot({
         path: join(shotDir, 'weak-confirm-routine-doubtful.png')
+      });
+      await chrome.locator('#refine-aggressiveness').selectOption('aggressive');
+      await expect(chrome.locator('#refine-confirm-row')).toBeVisible();
+      await chrome.locator('#refine-confirm').check();
+      await chrome.locator('#refine-run').click();
+      await expect(chrome.locator('#refine-panel')).toHaveAttribute('data-revision', '2', {
+        timeout: 20_000
       });
       const routineBtn = chrome.locator('#refine-confirm-routine');
       if (await routineBtn.isEnabled()) {
@@ -159,11 +171,17 @@ test.describe('Lot 4 refine', () => {
       const raw = await readFile(join(sessionsDir, sessionId, 'raw.jsonl'), 'utf8');
       expect(raw).toContain('record.start');
       expect(raw).toContain('record.stop');
-      const refined = JSON.parse(
+      const rev1 = JSON.parse(
         await readFile(join(sessionsDir, sessionId, 'refined', 'rev-1.json'), 'utf8')
-      ) as { status: string; steps: Array<{ sourceEvents: string[] }> };
-      expect(refined.status).toBe('finalized');
-      expect(refined.steps[0]?.sourceEvents[0]).toMatch(/^evt_/);
+      ) as { status: string; aggressiveness: string };
+      const rev2 = JSON.parse(
+        await readFile(join(sessionsDir, sessionId, 'refined', 'rev-2.json'), 'utf8')
+      ) as { status: string; aggressiveness: string; steps: Array<{ sourceEvents: string[] }> };
+      expect(rev1.status).toBe('reviewing');
+      expect(rev1.aggressiveness).toBe('balanced');
+      expect(rev2.status).toBe('finalized');
+      expect(rev2.aggressiveness).toBe('aggressive');
+      expect(rev2.steps[0]?.sourceEvents[0]).toMatch(/^evt_/);
     } finally {
       await electronApp.close();
     }
