@@ -92,6 +92,7 @@ export class VoiceBridge {
   private disposed = false;
   private capturing = false;
   private captureEpoch = 0;
+  private stopping = false;
   private captureMode: VoiceMode = 'hold';
   private vad: VadState = createVadState();
   private utteranceSeq = 0;
@@ -120,16 +121,34 @@ export class VoiceBridge {
     this.capturing = false;
   }
 
+  /** Fail-closed for new starts once Session Stop has begun (flush window). */
+  beginStop(): void {
+    this.stopping = true;
+    this.invalidateCapture();
+  }
+
+  /** Next Record may arm the mic again. */
+  resumeCapture(): void {
+    this.stopping = false;
+  }
+
   private allowsCapture(): boolean {
+    if (this.stopping || this.disposed) {
+      return false;
+    }
     return this.options.canCapture?.() !== false;
   }
 
   async startCapture(mode: VoiceMode): Promise<VoiceBridgeStatus> {
+    if (!this.allowsCapture()) {
+      this.capturing = false;
+      throw new Error('voice capture refused');
+    }
     const epoch = this.captureEpoch;
     const status = await this.ensureStarted();
-    if (this.disposed || this.captureEpoch !== epoch || !this.allowsCapture()) {
+    if (this.captureEpoch !== epoch || !this.allowsCapture()) {
       this.capturing = false;
-      return status;
+      throw new Error('voice capture refused');
     }
     this.capturing = true;
     this.captureMode = mode;

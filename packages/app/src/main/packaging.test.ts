@@ -194,7 +194,12 @@ describe('packaged Observe', () => {
     expect(bridge).toContain('captureEpoch');
     expect(bridge).toContain('invalidateCapture');
     expect(bridge).toContain('canCapture');
-    expect(main).toContain('invalidateCapture');
+    expect(main).toContain('beginStop');
+    expect(main).toContain('resumeCapture');
     expect(main).toContain('canCapture');
+    expect(bridge).toContain('beginStop');
+    expect(bridge).toContain('this.stopping');
+    expect(bridge).toContain('voice capture refused');
+    expect(main).toContain("error: 'voice capture refused'");
   });
 });

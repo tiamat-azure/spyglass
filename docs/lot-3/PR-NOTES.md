@@ -61,7 +61,7 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (229 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (230 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**12 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
@@ -166,6 +166,13 @@ Applied on tip `cd6fe10`. V1a energy VAD and C2b `before`-on-overlap are unchang
 Applied on tip `e72eae0`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 1. **P6-N1 high — mid-begin Stop vs late startCapture.** `begin()` / `toggleContinuous` call `api.voice.abort()` when `!stillLive()` after `voice.start` / `getUserMedia`, so a cold `startCapture` that resumes after Stop cannot leave `capturing=true`. `setArmed(false)` still does not abort: an already-armed utterance’s flush is preserved. Main `captureEpoch` / `invalidateCapture()` + `canCapture` (session still `recording`) refuse to set `capturing=true` if Stop ran or the session is sealed. `abort()` is a no-op against in-flight `pendingFinals`.
+
+### Adversarial pass 7 (auto-fixes)
+
+Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **P7-N1 medium — fail-closed during Stop flush.** `beginStop()` sets `stopping` when Session Stop starts so `allowsCapture` is false for the whole flush window, even while the recorder is still `recording`. A **fresh** `voice.start` cannot re-arm; not only in-flight epochs. `resumeCapture()` on the next Record.
+2. **P7-N2 low — refused start is `ok:false`.** `startCapture` throws `voice capture refused`; IPC maps that (and `!isCapturing()`) to `voice.start` `ok: false` so the renderer contract is fail-closed.
 
 ## Screenshots (committed)
 

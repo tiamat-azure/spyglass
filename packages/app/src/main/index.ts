@@ -433,6 +433,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const snapshot = requirePane().snapshot();
     const startUrl = payload.startUrl ?? snapshot.url;
     const started = await requireSession().start(startUrl);
+    voiceBridge?.resumeCapture();
     observerRuntime?.observer.onSessionStart(started.sessionId);
     return started;
   });
@@ -451,7 +452,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         state: 'stopping'
       });
     }
-    voiceBridge?.invalidateCapture();
+    voiceBridge?.beginStop();
     await voiceBridge?.stopCapture();
     return await requireSession().stop();
   });
@@ -637,6 +638,16 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     try {
       const status = await voiceBridge.startCapture(payload.mode);
+      if (!voiceBridge.isCapturing()) {
+        return {
+          ok: false,
+          mode: payload.mode,
+          engine: status.engine,
+          model: status.model,
+          fakeCapture: status.fakeCapture,
+          error: 'voice capture refused'
+        };
+      }
       return {
         ok: true,
         mode: payload.mode,
@@ -772,6 +783,7 @@ void (async () => {
           await observerRuntime?.observer.flush();
         },
         onBeforeStop: async () => {
+          voiceBridge?.beginStop();
           await voiceBridge?.stopCapture();
         }
       }
@@ -834,7 +846,10 @@ void (async () => {
       },
       sttEnv,
       {
-        canCapture: () => activeSession?.snapshot().state === 'recording'
+        canCapture: () => {
+          const state = activeSession?.snapshot().state;
+          return state === 'recording';
+        }
       }
     );
     pane.webContents.on('did-navigate', () => {

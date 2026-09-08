@@ -375,7 +375,10 @@ describe('VoiceBridge', () => {
       const started = bridge.startCapture('hold');
       await new Promise((resolve) => setTimeout(resolve, 20));
       await bridge.stopCapture();
-      await started;
+      await started.then(
+        () => undefined,
+        () => undefined
+      );
       expect(bridge.isCapturing()).toBe(false);
       bridge.sendFrame(Buffer.alloc(4000, 1));
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -412,7 +415,7 @@ describe('VoiceBridge', () => {
       await bridge.startCapture('hold');
       expect(bridge.isCapturing()).toBe(true);
       recording = false;
-      await bridge.startCapture('hold');
+      await expect(bridge.startCapture('hold')).rejects.toThrow('voice capture refused');
       expect(bridge.isCapturing()).toBe(false);
       bridge.sendFrame(Buffer.alloc(4000, 1));
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -451,6 +454,49 @@ describe('VoiceBridge', () => {
       bridge.abort();
       await flushing;
       expect(finals).toEqual(['keep-flush']);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('refuses a fresh startCapture during Stop flush while session is still recording', async () => {
+    const finals: string[] = [];
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: async (payload) => {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 80);
+          });
+          finals.push(payload.text);
+        },
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'flush-then-refuse'
+      },
+      {
+        canCapture: () => true
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.sendFrame(Buffer.alloc(4000, 1));
+      const flushing = bridge.stopCapture();
+      bridge.beginStop();
+      await expect(bridge.startCapture('hold')).rejects.toThrow('voice capture refused');
+      expect(bridge.isCapturing()).toBe(false);
+      await flushing;
+      expect(finals).toEqual(['flush-then-refuse']);
+      await expect(bridge.startCapture('hold')).rejects.toThrow('voice capture refused');
+      bridge.resumeCapture();
+      await bridge.startCapture('hold');
+      expect(bridge.isCapturing()).toBe(true);
     } finally {
       await bridge.dispose();
     }
