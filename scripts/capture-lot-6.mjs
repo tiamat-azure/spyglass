@@ -1,7 +1,7 @@
 /**
  * Lot 6 evidence screenshots: generated tree, headed run, headless report, protocol snippet.
  */
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { repoRoot } from '@spyglass/contracts';
@@ -108,9 +108,27 @@ if (headless !== 0) {
   throw new Error(`headless run failed: ${String(headless)}`);
 }
 
-const rates = await readFile(join(root, 'docs/lot-6/measured-rates.j0.json'), 'utf8');
+const ratesRaw = await readFile(join(root, 'docs/lot-6/measured-rates.j0.json'), 'utf8');
+const measured = JSON.parse(ratesRaw);
+const passed = measured.sites.filter((site) => site.ok).length;
+const compactRates = JSON.stringify(
+  {
+    wave: measured.wave,
+    measuredAt: measured.measuredAt,
+    replayWithoutAiRate: measured.replayWithoutAiRate,
+    passed: `${String(passed)}/${String(measured.sites.length)}`,
+    sites: measured.sites.map((site) => ({
+      id: site.id,
+      ok: site.ok,
+      exitCode: site.exitCode,
+      mode: site.mode
+    }))
+  },
+  null,
+  2
+);
 const protocol = await readFile(join(root, 'docs/lot-6/protocol.md'), 'utf8');
-const snippet = protocol.split('\n').slice(0, 28).join('\n');
+const snippet = protocol.split('\n').slice(0, 22).join('\n');
 const protocolHtml = `<!doctype html>
 <html lang="fr">
   <head>
@@ -118,15 +136,16 @@ const protocolHtml = `<!doctype html>
     <title>Lot 6 protocol + rates</title>
     <style>
       body { font: 15px/1.45 ui-sans-serif, system-ui, sans-serif; background: #f7f9fc; color: #0b1220; padding: 1.5rem 2rem; max-width: 52rem; }
-      pre { background: #0b1220; color: #e8eef8; padding: 1rem; border-radius: 8px; overflow: auto; font-size: 12px; }
+      pre { background: #0b1220; color: #e8eef8; padding: 1rem; border-radius: 8px; overflow: visible; white-space: pre-wrap; font-size: 12px; }
       h1, h2 { margin-bottom: 0.4rem; }
     </style>
   </head>
   <body>
     <h1>PRD §2.2 — protocole Lot 6</h1>
+    <h2>J+0 public corpus (published rates)</h2>
+    <pre id="rates">${compactRates.replaceAll('<', '&lt;')}</pre>
+    <h2>Protocol excerpt</h2>
     <pre>${snippet.replaceAll('<', '&lt;')}</pre>
-    <h2>J+0 public corpus (first published numbers)</h2>
-    <pre>${rates.replaceAll('<', '&lt;')}</pre>
   </body>
 </html>`;
 await writeFile(join(shotDir, 'protocol.html'), protocolHtml, 'utf8');
@@ -156,8 +175,12 @@ await driver.screenshot(join(shotDir, 'generated-script-tree.png'));
 await driver.goto(`file://${join(shotDir, 'headless.html')}`);
 await driver.screenshot(join(shotDir, 'headless-run.png'));
 await driver.goto(`file://${join(shotDir, 'protocol.html')}`);
-await driver.screenshot(join(shotDir, 'corpus-protocol-snippet.png'));
+await driver.screenshot(join(shotDir, 'corpus-protocol-snippet.png'), { fullPage: true });
 await driver.close();
+
+for (const name of ['tree.html', 'headless.html', 'protocol.html']) {
+  await unlink(join(shotDir, name)).catch(() => undefined);
+}
 
 await server.close();
 process.stdout.write(

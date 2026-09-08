@@ -79,7 +79,7 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 | [`screenshots/generated-script-tree.png`](screenshots/generated-script-tree.png) | `generated/` tree (json/ts importing `runScenario`) |
 | [`screenshots/headed-run.png`](screenshots/headed-run.png) | Visible fixture after generated-script click (`#done`) |
 | [`screenshots/headless-run.png`](screenshots/headless-run.png) | `--headless --no-ai` exit 0, no keys, outside Electron |
-| [`screenshots/corpus-protocol-snippet.png`](screenshots/corpus-protocol-snippet.png) | Protocol + first published rates |
+| [`screenshots/corpus-protocol-snippet.png`](screenshots/corpus-protocol-snippet.png) | Protocol excerpt + J+0 published rates (`10/10`, JSON visible) |
 
 ## Product decisions (ask-user)
 
@@ -213,6 +213,20 @@ Applied on tip `9be988d9ed1ad536ccf91a3cf5b63cdde5e650e4`. Product decisions
   `docs/lot-6/screenshots/generated-script-tree.png` and `headless-run.png`.
 
 Unit tests after this pass: **364 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 7 (auto-fix)
+
+Applied on tip `0b482c9446e862df94f4a546d75463ed9c09fdff`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-016** `corpus-protocol-snippet.png` is a **fullPage** capture with
+  compact J+0 published rates JSON first (`replayWithoutAiRate` / 10/10
+  site rows), not a viewport crop ending on a lone `{`.
+- **L6-017** Capture unlinks `docs/lot-6/screenshots/{tree,headless,protocol}.html`
+  after PNGs; `.gitignore` also ignores `docs/lot-6/screenshots/*.html`.
+
+Unit tests after this pass: **365 passed, 1 skipped**, 50 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals

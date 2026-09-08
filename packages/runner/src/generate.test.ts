@@ -95,6 +95,16 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(capture).not.toContain('@spyglass/runner runGeneratedScript');
   });
 
+  it('Lot 6 capture shows compact published rates, fullPage protocol shot, and unlinks HTML (L6-016 / L6-017)', async () => {
+    const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
+    expect(capture).toContain('fullPage: true');
+    expect(capture).toContain('compactRates');
+    expect(capture).toContain('unlink(join(shotDir, name))');
+    expect(capture).toContain('replayWithoutAiRate');
+    const gitignore = await readFile(join(repoRoot(), '.gitignore'), 'utf8');
+    expect(gitignore).toContain('docs/lot-6/screenshots/*.html');
+  });
+
   it('is visible by default and wires F-58 flags; CI does not force headless', () => {
     const headed = parseGeneratedArgv(['--no-ai', '--timeout', '5000'], { CI: '1' });
     expect(headed.headless).toBe(false);
