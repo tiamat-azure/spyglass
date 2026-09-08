@@ -33,10 +33,11 @@ points at the last committed DOM step.
 
 Local engine (ADR-0004 / ADR-0013): **whisper.cpp** `small` q5_1, invoked as a
 child process with **no network**. CI and this environment use the **mock**
-engine (`SPYGLASS_STT_ENGINE=mock`) because binaries/models are too heavy to
-vendor. The real path is `createWhisperEngine` + `scripts/fetch-whisper.mjs` →
-`vendor/whisper/` (gitignored `.bin` / `whisper-cli`). Auto-selects whisper
-when both files exist.
+engine (`SPYGLASS_STT_ENGINE=mock`, `SPYGLASS_STT_IN_PROCESS=1`) because
+binaries/models are too heavy to vendor. The real path is `createWhisperEngine`
++ `scripts/fetch-whisper.mjs` → `vendor/whisper/` (gitignored `.bin` /
+`whisper-cli`). Auto-selects whisper when both files exist. Packaged/dev still
+spawns `stt-sidecar.js` and talks to it over `ws://127.0.0.1` from **main**.
 
 `AUDIO_RETENTION=none` by default (F-49): `voice.audioRef` is `null` and no
 `audio/` directory is created. `corrected` / `all` can persist WAV next to the
@@ -55,13 +56,14 @@ transcribes and journals voice events.
 
 ### How the three exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:schemas`,
-`pnpm test:coverage`, and `pnpm test:e2e` (Lot 0–3) on this branch. CI uses
-mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`). whisper.cpp is covered by a
-**local stub binary** unit test that writes a `.txt` transcript with no HTTP.
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (195 passed, 1 skipped),
+`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**9 passed**, Lots 0–3) on
+this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
+the suite does not ship whisper weights. whisper.cpp is covered by a **local
+stub binary** unit test that writes a `.txt` transcript with no HTTP.
 
 1. **Dictate before and after an action.** Playwright
-   `packages/app/e2e/lot3-voice.spec.ts` Records, hold-to-talk (fake PCM → mock
+   `packages/app/e2e/lot3-voice.spec.ts` records, hold-to-talk (fake PCM → mock
    STT “Je vais cliquer sur Démarrer”), clicks `#step-1`, hold-to-talk again
    (“J'ai validé l'étape”). Chat rows are `data-kind=voice.final` with
    `data-relation=before` then `after`. Unit test
@@ -95,13 +97,14 @@ mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`). whisper.cpp is covered by a
   dropped.
 - `raw.jsonl` stays append-only. Correlation never rewrites a previous voice
   line.
+- Renderer/preload contain neither `new WebSocket` nor `ws://`.
 
 ## Screenshots (committed)
 
 | Relative path | What it shows |
 | --- | --- |
 | [`screenshots/hold-vad-ui.png`](screenshots/hold-vad-ui.png) | Mic + Hold/VAD toggle in the composer |
-| [`screenshots/partial-to-final.png`](screenshots/partial-to-final.png) | Live partial strip during hold-to-talk |
+| [`screenshots/partial-to-final.png`](screenshots/partial-to-final.png) | Live transcript + chat gabarit after hold-to-talk |
 | [`screenshots/before-after-correlation.png`](screenshots/before-after-correlation.png) | Chat: dictation before, click, dictation after |
 | [`screenshots/offline-dictation.png`](screenshots/offline-dictation.png) | Dictation with LLM offline / network cut |
 
@@ -114,5 +117,5 @@ Absolute paths in this checkout:
 
 Parent remounts copies to
 `/home/box/agent-data/grok-ship/reports/spyglass-screenshots/FM-spyglass-lot-3-20260908/`
-(this environment may not be able to write that path; files live under
+(this environment cannot write that path; files live under
 `docs/lot-3/screenshots/`).
