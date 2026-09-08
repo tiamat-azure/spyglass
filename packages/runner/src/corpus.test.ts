@@ -1,8 +1,11 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
 import { LOCAL_CORPUS_SIZE, localCorpusSites, measureCorpus, PUBLIC_CORPUS } from './corpus.ts';
+import { resolveCorpusOutPath } from './corpus-cli.ts';
 import { startFixtureServer } from './http-fixture.ts';
 
 describe('Lot 6 measurement protocol corpus', () => {
@@ -34,4 +37,29 @@ describe('Lot 6 measurement protocol corpus', () => {
       await server.close();
     }
   }, 120_000);
+
+  it('defaults --j1 output to measured-rates.j1.json and does not clobber J+0 (L6-006)', () => {
+    expect(resolveCorpusOutPath([], 'J+1')).toBe(
+      resolve(repoRoot(), 'docs/lot-6/measured-rates.j1.json')
+    );
+    expect(resolveCorpusOutPath(['--public', '--j1'], 'J+1')).toBe(
+      resolve(repoRoot(), 'docs/lot-6/measured-rates.j1.json')
+    );
+    expect(resolveCorpusOutPath(['--public'], 'J+0')).toBe(
+      resolve(repoRoot(), 'docs/lot-6/measured-rates.json')
+    );
+    expect(resolveCorpusOutPath([], 'local-immutable')).toBe(
+      resolve(repoRoot(), 'docs/lot-6/measured-rates.json')
+    );
+    expect(resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).toBe(
+      resolve('/tmp/custom-j1.json')
+    );
+  });
+
+  it('measure-corpus script uses --experimental-transform-types (L6-007)', async () => {
+    const pkg = JSON.parse(
+      await readFile(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')
+    ) as { scripts: Record<string, string> };
+    expect(pkg.scripts['measure-corpus']).toContain('--experimental-transform-types');
+  });
 });

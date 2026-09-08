@@ -2,8 +2,19 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
+import type { MeasuredRates } from './corpus.ts';
 import { localCorpusSites, measureCorpus, PUBLIC_CORPUS } from './corpus.ts';
 import { startFixtureServer } from './http-fixture.ts';
+
+export function resolveCorpusOutPath(argv: readonly string[], wave: MeasuredRates['wave']): string {
+  const outIndex = argv.indexOf('--out');
+  const outArg = outIndex >= 0 ? argv[outIndex + 1] : undefined;
+  if (outArg !== undefined && outArg.length > 0) {
+    return resolve(outArg);
+  }
+  const file = wave === 'J+1' ? 'measured-rates.j1.json' : 'measured-rates.json';
+  return resolve(repoRoot(), 'docs/lot-6', file);
+}
 
 export async function runCorpusCli(
   argv: readonly string[] = process.argv.slice(2),
@@ -11,12 +22,7 @@ export async function runCorpusCli(
 ): Promise<number> {
   const publicLive = argv.includes('--public');
   const wave = publicLive ? (argv.includes('--j1') ? 'J+1' : 'J+0') : 'local-immutable';
-  const outIndex = argv.indexOf('--out');
-  const outArg = outIndex >= 0 ? argv[outIndex + 1] : undefined;
-  const out =
-    outArg !== undefined && outArg.length > 0
-      ? resolve(outArg)
-      : resolve(repoRoot(), 'docs/lot-6/measured-rates.json');
+  const out = resolveCorpusOutPath(argv, wave);
   let close: (() => Promise<void>) | undefined;
   let sites = [...PUBLIC_CORPUS];
   if (!publicLive) {

@@ -37,9 +37,9 @@ sans régénérer les sélecteurs. Le taux « site inchangé sans IA » est
 Commande :
 
 ```bash
-pnpm --filter @spyglass/runner measure-corpus
-# live public (réseau requis) :
-pnpm --filter @spyglass/runner exec node src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json
+pnpm measure-corpus
+# live public (réseau requis) — `--j1` écrit `measured-rates.j1.json` par défaut :
+pnpm --filter @spyglass/runner exec node --experimental-transform-types src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json
 ```
 
 CI utilise le corpus local (`measure-corpus` sans `--public`).

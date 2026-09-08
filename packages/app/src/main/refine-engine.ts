@@ -338,7 +338,7 @@ export class RefineEngine {
     const before = await rawFingerprint(sessionDir);
     const generated = await this.writeGeneratedPackage(sessionDir, file);
     if (!generated.ok) {
-      return generated;
+      return await this.abortFinalizeAfterGenerate(sessionDir, file, false, generated.error);
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
       return await this.abortFinalizeAfterGenerate(
@@ -419,6 +419,11 @@ export class RefineEngine {
       await writeGeneratedFromRevision(sessionDir, file);
       return { ok: true };
     } catch (error) {
+      try {
+        await discardGeneratedPackage(sessionDir);
+      } catch {
+        // leftover generated/ is still unusable: CLI requires a finalized rev
+      }
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error)

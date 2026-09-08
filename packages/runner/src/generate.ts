@@ -46,26 +46,31 @@ export function npmPackageNameForSession(sessionId: string): string {
 export async function writeGeneratedPackage(
   input: WriteGeneratedPackageInput
 ): Promise<GeneratedPackagePaths> {
-  const dir = generatedDir(input.sessionDir);
-  await mkdir(dir, { recursive: true });
-  const scenarioJson = runPath(dir, GENERATED_SCENARIO_JSON);
-  const scenarioTs = runPath(dir, GENERATED_SCENARIO_TS);
-  const readme = runPath(dir, GENERATED_README);
-  const packageJson = runPath(dir, GENERATED_PACKAGE_JSON);
-  const version = input.runnerVersion ?? '0.0.0';
-  const scenario: Scenario = {
-    ...input.scenario,
-    generatedAt: input.scenario.generatedAt ?? new Date().toISOString()
-  };
-  await writeFile(scenarioJson, `${JSON.stringify(scenario, null, 2)}\n`, 'utf8');
-  await writeFile(scenarioTs, generatedScenarioTsSource(), 'utf8');
-  await writeFile(readme, generatedReadme(scenario.sessionId), 'utf8');
-  await writeFile(
-    packageJson,
-    `${JSON.stringify(generatedPackageManifest(scenario.sessionId, version), null, 2)}\n`,
-    'utf8'
-  );
-  return { dir, scenarioJson, scenarioTs, readme, packageJson };
+  try {
+    const dir = generatedDir(input.sessionDir);
+    await mkdir(dir, { recursive: true });
+    const scenarioJson = runPath(dir, GENERATED_SCENARIO_JSON);
+    const scenarioTs = runPath(dir, GENERATED_SCENARIO_TS);
+    const readme = runPath(dir, GENERATED_README);
+    const packageJson = runPath(dir, GENERATED_PACKAGE_JSON);
+    const version = input.runnerVersion ?? '0.0.0';
+    const scenario: Scenario = {
+      ...input.scenario,
+      generatedAt: input.scenario.generatedAt ?? new Date().toISOString()
+    };
+    await writeFile(scenarioJson, `${JSON.stringify(scenario, null, 2)}\n`, 'utf8');
+    await writeFile(scenarioTs, generatedScenarioTsSource(), 'utf8');
+    await writeFile(readme, generatedReadme(scenario.sessionId), 'utf8');
+    await writeFile(
+      packageJson,
+      `${JSON.stringify(generatedPackageManifest(scenario.sessionId, version), null, 2)}\n`,
+      'utf8'
+    );
+    return { dir, scenarioJson, scenarioTs, readme, packageJson };
+  } catch (error) {
+    await discardGeneratedPackage(input.sessionDir).catch(() => undefined);
+    throw error;
+  }
 }
 
 export type SessionRevisionLike = {

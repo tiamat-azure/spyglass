@@ -131,6 +131,26 @@ Applied on tip `a79060d40f1f5b0bf71fa569e0aa806aecf3da92`. Product decisions
 Unit tests after this pass: **356 passed, 1 skipped**, 49 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 3 (auto-fix)
+
+Applied on tip `2cb17b632aaf03378dc53971890c7c121f1f840f`. Product decisions
+1–5 and J1c (J+1 public **N/A / pending**) are unchanged. L6-008 J+1
+persist/replay semantics are unchanged (ask-user pending).
+
+- **L6-005** `writeGeneratedPackage` and finalize `!generated.ok` always
+  `discardGeneratedPackage` so a mid-write throw cannot leave a partial
+  `generated/`.
+- **L6-006** `corpus-cli --j1` defaults `--out` to
+  `docs/lot-6/measured-rates.j1.json` and does not clobber canonical J+0
+  `measured-rates.json`. J+0 / local-immutable default is unchanged.
+- **L6-007** `measure-corpus` and `docs/lot-6/protocol.md` use
+  `node --experimental-transform-types` (same form as PR-NOTES / MEASURED-RATES).
+- **L6-009** `.gitignore` again lists `packages/app/playwright-report/` in
+  addition to `docs/lot-6/corpus-runs/`.
+
+Unit tests after this pass: **360 passed, 1 skipped**, 49 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

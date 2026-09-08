@@ -20,7 +20,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "measure-corpus": "node src/corpus-cli.ts"
+    "measure-corpus": "node --experimental-transform-types src/corpus-cli.ts"
   },
   "dependencies": {
     "@spyglass/contracts": "workspace:*",

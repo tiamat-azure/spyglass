@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -246,5 +246,13 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
     expect(json.startUrl).toBe('https://exemple.test/start');
     expect(json.startUrl).not.toBe('https://leftover.test/stale');
+  });
+
+  it('discards partial generated/ if writeGeneratedPackage fails mid-write (L6-005)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-partial-'));
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'generated', 'package.json'), { recursive: true });
+    await expect(writeGeneratedPackage({ sessionDir, scenario: scenario() })).rejects.toThrow();
+    await expect(access(join(sessionDir, 'generated'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

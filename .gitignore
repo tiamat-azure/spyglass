@@ -13,6 +13,7 @@ sessions/
 Thumbs.db
 packages/app/release/
 playwright-report/
+packages/app/playwright-report/
 test-results/
 packages/app/test-results/
 docs/lot-6/corpus-runs/
