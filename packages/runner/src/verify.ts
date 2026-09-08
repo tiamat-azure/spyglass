@@ -3,10 +3,14 @@ import type { PageDriver } from './driver.ts';
 
 export type VerifyResult = { ok: true } | { ok: false; error: string };
 
-function globToRegExp(glob: string): RegExp {
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/gu, '\\$&').replace(/\*\*/gu, '::GLOBSTAR::');
+function globToRegExp(glob: string): RegExp | undefined {
+  const escaped = glob.replace(/[.+^${}()|[\]\\?]/gu, '\\$&').replace(/\*\*/gu, '::GLOBSTAR::');
   const withSingles = escaped.replace(/\*/gu, '[^/]*').replace(/::GLOBSTAR::/gu, '.*');
-  return new RegExp(`^${withSingles}$`);
+  try {
+    return new RegExp(`^${withSingles}$`);
+  } catch {
+    return undefined;
+  }
 }
 
 /** `*`, `**`, empty, separator-only wildcards, or globs that match any hierarchical URL. */
@@ -24,6 +28,9 @@ export function isDegenerateUrlPattern(expected: string): boolean {
     return true;
   }
   const re = globToRegExp(trimmed);
+  if (re === undefined) {
+    return true;
+  }
   return NEAR_UNIVERSAL_URL_PROBES.every((url) => re.test(url));
 }
 
@@ -65,7 +72,11 @@ async function checkOnce(
   switch (type) {
     case 'urlMatches': {
       const url = await driver.url();
-      if (globToRegExp(expected).test(url)) {
+      const re = globToRegExp(expected);
+      if (re === undefined) {
+        return { ok: false, error: `urlMatches invalid pattern: ${expected}` };
+      }
+      if (re.test(url)) {
         return { ok: true };
       }
       return { ok: false, error: `urlMatches expected ${expected}, got ${url}` };

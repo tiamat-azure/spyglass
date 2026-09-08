@@ -147,6 +147,15 @@ I-05, Lot 4 R3c, and A5a remain locked.
 - **L5-ADV-03b.** `urlMatches` also rejects near-universal globs (`**/*`,
   `**/**`, `*/*`, and equivalents that match any hierarchical URL).
 
+## Adversarial pass 3 (auto-fix on `f3b471f`)
+
+I-05, Lot 4 R3c, and A5a remain locked.
+
+- **L5-ADV-03c.** `globToRegExp` escapes literal `?` so query strings are not
+  regex quantifiers. An exact URL such as `https://exemple.test/login?next=/app`
+  matches itself. Awkward patterns (`?*`) fail closed without throwing from
+  `verifyStep` / `runScenario`. ADV-03b near-universal glob rejects remain.
+
 ## Residuals
 
 - Lot 6 generated Playwright script / corpus is out of scope.
