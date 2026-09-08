@@ -372,4 +372,53 @@ describe('observer agent', () => {
     expect(budget.snapshot().rateLimitPerMin).toBe(12);
     agent.dispose();
   });
+
+  it('resumes enrichment when Settings raises the ceiling above current usage', () => {
+    const usage: UsagePayload[] = [];
+    const budget = new FastTokenBudget({ ceiling: 100, warnRatio: 0.5 });
+    budget.recordCall(80, 20);
+    expect(budget.decide().reason).toBe('ceiling');
+    const agent = new ObserverAgent(
+      {
+        emitChat: () => undefined,
+        emitEnriched: () => undefined,
+        emitUsage: (payload) => {
+          usage.push(payload);
+        },
+        appendAgent: async () => undefined
+      },
+      {
+        gateway: new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: {
+              provider: 'anthropic',
+              model: 'claude-haiku-4-5-20251001',
+              baseUrl: 'https://api.anthropic.com',
+              apiKey: 'sk-test',
+              timeoutMs: 50
+            },
+            smart: {
+              provider: 'anthropic',
+              model: 'x',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            }
+          })
+        }),
+        budget,
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001'
+      }
+    );
+    const payload = agent.configureBudget({ ceiling: 500 });
+    expect(payload.halt).toBe('none');
+    expect(payload.ceiling).toBe(500);
+    expect(budget.snapshot().halt).toBe('none');
+    expect(usage.at(-1)?.halt).toBe('none');
+    expect(budget.decide().decision).toBe('allow');
+    agent.dispose();
+  });
 });

@@ -140,6 +140,13 @@ Applied on this branch without a PR. T1 (Settings test / mock transport unless
 - `resolveProfile('smart')` uses `LLM_SMART_TIMEOUT_MS` (default 8000), not the
   fast 1200 ms budget.
 
+### Adversarial pass 2 (F1)
+
+Raising `sessionTokenLimitFast` from Settings via `configure()` / `configureBudget`
+clears `halt === 'ceiling'` when current tokens are under the new limit, resets
+the warn latch, and emits usage so enrichment resumes without « Relever le
+plafond ». T1 still pending captain.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

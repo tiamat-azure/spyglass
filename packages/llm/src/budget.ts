@@ -150,6 +150,11 @@ export class FastTokenBudget {
     if (options.rateLimitPerMin !== undefined) {
       this.rateLimitPerMin = positiveInt(options.rateLimitPerMin, this.rateLimitPerMin);
     }
+    const total = this.inputTokens + this.outputTokens;
+    if (this.halt === 'ceiling' && total < this.ceiling) {
+      this.halt = 'none';
+      this.warned = false;
+    }
     return this.snapshot();
   }
 

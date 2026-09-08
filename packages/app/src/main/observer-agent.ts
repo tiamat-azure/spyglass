@@ -120,7 +120,11 @@ export class ObserverAgent {
     warnRatio?: number;
     rateLimitPerMin?: number;
   }): UsagePayload {
+    const previousHalt = this.deps.budget.snapshot().halt;
     const snapshot = this.deps.budget.configure(options);
+    if (previousHalt === 'ceiling' && snapshot.halt === 'none') {
+      this.announcedHalt = undefined;
+    }
     const payload = toUsagePayload(snapshot, this.deps.modelName());
     this.handlers.emitUsage(payload);
     return payload;

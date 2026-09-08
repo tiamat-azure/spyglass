@@ -72,4 +72,16 @@ describe('fast token budget (F-70 / F-72 / F-73)', () => {
     budget.recordCall(1, 1);
     expect(budget.decide().reason).toBe('rate-limit');
   });
+
+  it('clears a ceiling halt from configure() when usage is under the new limit', () => {
+    const budget = new FastTokenBudget({ ceiling: 100, warnRatio: 0.5 });
+    budget.recordCall(80, 20);
+    expect(budget.decide().reason).toBe('ceiling');
+    const stillOver = budget.configure({ ceiling: 90 });
+    expect(stillOver.halt).toBe('ceiling');
+    const resumed = budget.configure({ ceiling: 400 });
+    expect(resumed.halt).toBe('none');
+    expect(resumed.ceiling).toBe(400);
+    expect(budget.decide().decision).toBe('allow');
+  });
 });
