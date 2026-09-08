@@ -292,6 +292,7 @@ export class RefineEngine {
     session.beginRefine();
     const token = ++this.runToken;
     this.budget.beginOperation();
+    let persistedRevision: number | undefined;
     try {
       const result = await this.deps.refine(events, aggressiveness);
       if (!this.stillOwns(token, sessionId)) {
@@ -328,9 +329,9 @@ export class RefineEngine {
         steps
       };
       await persistRevision(sessionDir, file);
+      persistedRevision = file.revision;
       await this.deps.afterPersist?.();
       if (!this.stillOwns(token, sessionId)) {
-        await discardOrphanRevision(sessionDir, file.revision);
         return this.abandonStale(sessionId, hadRevision);
       }
       const afterHash = await rawFingerprint(sessionDir);
@@ -339,6 +340,7 @@ export class RefineEngine {
         return { ok: false, error: 'raw.jsonl mutated during refine' };
       }
       this.current = file;
+      persistedRevision = undefined;
       session.finishRefineReview();
       return { ok: true, revision: toView(file) };
     } catch (error) {
@@ -350,6 +352,16 @@ export class RefineEngine {
         ok: false,
         error: error instanceof Error ? error.message : String(error)
       };
+    } finally {
+      // Every post-persist abort (stillOwns, hash mismatch, catch — including
+      // when discard itself threw) must unlink rev-N so nextRevision reuses N.
+      if (persistedRevision !== undefined) {
+        try {
+          await discardOrphanRevision(sessionDir, persistedRevision);
+        } catch {
+          // best-effort; a burned slot would skip N forever
+        }
+      }
     }
   }
 

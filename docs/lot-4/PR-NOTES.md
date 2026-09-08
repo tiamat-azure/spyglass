@@ -63,7 +63,7 @@ no key. Offline (`SPYGLASS_LLM_OFFLINE=1`) cannot enter `refining` (S-5).
 
 ### How the exit demos were proven
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test` (266 passed, 1 skipped),
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (268 passed, 1 skipped),
 `pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**14 passed**, Lots 0–4)
 on this branch. CI uses the mock LLM transport (no live keys).
 
@@ -119,8 +119,10 @@ on this branch. CI uses the mock LLM transport (no live keys).
   match.
 - **P2-2:** `bindLlmProposal` ignores model `actionType`; local action +
   `classifyVerification` stay paired in `rev-N.json`.
-- **P2-3:** late abort after `persistRevision` deletes the orphan `rev-N.json`
-  so `nextRevision` reuses N; no reviewing orphan on disk.
+- **P2-3 / P3-1:** every post-persist abort unlinks the just-written
+  `rev-N.json` (`!stillOwns`, `raw.jsonl` hash mismatch, `catch` after a
+  successful persist — including when discard itself threw). `nextRevision`
+  reuses N; no reviewing orphan on disk.
 
 ## Screenshots (committed)
 

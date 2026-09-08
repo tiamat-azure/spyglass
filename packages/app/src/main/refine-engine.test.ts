@@ -477,6 +477,95 @@ describe('RefineEngine', () => {
     expect(session.state).toBe('reviewing');
   });
 
+  it('discards rev-N.json when raw.jsonl mutates after persist (P3-1 hash-mismatch)', async () => {
+    const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
+    const steps = refineFromRaw(session.events, 'balanced');
+    const rawPath = join(session.dir, 'raw.jsonl');
+    const originalRaw = await readFile(rawPath, 'utf8');
+    let trip = true;
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps,
+        source: 'smart',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false,
+      afterPersist: async () => {
+        if (trip) {
+          trip = false;
+          await writeFile(rawPath, `${originalRaw}\n`, 'utf8');
+        }
+      }
+    });
+    const mutated = await engine.run('balanced', false);
+    expect(mutated.ok).toBe(false);
+    if (!mutated.ok) {
+      expect(mutated.error).toMatch(/raw\.jsonl mutated during refine/);
+    }
+    expect(engine.currentRevision()).toBeUndefined();
+    expect(session.state).toBe('sealed');
+    await expect(readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')).rejects.toThrow();
+    expect(await nextRevision(session.dir)).toBe(1);
+
+    const retry = await engine.run('balanced', false);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) {
+      return;
+    }
+    expect(retry.revision.revision).toBe(1);
+    expect(session.state).toBe('reviewing');
+  });
+
+  it('discards rev-N.json when catch runs after persist (P3-1 catch-path / !stillOwns)', async () => {
+    const session = await makeSession([click('evt_000001', 1, 'https://app.example.test/a', 1)]);
+    const steps = refineFromRaw(session.events, 'balanced');
+    let trip = true;
+    const engine = new RefineEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      refine: async () => ({
+        ok: true,
+        steps,
+        source: 'smart',
+        inputTokens: 1,
+        outputTokens: 1,
+        latencyMs: 1
+      }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      confirmThreshold: () => 100_000,
+      offline: () => false,
+      afterPersist: async () => {
+        if (trip) {
+          trip = false;
+          engine.reset();
+          throw new Error('boom after persist');
+        }
+      }
+    });
+    const crashed = await engine.run('balanced', false);
+    expect(crashed.ok).toBe(false);
+    if (!crashed.ok) {
+      expect(crashed.error).toMatch(/aborted|boom after persist/);
+    }
+    expect(engine.currentRevision()).toBeUndefined();
+    expect(session.state).toBe('sealed');
+    await expect(readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')).rejects.toThrow();
+    expect(await nextRevision(session.dir)).toBe(1);
+
+    const retry = await engine.run('balanced', false);
+    expect(retry.ok).toBe(true);
+    if (!retry.ok) {
+      return;
+    }
+    expect(retry.revision.revision).toBe(1);
+    expect(session.state).toBe('reviewing');
+  });
+
   it('rejects sourceEvents that are retracted (LOT4-R4)', async () => {
     const events: RawEvent[] = [
       click('evt_000001', 1, 'https://app.example.test/a', 1),
