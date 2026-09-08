@@ -27,7 +27,12 @@ export async function runGenerateCli(
 const entry = process.argv[1];
 const isMain = entry !== undefined && import.meta.url === pathToFileURL(entry).href;
 if (isMain) {
-  void runGenerateCli().then((code) => {
-    process.exit(code);
-  });
+  void runGenerateCli()
+    .then((code) => {
+      process.exit(code);
+    })
+    .catch((error) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exit(1);
+    });
 }

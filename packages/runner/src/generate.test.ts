@@ -393,6 +393,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(source).toContain('generatedHelpText()');
     expect(source).toContain("argv.includes('--help')");
     expect(source).toContain("argv.includes('-h')");
+    expect(source).toContain("argv.includes('--headless')");
+    expect(source).not.toContain("process.argv.includes('--headless')");
     expect(source.indexOf('process.exit(0)')).toBeLessThan(
       source.indexOf('JSON.stringify({ exitCode')
     );
@@ -416,6 +418,12 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(stdout).toMatch(/--no-ai/);
     expect(stdout).not.toMatch(/"exitCode"/);
     expect(stdout).not.toMatch(/"runDir"/);
+  });
+
+  it('generate-cli main entry catches unhandled rejections (L6-039)', async () => {
+    const source = await readFile(join(repoRoot(), 'packages/runner/src/generate-cli.ts'), 'utf8');
+    expect(source).toContain('.catch((error) => {');
+    expect(source).toContain('process.exit(1)');
   });
 
   it('generated scenario.ts catches runScenario failures and exits 1 (L6-026)', () => {

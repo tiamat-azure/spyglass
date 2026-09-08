@@ -185,7 +185,7 @@ try {
   }
   const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
   const result = await runScenario(scenario, {
-    headless: process.argv.includes('--headless'),
+    headless: argv.includes('--headless'),
     argv,
     env: process.env,
     scriptDir: here

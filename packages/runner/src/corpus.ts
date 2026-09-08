@@ -105,6 +105,16 @@ export type CorpusWaveResult = {
   durationMs: number;
 };
 
+/** Wave mode is `script` only when every step is script; otherwise AI (or none). */
+export function corpusWaveMode(
+  steps: readonly { mode?: 'script' | 'AI' }[]
+): CorpusWaveResult['mode'] {
+  if (steps.length === 0) {
+    return 'none';
+  }
+  return steps.every((step) => step.mode === 'script') ? 'script' : 'AI';
+}
+
 export type MeasuredRates = {
   schemaVersion: 1;
   protocol: 'prd-2.2-jplus1';
@@ -246,13 +256,14 @@ export async function measureCorpus(input: {
         runId
       });
       const failed = result.report.steps.find((step) => step.status === 'failed');
+      const mode = corpusWaveMode(result.report.steps);
       const row: CorpusWaveResult = {
         id: site.id,
         name: site.name,
         startUrl: site.startUrl,
-        ok: result.exitCode === 0,
+        ok: result.exitCode === 0 && mode === 'script',
         exitCode: result.exitCode,
-        mode: result.report.steps[0]?.mode ?? 'none',
+        mode,
         durationMs: Date.now() - siteStarted
       };
       if (failed?.error !== undefined) {

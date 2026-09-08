@@ -1,5 +1,5 @@
-import { writeFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import type { MeasuredRates } from './corpus.ts';
@@ -62,6 +62,7 @@ export async function runCorpusCli(
       env,
       headless: true
     });
+    await mkdir(dirname(out), { recursive: true });
     await writeFile(out, `${JSON.stringify(measured, null, 2)}\n`, 'utf8');
     process.stdout.write(`${JSON.stringify({ out, rate: measured.replayWithoutAiRate })}\n`);
     return measured.sites.every((row) => row.ok) ? 0 : 1;

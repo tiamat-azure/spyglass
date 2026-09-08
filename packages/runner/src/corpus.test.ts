@@ -4,11 +4,25 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { repoRoot } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
-import { LOCAL_CORPUS_SIZE, localCorpusSites, measureCorpus, PUBLIC_CORPUS } from './corpus.ts';
+import {
+  LOCAL_CORPUS_SIZE,
+  corpusWaveMode,
+  localCorpusSites,
+  measureCorpus,
+  PUBLIC_CORPUS
+} from './corpus.ts';
 import { resolveCorpusOutPath, runCorpusCli } from './corpus-cli.ts';
 import { startFixtureServer } from './http-fixture.ts';
 
 describe('Lot 6 measurement protocol corpus', () => {
+  it('aggregates step modes so no-AI success is exit 0 and all script (L6-038)', () => {
+    expect(corpusWaveMode([])).toBe('none');
+    expect(corpusWaveMode([{ mode: 'script' }, { mode: 'script' }])).toBe('script');
+    expect(corpusWaveMode([{ mode: 'script' }, { mode: 'AI' }])).toBe('AI');
+    expect(corpusWaveMode([{ mode: 'AI' }, { mode: 'script' }])).toBe('AI');
+    expect(corpusWaveMode([{ mode: 'script' }, {}])).toBe('AI');
+  });
+
   it('defines 10 public sites and 10 local protocol pages', () => {
     expect(PUBLIC_CORPUS).toHaveLength(10);
     expect(new Set(PUBLIC_CORPUS.map((site) => site.id)).size).toBe(10);
@@ -60,6 +74,14 @@ describe('Lot 6 measurement protocol corpus', () => {
     expect(() =>
       resolveCorpusOutPath(['--out', resolve(repoRoot(), '..', 'spyglass-out-escape.json')], 'J+0')
     ).toThrow(/escapes the repo/);
+  });
+
+  it('corpus-cli mkdir parent dirs before writeFile (L6-040)', async () => {
+    const src = await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), 'corpus-cli.ts'),
+      'utf8'
+    );
+    expect(src).toContain('mkdir(dirname(out), { recursive: true })');
   });
 
   it('measure-corpus script uses --experimental-transform-types (L6-007)', async () => {

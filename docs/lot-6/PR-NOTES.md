@@ -378,6 +378,22 @@ Applied on tip `61af7e5e376c7d57fc6a4789d2cc00f79d606ef2`. Product decisions
 Unit tests after this pass: **388 passed, 1 skipped**, 52 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 15 (Copilot auto-fix)
+
+Applied on tip `ddffb3cd462ea03854da8ff65af0f61b9c765829`. Product decisions
+1–5, J1c, J8c, A19a, H29a, D35b, and O34a are unchanged.
+
+- **L6-038** `measureCorpus` aggregates step `mode` across **all** steps
+  (`corpusWaveMode`): `script` only when every step is `script`; otherwise
+  `AI` (or `none` if there are no steps). `ok` / `replayWithoutAiRate` count
+  a site only when exit 0 **and** all steps are `script`.
+- **L6-039** `generate-cli` main entry `.catch` writes stderr and `process.exit(1)`
+  on unhandled rejection (same as `corpus-cli` / L6-014).
+- **L6-040** `corpus-cli` `mkdir(dirname(out), { recursive: true })` before
+  `writeFile` so nested `--out` under the repo jail does not ENOENT.
+- **L6-041** Generated `scenario.ts` uses the local `argv` constant for
+  `--headless` (same as `--help`), not a fresh `process.argv.includes`.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
