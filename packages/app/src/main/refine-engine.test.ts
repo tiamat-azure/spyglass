@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { canFinalize, createMockTransport, LlmGateway, refineFromRaw } from '@spyglass/llm';
+import { writeGeneratedFromRevision } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
 import {
   applyCorrelatedObserveEnrichment,
   nextRevision,
   observeMatchScore,
+  type RefinedRevisionFile,
   RefineEngine
 } from './refine-engine.ts';
 import type { RecorderState, SessionOrchestrator } from './session-orchestrator.ts';
@@ -162,6 +164,7 @@ function engineFor(
     observe?: () => Promise<{ ok: boolean; observations: Array<{ selector?: string }> }>;
     threshold?: number;
     offline?: boolean;
+    generate?: (sessionDir: string, file: RefinedRevisionFile) => Promise<void>;
   }
 ): RefineEngine {
   const gateway = new LlmGateway({
@@ -189,7 +192,8 @@ function engineFor(
     model: () => 'claude-sonnet-4-5-20250929',
     confirmThreshold: () => options?.threshold ?? 100_000,
     offline: () => options?.offline === true,
-    observe: options?.observe
+    observe: options?.observe,
+    generate: options?.generate
   });
 }
 
@@ -293,6 +297,74 @@ describe('RefineEngine', () => {
       await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
     ) as { sessionId: string };
     expect(scenarioJson.sessionId).toBe('ses_lot4');
+  });
+
+  it('does not leave the session stuck if generate fails (L6-001)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    let failGenerate = true;
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        if (failGenerate) {
+          failGenerate = false;
+          throw new Error('disk full');
+        }
+        await writeGeneratedFromRevision(sessionDir, file);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    expect(engine.view()?.canFinalize).toBe(true);
+
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/disk full/);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.currentRevision()?.status).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+    const diskAfterFail = JSON.parse(
+      await readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')
+    ) as { status: string };
+    expect(diskAfterFail.status).toBe('reviewing');
+
+    const retry = await engine.finalize();
+    expect(retry.ok).toBe(true);
+    if (retry.ok) {
+      expect(retry.revision.status).toBe('finalized');
+      expect(retry.revision.canFinalize).toBe(false);
+    }
+    expect(session.state).toBe('finalized');
+    const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
+    expect(generated).toContain('runScenario');
   });
 
   it('requires explicit confirm above the per-operation smart threshold', async () => {

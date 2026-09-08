@@ -81,6 +81,22 @@ export async function generateFromSessionDir(sessionDir: string): Promise<Genera
   return await writeGeneratedPackage({ sessionDir, scenario });
 }
 
+/**
+ * Writes `generated/` from an in-memory revision that may still be `reviewing`.
+ * Used by finalize so generate can succeed before persisting `status: 'finalized'`
+ * (L6-001). CLI `generateFromSessionDir` still requires a finalized rev-N.json.
+ */
+export async function writeGeneratedFromRevision(
+  sessionDir: string,
+  revision: SessionRevisionLike
+): Promise<GeneratedPackagePaths> {
+  const startUrl = await readSessionStartUrl(sessionDir);
+  return await writeGeneratedPackage({
+    sessionDir,
+    scenario: scenarioFromRevision(revision, startUrl)
+  });
+}
+
 export async function loadFinalizedScenarioForGenerate(sessionDir: string): Promise<Scenario> {
   const startUrl = await readSessionStartUrl(sessionDir);
   const refinedDir = join(sessionDir, 'refined');
@@ -219,12 +235,26 @@ node --experimental-transform-types scenario.ts --headless --no-ai
 En CI, \`CI=1\` (ou \`true\` / \`yes\`) équivaut à \`--no-ai\` (F-60) ; \`--ai\`
 le force. \`--no-ai\` gagne toujours.
 
+### \`--base-url\` (F-58)
+
+WHATWG \`new URL(absolu, base)\` **ignore** \`base\` dès que \`startUrl\` est
+absolu — or les scénarios capturés le sont. Avec \`--base-url\` :
+
+- \`startUrl\` **relatif** : résolution WHATWG contre la base.
+- \`startUrl\` **http(s) absolu** : l'origine est remplacée par celle de la
+  base. Si le pathname de base n'est pas \`/\`, il est préfixé au chemin du
+  start (ex. \`https://staging.test/preview/\` + \`https://prod.test/login\` →
+  \`https://staging.test/preview/login\`). Query et hash du start sont
+  conservés.
+- \`startUrl\` \`file:\` (ou autre schéma non-http) : **inchangé** — un base
+  http ne coerce pas un fichier local.
+
 ## Paramètres (F-58)
 
 | Flag | Effet |
 | --- | --- |
 | \`--headless\` | Chromium sans fenêtre |
-| \`--base-url <url>\` | préfixe le \`startUrl\` |
+| \`--base-url <url>\` | swap l'origine d'un \`startUrl\` http(s) absolu (staging) ; un pathname de base autre que \`/\` est préfixé ; relatif = résolution WHATWG |
 | \`--timeout <ms>\` | timeout de vérification d'étape (défaut 10000) |
 | \`--max-ai-retries <n>\` | tentatives de rattrapage (défaut 3 / \`MAX_AI_RETRIES\`) |
 | \`--no-ai\` | aucun rattrapage, aucun appel LLM |

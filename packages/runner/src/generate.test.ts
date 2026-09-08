@@ -68,6 +68,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(readme).toContain('--headless');
     expect(readme).toContain('--no-ai');
     expect(readme).toContain('--base-url');
+    expect(readme).toMatch(/origine|origin|staging/i);
+    expect(readme).toContain('WHATWG');
     expect(readme).toContain('--timeout');
     expect(readme).toContain('--max-ai-retries');
     expect(readme).toContain('--ai');

@@ -226,9 +226,11 @@ on the happy path (F-50), post-step verification (F-51), bounded AI recovery
 Implemented (Lot 6): finalize writes `generated/scenario.json` (source of
 truth), thin `scenario.ts` importing `runScenario` from
 `@spyglass/runner` (ADR-0006 / F-45), README mode d'emploi, F-58 flags with
-**visible by default** and `--headless`. The script runs outside Electron;
-`--no-ai` needs no API key. Measurement protocol for PRD §2.2 non-contractual
-replay rates: 10 public sites + local CI corpus, J+1 replay, published under
+**visible by default** and `--headless`. `--base-url` rewrites the origin of
+an absolute http(s) `startUrl` (optional base path prefix); relative URLs
+still resolve with WHATWG. The script runs outside Electron; `--no-ai` needs
+no API key. Measurement protocol for PRD §2.2 non-contractual replay rates:
+10 public sites + local CI corpus, J+1 replay, published under
 [`docs/lot-6/`](docs/lot-6/).
 
 **Not** implemented: Lot 7 assisted patch apply / PR to the target repo

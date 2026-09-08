@@ -11,6 +11,7 @@ import type {
 } from '@spyglass/contracts';
 import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
+import { applyBaseUrl } from './base-url.ts';
 import type { PageDriver } from './driver.ts';
 import {
   parseGeneratedArgv,
@@ -512,14 +513,7 @@ async function captureFailure(
 }
 
 function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
-  if (baseUrl === undefined || baseUrl.length === 0) {
-    return startUrl;
-  }
-  try {
-    return new URL(startUrl, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).href;
-  } catch {
-    return startUrl;
-  }
+  return applyBaseUrl(baseUrl, startUrl);
 }
 
 function unique(values: string[]): string[] {

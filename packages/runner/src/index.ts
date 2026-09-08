@@ -3,6 +3,7 @@
  * ADR-0006 / PRD F-45, F-50–F-61, §6.12.
  */
 
+export { applyBaseUrl } from './base-url.ts';
 export type { CorpusSite, CorpusWaveResult, MeasuredRates } from './corpus.ts';
 export {
   LOCAL_CORPUS_SIZE,
@@ -28,6 +29,8 @@ export {
   generateFromSessionDir,
   loadFinalizedScenarioForGenerate,
   npmPackageNameForSession,
+  readSessionStartUrl,
+  writeGeneratedFromRevision,
   writeGeneratedPackage
 } from './generate.ts';
 export { generatedHelpText, runGeneratedScript } from './generated-run.ts';

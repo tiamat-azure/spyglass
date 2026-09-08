@@ -16,7 +16,7 @@ import {
   unconfirmedWeaks,
   weakGroup
 } from '@spyglass/llm';
-import { generateFromSessionDir } from '@spyglass/runner';
+import { writeGeneratedFromRevision } from '@spyglass/runner';
 import type { RefinedStepView, RefineRevisionView } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
@@ -48,6 +48,11 @@ export type RefineEngineDeps = {
   observe?: () => Promise<{ ok: boolean; observations: ObserveCandidate[] }>;
   /** Test seam: invoked after persistRevision, before the ownership check. */
   afterPersist?: () => void | Promise<void>;
+  /**
+   * Writes `generated/` (F-45). Called **before** persisting `status: 'finalized'`
+   * so a generate failure cannot leave the session stuck (L6-001).
+   */
+  generate?: (sessionDir: string, file: RefinedRevisionFile) => Promise<void>;
 };
 
 export type { ObserveCandidate } from '@spyglass/llm';
@@ -331,22 +336,59 @@ export class RefineEngine {
       return { ok: false, error: 'no session directory' };
     }
     const before = await rawFingerprint(sessionDir);
-    file.status = 'finalized';
-    await persistRevision(sessionDir, file);
+    const generated = await this.writeGeneratedPackage(sessionDir, file);
+    if (!generated.ok) {
+      return generated;
+    }
     if ((await rawFingerprint(sessionDir)) !== before) {
       return { ok: false, error: 'raw.jsonl mutated during finalize' };
     }
+    file.status = 'finalized';
     try {
-      await generateFromSessionDir(sessionDir);
+      await persistRevision(sessionDir, file);
+    } catch (error) {
+      file.status = 'reviewing';
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+    if ((await rawFingerprint(sessionDir)) !== before) {
+      file.status = 'reviewing';
+      await persistRevision(sessionDir, file);
+      return { ok: false, error: 'raw.jsonl mutated during finalize' };
+    }
+    try {
+      session.finalizeScenario();
+    } catch (error) {
+      file.status = 'reviewing';
+      await persistRevision(sessionDir, file);
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+    this.current = file;
+    return { ok: true, revision: toView(file) };
+  }
+
+  private async writeGeneratedPackage(
+    sessionDir: string,
+    file: RefinedRevisionFile
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      if (this.deps.generate !== undefined) {
+        await this.deps.generate(sessionDir, file);
+        return { ok: true };
+      }
+      await writeGeneratedFromRevision(sessionDir, file);
+      return { ok: true };
     } catch (error) {
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error)
       };
     }
-    session.finalizeScenario();
-    this.current = file;
-    return { ok: true, revision: toView(file) };
   }
 
   reset(): void {

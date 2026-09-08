@@ -87,6 +87,27 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
    is not in this lot’s wall-clock. Command is documented; parent can run
    `--public --j1` on 2026-09-09.
 
+## Adversarial pass 1 (auto-fix)
+
+Applied on tip `7438b3ddefdeb82a3bc9cb04c2de5512c91aa525`. Product decisions
+1–5 above are unchanged. L6-003 (J+1 exit checklist) is unchanged
+(ask-user pending).
+
+- **L6-001** Finalize writes `generated/` while the revision is still
+  `reviewing`, then persists `status: 'finalized'` and calls
+  `finalizeScenario()`. A generate failure leaves disk + memory
+  `reviewing`, orchestrator `reviewing`, and `canFinalize` true so
+  re-finalize stays open. Persist / `finalizeScenario` failures after a
+  successful generate roll the revision status back to `reviewing`.
+- **L6-002** `--base-url` rewrites the origin of an absolute http(s)
+  `startUrl` (optional non-root base path prefix, query/hash preserved).
+  Relative `startUrl` still uses WHATWG resolution. `file:` start URLs are
+  left unchanged. Generated README matches this behavior.
+
+Unit tests after this pass: **353 passed, 1 skipped**, 49 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`). L6-003 J+1 public replay
+remains pending.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
