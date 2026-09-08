@@ -12,7 +12,12 @@ export function resolveCorpusOutPath(argv: readonly string[], wave: MeasuredRate
   if (outArg !== undefined && outArg.length > 0) {
     return resolve(outArg);
   }
-  const file = wave === 'J+1' ? 'measured-rates.j1.json' : 'measured-rates.json';
+  const file =
+    wave === 'J+1'
+      ? 'measured-rates.j1.json'
+      : wave === 'local-immutable'
+        ? 'measured-rates.local.json'
+        : 'measured-rates.json';
   return resolve(repoRoot(), 'docs/lot-6', file);
 }
 
@@ -29,13 +34,13 @@ export async function runCorpusCli(
   const wave = publicLive ? (wantsJ1 ? 'J+1' : 'J+0') : 'local-immutable';
   const out = resolveCorpusOutPath(argv, wave);
   let close: (() => Promise<void>) | undefined;
-  let sites = [...PUBLIC_CORPUS];
-  if (!publicLive) {
-    const server = await startFixtureServer();
-    close = () => server.close();
-    sites = localCorpusSites(server.origin);
-  }
   try {
+    let sites = [...PUBLIC_CORPUS];
+    if (!publicLive) {
+      const server = await startFixtureServer();
+      close = () => server.close();
+      sites = localCorpusSites(server.origin);
+    }
     const measured = await measureCorpus({
       sites,
       wave,
@@ -46,15 +51,27 @@ export async function runCorpusCli(
     await writeFile(out, `${JSON.stringify(measured, null, 2)}\n`, 'utf8');
     process.stdout.write(`${JSON.stringify({ out, rate: measured.replayWithoutAiRate })}\n`);
     return measured.sites.every((row) => row.ok) ? 0 : 1;
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
   } finally {
-    await close?.();
+    try {
+      await close?.();
+    } catch {
+      // close must not mask measure/write exit status
+    }
   }
 }
 
 const entry = process.argv[1];
 const isMain = entry !== undefined && import.meta.url === pathToFileURL(entry).href;
 if (isMain) {
-  void runCorpusCli().then((code) => {
-    process.exit(code);
-  });
+  void runCorpusCli()
+    .then((code) => {
+      process.exit(code);
+    })
+    .catch((error) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      process.exit(1);
+    });
 }

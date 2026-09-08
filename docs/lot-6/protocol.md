@@ -26,7 +26,10 @@ seulement). Pour cet hôte, l'étape 1 est `elementVisible` sur `body`
    `textPresent` (marqueur) → `urlMatches` (URL exacte, pas un glob universel).
 2. Exécuter le **script généré** (ou `runScenario` sans driver) en `--headless --no-ai`.
 3. Succès = code 0, toutes les étapes `mode=script`.
-4. Enregistrer `docs/lot-6/measured-rates.json` (vague `J+0` ou `local-immutable`).
+4. Enregistrer `docs/lot-6/measured-rates.json` (vague `J+0` publique).
+   Le corpus local (`measure-corpus` sans `--public`) écrit
+   `docs/lot-6/measured-rates.local.json` et **ne clobber pas** le J+0
+   canonique. `--j1` écrit `docs/lot-6/measured-rates.j1.json`.
 
 ## Vague J+1
 

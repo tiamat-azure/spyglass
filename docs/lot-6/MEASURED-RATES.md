@@ -42,6 +42,11 @@ Re-run local / J+0:
 pnpm measure-corpus
 ```
 
+`pnpm measure-corpus` (local-immutable) writes [`measured-rates.local.json`](measured-rates.local.json)
+and does **not** clobber canonical J+0 [`measured-rates.json`](measured-rates.json).
+J+0 public: `--public` (default `--out` `measured-rates.json`). J+1:
+`--public --j1` (default `--out` `measured-rates.j1.json`).
+
 J+1 public (`--public --j1`) is **N/A / pending** until the due date; use the
 command in the section above (`--out docs/lot-6/measured-rates.j1.json`).
 Do not invent a J+1 percentage.

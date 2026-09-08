@@ -187,6 +187,22 @@ Applied on tip `6bb40bddd59285a5479ad7071364e6d6c45b2d0f`. Product decisions
 Unit tests after this pass: **362 passed, 1 skipped**, 49 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 5 (auto-fix)
+
+Applied on tip `aad8027192f4cd234aff9609fb2d9978e14c5511`. Product decisions
+1–5, J1c, and J8c are unchanged.
+
+- **L6-013** Local-immutable default `--out` is
+  `docs/lot-6/measured-rates.local.json` and does not clobber canonical J+0
+  `measured-rates.json`. J+0 public still defaults to `measured-rates.json`;
+  J+1 still defaults to `measured-rates.j1.json`.
+- **L6-014** `runCorpusCli` try/catch (fixture bind + `writeFile` + measure)
+  writes stderr and exits 1. `isMain` `.catch` prevents an unhandled
+  rejection.
+
+Unit tests after this pass: **363 passed, 1 skipped**, 50 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

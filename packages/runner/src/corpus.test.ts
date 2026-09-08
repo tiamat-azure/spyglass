@@ -38,7 +38,7 @@ describe('Lot 6 measurement protocol corpus', () => {
     }
   }, 120_000);
 
-  it('defaults --j1 output to measured-rates.j1.json and does not clobber J+0 (L6-006)', () => {
+  it('defaults local --out to measured-rates.local.json and does not clobber J+0 (L6-006 / L6-013)', () => {
     expect(resolveCorpusOutPath([], 'J+1')).toBe(
       resolve(repoRoot(), 'docs/lot-6/measured-rates.j1.json')
     );
@@ -49,7 +49,7 @@ describe('Lot 6 measurement protocol corpus', () => {
       resolve(repoRoot(), 'docs/lot-6/measured-rates.json')
     );
     expect(resolveCorpusOutPath([], 'local-immutable')).toBe(
-      resolve(repoRoot(), 'docs/lot-6/measured-rates.json')
+      resolve(repoRoot(), 'docs/lot-6/measured-rates.local.json')
     );
     expect(resolveCorpusOutPath(['--out', '/tmp/custom-j1.json'], 'J+1')).toBe(
       resolve('/tmp/custom-j1.json')
