@@ -5,14 +5,33 @@ import {
   type LlmTransport
 } from '@spyglass/llm';
 
+export type TransportMode = 'offline' | 'mock' | 'live';
+
+/**
+ * T1a: a saved API key selects live fetch. Mock remains for CI (no key or
+ * explicit `SPYGLASS_LLM_TRANSPORT=mock`). Offline env always fails closed.
+ */
+export function resolveTransportMode(env: NodeJS.ProcessEnv, hasFastKey: boolean): TransportMode {
+  if (isLlmOffline(env)) {
+    return 'offline';
+  }
+  if (env.SPYGLASS_LLM_TRANSPORT === 'mock') {
+    return 'mock';
+  }
+  if (hasFastKey) {
+    return 'live';
+  }
+  return 'mock';
+}
+
 export function selectTransport(env: NodeJS.ProcessEnv, hasFastKey: boolean): LlmTransport {
-  const mode = env.SPYGLASS_LLM_TRANSPORT;
+  const mode = resolveTransportMode(env, hasFastKey);
   const delayMs = intOr(env.SPYGLASS_LLM_MOCK_DELAY_MS, 80);
   const tokensPerCall = intOr(env.SPYGLASS_LLM_MOCK_TOKENS, 80);
-  if (isLlmOffline(env)) {
+  if (mode === 'offline') {
     return createMockTransport({ delayMs: 1, fail: 'network cut' });
   }
-  if (mode === 'live' && hasFastKey) {
+  if (mode === 'live') {
     return fetchTransport();
   }
   return createMockTransport({ delayMs, tokensPerCall });

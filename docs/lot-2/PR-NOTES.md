@@ -51,8 +51,8 @@ keys are encrypted with Electron `safeStorage` and never written as plaintext
 in `settings.json`. When encryption is unavailable (headless Linux without a
 keyring), the key stays in memory / env only.
 
-CI never needs a live key: `SPYGLASS_LLM_TRANSPORT=mock` (default without a
-key) plus an explicit offline transport.
+CI never needs a live key: no API key, or explicit `SPYGLASS_LLM_TRANSPORT=mock`.
+Saving a key switches to live fetch; Test connection never soft-succeeds on mock.
 
 **No Lot 3+** (no voice sidecar, refinement, runner, or generated script).
 Stagehand `act()` replay remains LLM-free (I-07).
@@ -111,7 +111,8 @@ write (Lot 1 Record/Stop e2e still ~2.7 s).
   frozen (Lot 4).
 - F-25 dialogue during recording, F-26 verification proposals, F-27 click-to-
   highlight (C-1 bis overlay) are out of Lot 2 scope.
-- Live Anthropic/OpenAI calls are opt-in (`SPYGLASS_LLM_TRANSPORT=live` + key).
+- Live Anthropic/OpenAI calls start when a real API key is saved (T1a). CI
+  stays on the mock with no key or `SPYGLASS_LLM_TRANSPORT=mock`.
 - Linux CI `safeStorage.isEncryptionAvailable()` is often false; keys then
   stay in memory. Encrypted persist is covered by a vault double in unit tests.
 
@@ -125,8 +126,9 @@ write (Lot 1 Record/Stop e2e still ~2.7 s).
 
 ### Adversarial pass 1 (auto-fix)
 
-Applied on this branch without a PR. T1 (Settings test / mock transport unless
-`SPYGLASS_LLM_TRANSPORT=live`) left for the captain.
+Applied on this branch without a PR. **T1a locked:** a saved API key switches
+narration to live fetch; « Test connection » always hits the real provider and
+fails closed. Mock remains for CI (no key / `SPYGLASS_LLM_TRANSPORT=mock`).
 
 - Password/card keystrokes are omitted from gabarits (`shouldMaskField`) and
   `keyGabarit` never interpolates masked or single-character keys.
@@ -145,7 +147,23 @@ Applied on this branch without a PR. T1 (Settings test / mock transport unless
 Raising `sessionTokenLimitFast` from Settings via `configure()` / `configureBudget`
 clears `halt === 'ceiling'` when current tokens are under the new limit, resets
 the warn latch, and emits usage so enrichment resumes without « Relever le
-plafond ». T1 still pending captain.
+plafond ».
+
+### Adversarial pass 3 + T1a
+
+- **T1a:** `resolveTransportMode` / lazy `selectTransport` go **live** once a
+  fast API key exists. Explicit `mock` / no key keep CI green. Test connection
+  uses `liveTransport` (default `fetchTransport`), never the mock narrate path.
+- **N1:** `enrich()` respects the `warned` latch — 50 % warning once per
+  crossing, not every batch.
+- **N2:** `raiseCeiling` persists `sessionTokenLimitFast` and the Settings
+  ceiling field tracks `usage.ceiling` so a later Save cannot undo the raise.
+- **N3:** clearing a ceiling halt emits « Plafond relevé » and disables stale
+  « Relever le plafond » actions in the chat.
+- **N4:** `usageRaiseCeiling` returns `{ ok: false }` when the observer runtime
+  is missing (no optional-chain success).
+- **N5:** `configure()` sets `halt='ceiling'` immediately when usage already
+  exceeds the new limit.
 
 ## Screenshots (committed)
 
@@ -155,7 +173,7 @@ plafond ». T1 still pending captain.
 | [`screenshots/enrichment-replace-in-place.png`](screenshots/enrichment-replace-in-place.png) | Same row `ENRICHI` (`Tu as cliqué sur le bouton Start`) + open `descripteur DOM` JSON |
 | [`screenshots/offline-gabarits.png`](screenshots/offline-gabarits.png) | Gabarits only, réseau indisponible banner, `enrichment offline · recording continues` |
 | [`screenshots/suspended-enrichment-recording-continues.png`](screenshots/suspended-enrichment-recording-continues.png) | 80 % warning + ceiling banner, meter 160/100, Stop/REC still active |
-| [`screenshots/f29-settings-safestorage.png`](screenshots/f29-settings-safestorage.png) | F-29 Settings: Haiku pin, `safeStorage` copy, ceiling 100 |
+| [`screenshots/f29-settings-safestorage.png`](screenshots/f29-settings-safestorage.png) | F-29 Settings: Haiku pin, T1a live-on-save copy, ceiling 100 |
 
 Absolute paths in this checkout:
 

@@ -14,6 +14,7 @@ export type UsageSnapshot = {
   halt: BudgetHalt;
   rateLimitPerMin: number;
   callsInWindow: number;
+  warned: boolean;
 };
 
 export type FastTokenBudgetOptions = {
@@ -65,7 +66,8 @@ export class FastTokenBudget {
       warnRatio: this.warnRatio,
       halt: this.halt,
       rateLimitPerMin: this.rateLimitPerMin,
-      callsInWindow: this.callsInWindow()
+      callsInWindow: this.callsInWindow(),
+      warned: this.warned
     };
   }
 
@@ -151,11 +153,19 @@ export class FastTokenBudget {
       this.rateLimitPerMin = positiveInt(options.rateLimitPerMin, this.rateLimitPerMin);
     }
     const total = this.inputTokens + this.outputTokens;
-    if (this.halt === 'ceiling' && total < this.ceiling) {
+    if (total >= this.ceiling) {
+      if (this.halt === 'none' || this.halt === 'ceiling' || this.halt === 'rate-limit') {
+        this.halt = 'ceiling';
+      }
+    } else if (this.halt === 'ceiling') {
       this.halt = 'none';
       this.warned = false;
     }
     return this.snapshot();
+  }
+
+  markWarned(): void {
+    this.warned = true;
   }
 
   resetSession(): UsageSnapshot {

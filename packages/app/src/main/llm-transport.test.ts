@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { batchMsFromEnv, isLlmOffline, selectTransport } from './llm-transport.ts';
+import {
+  batchMsFromEnv,
+  isLlmOffline,
+  resolveTransportMode,
+  selectTransport
+} from './llm-transport.ts';
 
 describe('llm transport selection', () => {
   it('defaults to mock so CI never needs a live key', async () => {
@@ -39,5 +44,13 @@ describe('llm transport selection', () => {
     expect(isLlmOffline({ SPYGLASS_LLM_TRANSPORT: 'offline' })).toBe(true);
     expect(isLlmOffline({ SPYGLASS_LLM_TRANSPORT: 'mock' })).toBe(false);
     expect(isLlmOffline({})).toBe(false);
+  });
+
+  it('switches to live when a fast API key is present unless mock is explicit (T1a)', () => {
+    expect(resolveTransportMode({}, false)).toBe('mock');
+    expect(resolveTransportMode({}, true)).toBe('live');
+    expect(resolveTransportMode({ SPYGLASS_LLM_TRANSPORT: 'mock' }, true)).toBe('mock');
+    expect(resolveTransportMode({ SPYGLASS_LLM_TRANSPORT: 'live' }, true)).toBe('live');
+    expect(resolveTransportMode({ SPYGLASS_LLM_OFFLINE: '1' }, true)).toBe('offline');
   });
 });

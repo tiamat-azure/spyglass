@@ -42,4 +42,15 @@ describe('settings store (F-29 / safeStorage)', () => {
     expect(disk).not.toContain('sk-memory-only-key-xx');
     expect(store.profileConfig('fast').apiKey).toBe('sk-memory-only-key-xx');
   });
+
+  it('persists a raised sessionTokenLimitFast so Settings cannot silently revert it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-settings-'));
+    const path = join(dir, 'settings.json');
+    const store = new SettingsStore(path, xorTestVault(), {});
+    await store.load();
+    await store.apply({ sessionTokenLimitFast: 200 });
+    expect(store.sessionTokenLimitFast()).toBe(200);
+    const disk = JSON.parse(await readFile(path, 'utf8')) as { sessionTokenLimitFast?: number };
+    expect(disk.sessionTokenLimitFast).toBe(200);
+  });
 });

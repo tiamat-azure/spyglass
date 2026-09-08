@@ -375,12 +375,15 @@ describe('observer agent', () => {
 
   it('resumes enrichment when Settings raises the ceiling above current usage', () => {
     const usage: UsagePayload[] = [];
+    const chat: ChatMessagePayload[] = [];
     const budget = new FastTokenBudget({ ceiling: 100, warnRatio: 0.5 });
     budget.recordCall(80, 20);
     expect(budget.decide().reason).toBe('ceiling');
     const agent = new ObserverAgent(
       {
-        emitChat: () => undefined,
+        emitChat: (message) => {
+          chat.push(message);
+        },
         emitEnriched: () => undefined,
         emitUsage: (payload) => {
           usage.push(payload);
@@ -418,7 +421,105 @@ describe('observer agent', () => {
     expect(payload.ceiling).toBe(500);
     expect(budget.snapshot().halt).toBe('none');
     expect(usage.at(-1)?.halt).toBe('none');
+    expect(chat.some((row) => row.text.includes('Plafond relevé'))).toBe(true);
     expect(budget.decide().decision).toBe('allow');
+    agent.dispose();
+  });
+
+  it('warns once when crossing 50% even across later batches', async () => {
+    const chat: ChatMessagePayload[] = [];
+    const agent = new ObserverAgent(
+      {
+        emitChat: (message) => {
+          chat.push(message);
+        },
+        emitEnriched: () => undefined,
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway: new LlmGateway({
+          transport: createMockTransport({ delayMs: 1, tokensPerCall: 80 }),
+          profiles: () => ({
+            fast: {
+              provider: 'anthropic',
+              model: 'claude-haiku-4-5-20251001',
+              baseUrl: 'https://api.anthropic.com',
+              apiKey: 'sk-test',
+              timeoutMs: 200
+            },
+            smart: {
+              provider: 'anthropic',
+              model: 'x',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            }
+          })
+        }),
+        budget: new FastTokenBudget({ ceiling: 200, warnRatio: 0.5, rateLimitPerMin: 60 }),
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001'
+      }
+    );
+    agent.onSessionStart('ses_test');
+    agent.onRawEvent(click('evt_000001'));
+    await agent.flush();
+    agent.onRawEvent({ ...click('evt_000002'), id: 'evt_000002' });
+    await agent.flush();
+    agent.onRawEvent({ ...click('evt_000003'), id: 'evt_000003' });
+    await agent.flush();
+    const warnings = chat.filter((row) => row.text.includes('du plafond de tokens du profil fast'));
+    expect(warnings).toHaveLength(1);
+    agent.dispose();
+  });
+
+  it('persists an in-session raiseCeiling so a later Settings save cannot undo it', () => {
+    const persisted: number[] = [];
+    const budget = new FastTokenBudget({ ceiling: 100 });
+    budget.recordCall(80, 20);
+    budget.decide();
+    const agent = new ObserverAgent(
+      {
+        emitChat: () => undefined,
+        emitEnriched: () => undefined,
+        emitUsage: () => undefined,
+        appendAgent: async () => undefined
+      },
+      {
+        gateway: new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: {
+              provider: 'anthropic',
+              model: 'claude-haiku-4-5-20251001',
+              baseUrl: 'https://api.anthropic.com',
+              apiKey: 'sk-test',
+              timeoutMs: 50
+            },
+            smart: {
+              provider: 'anthropic',
+              model: 'x',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 50
+            }
+          })
+        }),
+        budget,
+        windowMs: 1,
+        enrichmentEnabled: () => true,
+        modelName: () => 'claude-haiku-4-5-20251001',
+        persistCeiling: (ceiling) => {
+          persisted.push(ceiling);
+        }
+      }
+    );
+    const raised = agent.raiseCeiling();
+    expect(raised.halt).toBe('none');
+    expect(persisted).toEqual([raised.ceiling]);
+    expect(raised.ceiling).toBeGreaterThan(100);
     agent.dispose();
   });
 });

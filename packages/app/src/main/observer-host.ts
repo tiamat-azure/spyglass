@@ -24,7 +24,8 @@ export async function createObserverRuntime(
   );
   await settings.load();
 
-  const transport = selectTransport(process.env, settings.profileConfig('fast').apiKey.length > 0);
+  const transport = () =>
+    selectTransport(process.env, settings.profileConfig('fast').apiKey.trim().length > 0);
   const gateway = new LlmGateway({
     transport,
     profiles: () => ({
@@ -64,7 +65,10 @@ export async function createObserverRuntime(
       budget,
       windowMs,
       enrichmentEnabled: () => settings.enrichmentEnabled() && !isLlmOffline(process.env),
-      modelName: () => settings.profileConfig('fast').model
+      modelName: () => settings.profileConfig('fast').model,
+      persistCeiling: (ceiling) => {
+        void settings.apply({ sessionTokenLimitFast: ceiling });
+      }
     }
   );
   if (!settings.enrichmentEnabled() || isLlmOffline(process.env)) {

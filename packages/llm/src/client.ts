@@ -60,7 +60,9 @@ export type ConnectionTestResult = {
 };
 
 export type LlmGatewayOptions = {
-  transport?: LlmTransport;
+  transport?: LlmTransport | (() => LlmTransport);
+  /** « Test connection » always uses a live fetch — never the mock narrate path. */
+  liveTransport?: LlmTransport;
   profiles: () => { fast: ProfileConfig; smart: ProfileConfig };
 };
 
@@ -69,11 +71,13 @@ export type LlmGatewayOptions = {
  * transport sees any payload — there is no public method that skips it.
  */
 export class LlmGateway {
-  private readonly transport: LlmTransport;
+  private readonly transport: LlmTransport | (() => LlmTransport);
+  private readonly liveTransport: LlmTransport;
   private readonly profiles: () => { fast: ProfileConfig; smart: ProfileConfig };
 
   constructor(options: LlmGatewayOptions) {
     this.transport = options.transport ?? fetchTransport();
+    this.liveTransport = options.liveTransport ?? fetchTransport();
     this.profiles = options.profiles;
   }
 
@@ -91,7 +95,7 @@ export class LlmGateway {
     const request = toTransportRequest('fast', profile, messages.system, messages.user);
     assertNoLeak(request.body, forbidden);
     try {
-      const result = await this.transport.complete(request);
+      const result = await this.resolveNarrateTransport().complete(request);
       assertNoLeak(result, forbidden);
       const parsed = parseNarrationResponse(
         result.text,
@@ -134,7 +138,7 @@ export class LlmGateway {
       'ping'
     );
     try {
-      await this.transport.complete(request);
+      await this.liveTransport.complete(request);
       return {
         ok: true,
         latencyMs: Date.now() - started,
@@ -149,6 +153,10 @@ export class LlmGateway {
       result.error = error instanceof Error ? error.message : String(error);
       return result;
     }
+  }
+
+  private resolveNarrateTransport(): LlmTransport {
+    return typeof this.transport === 'function' ? this.transport() : this.transport;
   }
 }
 

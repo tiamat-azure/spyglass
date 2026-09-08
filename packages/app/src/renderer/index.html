@@ -65,6 +65,12 @@
                 Keys are encrypted with Electron <code>safeStorage</code> and never written in
                 plaintext. Precedence: interface &gt; env &gt; default.
               </p>
+              <p class="settings-copy">
+                Saving an API key switches that profile to the <strong>live</strong> provider.
+                <strong>Test connection</strong> always contacts the real endpoint and fails closed
+                if the key is invalid or the host is unreachable. Without a key — or with
+                <code>SPYGLASS_LLM_TRANSPORT=mock</code> — narration stays on the local mock (CI).
+              </p>
               <p class="settings-copy" id="encryption-status"></p>
             </header>
             <div class="settings-grid">

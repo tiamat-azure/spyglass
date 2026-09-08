@@ -142,3 +142,80 @@ describe('resolveProfile', () => {
     );
   });
 });
+
+describe('test connection (T1a fail-closed)', () => {
+  it('never treats the mock narrate transport as a successful provider ping', async () => {
+    const mock = createMockTransport({ delayMs: 1 });
+    const gateway = new LlmGateway({
+      transport: mock,
+      liveTransport: {
+        complete: async () => {
+          throw new Error('provider unreachable');
+        }
+      },
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: LLM_FAST_MODEL_DEFAULT,
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test-not-live',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-5-20250929',
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: 'sk-test-not-live',
+          timeoutMs: 200
+        }
+      })
+    });
+    const ping = await gateway.testConnection('fast');
+    expect(ping.ok).toBe(false);
+    expect(ping.error).toMatch(/provider unreachable/);
+    const narrate = await gateway.narrate([clickEvent()]);
+    expect(narrate.ok).toBe(true);
+  });
+
+  it('re-reads a lazy narrate transport after a key is saved', async () => {
+    let live = false;
+    const mock = createMockTransport({ delayMs: 1 });
+    const gateway = new LlmGateway({
+      transport: () =>
+        live
+          ? {
+              complete: async () => ({
+                text: JSON.stringify({
+                  narrations: [{ id: 'evt_000123', text: 'Tu as cliqué sur le bouton live' }]
+                }),
+                inputTokens: 1,
+                outputTokens: 1
+              })
+            }
+          : mock,
+      liveTransport: createMockTransport({ delayMs: 1, fail: true }),
+      profiles: () => ({
+        fast: {
+          provider: 'anthropic',
+          model: LLM_FAST_MODEL_DEFAULT,
+          baseUrl: 'https://api.anthropic.com',
+          apiKey: live ? 'sk-saved' : '',
+          timeoutMs: 200
+        },
+        smart: {
+          provider: 'anthropic',
+          model: 'x',
+          baseUrl: '',
+          apiKey: '',
+          timeoutMs: 50
+        }
+      })
+    });
+    live = true;
+    const result = await gateway.narrate([clickEvent()]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.narrations[0]?.text).toMatch(/live/);
+    }
+  });
+});

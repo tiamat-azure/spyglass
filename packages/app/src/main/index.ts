@@ -578,8 +578,11 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (rejectForeignIpc(event, winRef, IPC.usageRaiseCeiling)) {
       return { ok: false };
     }
+    if (observerRuntime === undefined) {
+      return { ok: false };
+    }
     const payload = parseRaiseCeilingPayload(raw);
-    observerRuntime?.observer.raiseCeiling(payload.tokens);
+    observerRuntime.observer.raiseCeiling(payload.tokens);
     return { ok: true };
   });
 

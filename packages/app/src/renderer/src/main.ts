@@ -164,7 +164,8 @@ function applyUsage(
   fill: HTMLElement,
   counts: HTMLElement,
   hint: HTMLElement,
-  usage: UsagePayload
+  usage: UsagePayload,
+  log: HTMLOListElement
 ): void {
   const pct = Math.min(100, Math.max(0, usage.ratio * 100));
   fill.style.width = `${String(pct)}%`;
@@ -177,6 +178,15 @@ function applyUsage(
     usage.halt === 'none'
       ? `${String(usage.calls)} calls · ${String(usage.inputTokens)} in / ${String(usage.outputTokens)} out${usd}`
       : `enrichment ${usage.halt} · recording continues${usd}`;
+  const limit = document.getElementById('session-token-limit');
+  if (limit instanceof HTMLInputElement && document.activeElement !== limit) {
+    limit.value = String(usage.ceiling);
+  }
+  if (usage.halt !== 'ceiling') {
+    for (const button of log.querySelectorAll<HTMLButtonElement>('button.chat-action')) {
+      button.disabled = true;
+    }
+  }
 }
 
 function sourceLabel(source: string): string {
@@ -385,7 +395,7 @@ if (api !== undefined) {
   });
 
   api.usage.onUpdate((usage: UsagePayload) => {
-    applyUsage(tokenMeter, tokenFill, tokenCounts, tokenHint, usage);
+    applyUsage(tokenMeter, tokenFill, tokenCounts, tokenHint, usage, log);
   });
 
   void api.stagehand.cdp().then((info) => {

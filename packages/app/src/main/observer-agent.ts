@@ -36,6 +36,7 @@ export type ObserverDeps = {
   enrichmentEnabled: () => boolean;
   modelName: () => string;
   now?: () => number;
+  persistCeiling?: (ceiling: number) => void | Promise<void>;
 };
 
 /**
@@ -109,9 +110,8 @@ export class ObserverAgent {
     this.announcedHalt = undefined;
     const payload = toUsagePayload(snapshot, this.deps.modelName());
     this.handlers.emitUsage(payload);
-    this.handlers.emitChat(
-      systemMessage(this.now(), "Plafond relevé — l'enrichissement reprend.", 'warning')
-    );
+    this.emitResume();
+    void this.deps.persistCeiling?.(snapshot.ceiling);
     return payload;
   }
 
@@ -124,6 +124,9 @@ export class ObserverAgent {
     const snapshot = this.deps.budget.configure(options);
     if (previousHalt === 'ceiling' && snapshot.halt === 'none') {
       this.announcedHalt = undefined;
+      this.emitResume();
+    } else if (snapshot.halt === 'ceiling' && previousHalt !== 'ceiling') {
+      this.announceHalt(snapshot);
     }
     const payload = toUsagePayload(snapshot, this.deps.modelName());
     this.handlers.emitUsage(payload);
@@ -201,7 +204,8 @@ export class ObserverAgent {
     }
     const snapshot = this.deps.budget.recordCall(result.inputTokens, result.outputTokens);
     this.handlers.emitUsage(toUsagePayload(snapshot, this.deps.modelName()));
-    if (snapshot.ratio >= snapshot.warnRatio && snapshot.halt === 'none') {
+    if (snapshot.halt === 'none' && snapshot.ratio >= snapshot.warnRatio && !snapshot.warned) {
+      this.deps.budget.markWarned();
       this.emitWarning(snapshot);
     }
     if (snapshot.halt === 'ceiling') {
@@ -211,6 +215,12 @@ export class ObserverAgent {
       this.handlers.emitEnriched({ eventId: item.id, mode: 'llm', text: item.text });
       await this.appendNarration(item.id, item.text, batchId);
     }
+  }
+
+  private emitResume(): void {
+    this.handlers.emitChat(
+      systemMessage(this.now(), "Plafond relevé — l'enrichissement reprend.", 'warning')
+    );
   }
 
   private emitWarning(snapshot: UsageSnapshot): void {
