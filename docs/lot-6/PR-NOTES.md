@@ -117,6 +117,20 @@ docs pass. Product decisions 1–5 above are unchanged.
 Unit tests after L6-001/002: **353 passed, 1 skipped**, 49 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 2 (auto-fix)
+
+Applied on tip `a79060d40f1f5b0bf71fa569e0aa806aecf3da92`. Product decisions
+1–5 and J1c (J+1 public **N/A / pending**) are unchanged.
+
+- **L6-004** Generate-first still writes `generated/` before persisting
+  `finalized` (L6-001). If persist / `finalizeScenario` / raw-mutation fails
+  after that write, `generated/` is deleted. `spyglass-generate` /
+  `loadFinalizedScenarioForGenerate` no longer fall back to leftover
+  `generated/scenario.json` when no finalized `rev-N.json` exists.
+
+Unit tests after this pass: **356 passed, 1 skipped**, 49 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

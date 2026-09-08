@@ -1,9 +1,9 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Scenario } from '@spyglass/contracts';
 import { RUNNER_PACKAGE } from './package-name.ts';
 import { runPath } from './paths.ts';
-import { loadScenarioFile, scenarioFromRevision } from './scenario.ts';
+import { scenarioFromRevision } from './scenario.ts';
 
 export const GENERATED_DIR_NAME = 'generated';
 export const GENERATED_SCENARIO_JSON = 'scenario.json';
@@ -97,10 +97,27 @@ export async function writeGeneratedFromRevision(
   });
 }
 
+/**
+ * Removes `generated/` after a generate-first finalize that did not persist
+ * `status: 'finalized'` (L6-004). CLI generate must not treat leftover files
+ * as authoritative while the session is still reviewing.
+ */
+export async function discardGeneratedPackage(sessionDir: string): Promise<void> {
+  await rm(generatedDir(sessionDir), { recursive: true, force: true });
+}
+
 export async function loadFinalizedScenarioForGenerate(sessionDir: string): Promise<Scenario> {
   const startUrl = await readSessionStartUrl(sessionDir);
   const refinedDir = join(sessionDir, 'refined');
-  const files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
+  let files: string[] = [];
+  try {
+    files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+  }
   files.sort(
     (left, right) => Number.parseInt(left.slice(4), 10) - Number.parseInt(right.slice(4), 10)
   );
@@ -116,11 +133,7 @@ export async function loadFinalizedScenarioForGenerate(sessionDir: string): Prom
       return scenarioFromRevision(revision, startUrl);
     }
   }
-  try {
-    return await loadScenarioFile(generatedScenarioJsonPath(sessionDir), startUrl);
-  } catch {
-    throw new Error('no finalized revision to generate from');
-  }
+  throw new Error('no finalized revision to generate from');
 }
 
 export async function readSessionStartUrl(sessionDir: string): Promise<string> {

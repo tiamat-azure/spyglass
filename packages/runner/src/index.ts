@@ -16,6 +16,7 @@ export {
 export type { PageDriver, PageSnapshot } from './driver.ts';
 export type { GeneratedPackagePaths, WriteGeneratedPackageInput } from './generate.ts';
 export {
+  discardGeneratedPackage,
   GENERATED_DIR_NAME,
   GENERATED_PACKAGE_JSON,
   GENERATED_README,

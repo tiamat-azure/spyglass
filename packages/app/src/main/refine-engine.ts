@@ -16,7 +16,7 @@ import {
   unconfirmedWeaks,
   weakGroup
 } from '@spyglass/llm';
-import { writeGeneratedFromRevision } from '@spyglass/runner';
+import { discardGeneratedPackage, writeGeneratedFromRevision } from '@spyglass/runner';
 import type { RefinedStepView, RefineRevisionView } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
@@ -341,35 +341,70 @@ export class RefineEngine {
       return generated;
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
-      return { ok: false, error: 'raw.jsonl mutated during finalize' };
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        false,
+        'raw.jsonl mutated during finalize'
+      );
     }
     file.status = 'finalized';
     try {
       await persistRevision(sessionDir, file);
     } catch (error) {
-      file.status = 'reviewing';
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        false,
+        error instanceof Error ? error.message : String(error)
+      );
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
-      file.status = 'reviewing';
-      await persistRevision(sessionDir, file);
-      return { ok: false, error: 'raw.jsonl mutated during finalize' };
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        true,
+        'raw.jsonl mutated during finalize'
+      );
     }
     try {
       session.finalizeScenario();
     } catch (error) {
-      file.status = 'reviewing';
-      await persistRevision(sessionDir, file);
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        true,
+        error instanceof Error ? error.message : String(error)
+      );
     }
     this.current = file;
     return { ok: true, revision: toView(file) };
+  }
+
+  /**
+   * L6-001 keeps status `reviewing` + `canFinalize`. L6-004 also deletes the
+   * generate-first `generated/` so CLI cannot treat leftovers as truth.
+   */
+  private async abortFinalizeAfterGenerate(
+    sessionDir: string,
+    file: RefinedRevisionFile,
+    persistReviewing: boolean,
+    error: string
+  ): Promise<{ ok: false; error: string }> {
+    file.status = 'reviewing';
+    if (persistReviewing) {
+      try {
+        await persistRevision(sessionDir, file);
+      } catch {
+        // original finalize error is the one to report
+      }
+    }
+    try {
+      await discardGeneratedPackage(sessionDir);
+    } catch {
+      // CLI generate still refuses leftover files without a finalized rev
+    }
+    return { ok: false, error };
   }
 
   private async writeGeneratedPackage(

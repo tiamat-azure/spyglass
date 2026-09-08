@@ -7,6 +7,7 @@ import {
   generatedReadme,
   generatedScenarioTsSource,
   generateFromSessionDir,
+  loadFinalizedScenarioForGenerate,
   npmPackageNameForSession,
   writeGeneratedPackage
 } from './generate.ts';
@@ -177,5 +178,73 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const paths = await generateFromSessionDir(sessionDir);
     const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
     expect(json.startUrl).toBe('https://exemple.test/start');
+  });
+
+  it('refuses leftover generated/ when no finalized rev exists (L6-004)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-leftover-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'reviewing',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    await writeGeneratedPackage({
+      sessionDir,
+      scenario: { ...scenario(), startUrl: 'https://leftover.test/stale' }
+    });
+    await expect(generateFromSessionDir(sessionDir)).rejects.toThrow(
+      /no finalized revision to generate from/
+    );
+    await expect(loadFinalizedScenarioForGenerate(sessionDir)).rejects.toThrow(
+      /no finalized revision to generate from/
+    );
+    const leftover = JSON.parse(
+      await readFile(join(sessionDir, 'generated', 'scenario.json'), 'utf8')
+    ) as Scenario;
+    expect(leftover.startUrl).toBe('https://leftover.test/stale');
+  });
+
+  it('regenerates from a finalized rev, not leftover generated/ (L6-004)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-regen-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeGeneratedPackage({
+      sessionDir,
+      scenario: { ...scenario(), startUrl: 'https://leftover.test/stale' }
+    });
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'finalized',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    const paths = await generateFromSessionDir(sessionDir);
+    const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
+    expect(json.startUrl).toBe('https://exemple.test/start');
+    expect(json.startUrl).not.toBe('https://leftover.test/stale');
   });
 });

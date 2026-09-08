@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
@@ -365,6 +365,58 @@ describe('RefineEngine', () => {
     expect(session.state).toBe('finalized');
     const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
     expect(generated).toContain('runScenario');
+  });
+
+  it('deletes leftover generated/ if persist fails after generate-first (L6-004)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const rawPath = join(sessionDir, 'raw.jsonl');
+        await writeFile(rawPath, `${await readFile(rawPath, 'utf8')}\n`, 'utf8');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/raw\.jsonl mutated/);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.currentRevision()?.status).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+    await expect(access(join(session.dir, 'generated', 'scenario.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
   });
 
   it('requires explicit confirm above the per-operation smart threshold', async () => {
