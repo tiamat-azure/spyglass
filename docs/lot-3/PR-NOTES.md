@@ -62,7 +62,7 @@ transcribes and journals voice events.
 ### How the three exit demos were proven
 
 `pnpm lint`, `pnpm typecheck`, `pnpm test` (221 passed, 1 skipped),
-`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**11 passed**, Lots 0–3) on
+`pnpm test:schemas`, and `xvfb-run pnpm test:e2e` (**12 passed**, Lots 0–3) on
 this branch. CI uses mock STT + fake PCM (`SPYGLASS_VOICE_FAKE=1`) in-process so
 the suite does not ship whisper weights. whisper.cpp is covered by a **local
 stub binary** unit test that writes a `.txt` transcript with no HTTP.
@@ -145,7 +145,7 @@ Applied on tip `b6867f8`. V1a energy VAD and C2b `before`-on-overlap are unchang
 
 ### Adversarial pass 4 (auto-fixes)
 
-Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+Applied on tip `2b5ab40`. V1a energy VAD and C2b `before`-on-overlap are unchanged.
 
 1. **P3-N1 high — mic race.** `begin()` / `toggleContinuous` re-validate `armed`/`holding` after `voice.start` and `getUserMedia`. If Stop/`setArmed(false)` raced mid-begin, any late `MediaStream` is stopped and the graph is torn down; main is aborted so the mic is not left hot.
 2. **P3-N1 high — flush budget.** `stopCapture` flush wait is `VOICE_FLUSH_MS` (`WHISPER_TIMEOUT_MS_DEFAULT` + 2s = 10s), not 4s. Aligns with whisper timeout so a slow final is not dropped. Wait covers `onFinal`/journal completion.
