@@ -53,6 +53,8 @@ export type SessionOrchestratorHandlers = {
   onBeforeSeal?: () => Promise<void>;
   /** Runs before the stop write (still `recording`) so voice.final can journal. */
   onBeforeStop?: () => Promise<void>;
+  /** Stop failed before a durable record.stop; session is recording again. */
+  onStopRolledBack?: () => void;
 };
 
 type PendingClick = {
@@ -258,6 +260,7 @@ export class SessionOrchestrator {
           this.state = 'recording';
           this.since = Date.now();
           this.emitState();
+          this.handlers.onStopRolledBack?.();
           throw error;
         }
         this.enterSealedFailed();

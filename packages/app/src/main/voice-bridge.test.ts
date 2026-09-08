@@ -501,6 +501,38 @@ describe('VoiceBridge', () => {
       await bridge.dispose();
     }
   });
+
+  it('stop-failure rollback clears the stopping latch so capture can arm again', async () => {
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: () => undefined,
+        onLevel: () => undefined,
+        onError: (message) => {
+          throw new Error(message);
+        }
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'mock',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        SPYGLASS_STT_MOCK_TRANSCRIPTS: 'after-rollback'
+      },
+      {
+        canCapture: () => true
+      }
+    );
+    try {
+      await bridge.startCapture('hold');
+      bridge.beginStop();
+      await expect(bridge.startCapture('hold')).rejects.toThrow('voice capture refused');
+      expect(bridge.isCapturing()).toBe(false);
+      bridge.resumeCapture();
+      await bridge.startCapture('hold');
+      expect(bridge.isCapturing()).toBe(true);
+    } finally {
+      await bridge.dispose();
+    }
+  });
 });
 
 function pcmFilled(sample: number, samples = 1600): Buffer {

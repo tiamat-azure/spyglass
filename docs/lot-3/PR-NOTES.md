@@ -174,6 +174,12 @@ Applied on tip `84d5566`. V1a energy VAD and C2b `before`-on-overlap are unchang
 1. **P7-N1 medium — fail-closed during Stop flush.** `beginStop()` sets `stopping` when Session Stop starts so `allowsCapture` is false for the whole flush window, even while the recorder is still `recording`. A **fresh** `voice.start` cannot re-arm; not only in-flight epochs. `resumeCapture()` on the next Record.
 2. **P7-N2 low — refused start is `ok:false`.** `startCapture` throws `voice capture refused`; IPC maps that (and `!isCapturing()`) to `voice.start` `ok: false` so the renderer contract is fail-closed.
 
+### Adversarial pass 8 (auto-fixes)
+
+Applied on tip (this commit). V1a energy VAD and C2b `before`-on-overlap are unchanged.
+
+1. **P8-N1 medium — Stop-failure unlocks capture.** If `session.stop` fails before a durable `record.stop` (`!durableStop` → state back to `recording` + emitState), `onStopRolledBack` / `onState(recording)` / IPC catch call `resumeCapture()` so the `beginStop()` latch does not stick. UI already re-arms via `setArmed(recording===true)`. Happy-path Stop-flush still refuses a fresh `voice.start` (`ok:false`) while `stopping` is set.
+
 ## Screenshots (committed)
 
 | Relative path | What it shows |

@@ -76,6 +76,7 @@ describe('packaged Observe', () => {
     expect(stopFn.indexOf('enqueueWrite')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
     expect(stopFn.indexOf('onBeforeSeal')).toBeLessThan(stopFn.indexOf("this.state = 'stopping'"));
     expect(stopFn.indexOf('onBeforeStop')).toBeLessThan(stopFn.indexOf('enqueueWrite'));
+    expect(stopFn).toContain('onStopRolledBack');
     expect(orch).toContain('AsyncLocalStorage');
     expect(stopFn.indexOf("this.state = 'stopping'")).toBeLessThan(
       stopFn.indexOf("kind: 'record.stop'")
@@ -201,5 +202,7 @@ describe('packaged Observe', () => {
     expect(bridge).toContain('this.stopping');
     expect(bridge).toContain('voice capture refused');
     expect(main).toContain("error: 'voice capture refused'");
+    expect(main).toContain('onStopRolledBack');
+    expect(main).toContain("state.state === 'recording'");
   });
 });

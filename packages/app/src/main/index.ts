@@ -454,7 +454,14 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     voiceBridge?.beginStop();
     await voiceBridge?.stopCapture();
-    return await requireSession().stop();
+    try {
+      return await requireSession().stop();
+    } catch (error) {
+      if (activeSession?.snapshot().state === 'recording') {
+        voiceBridge?.resumeCapture();
+      }
+      throw error;
+    }
   });
 
   ipcMain.handle(IPC.sessionRetract, async (event, raw: unknown) => {
@@ -778,6 +785,9 @@ void (async () => {
         },
         onState: (state: SessionStatePayload) => {
           emitToChrome(win, IPC.sessionState, state);
+          if (state.state === 'recording') {
+            voiceBridge?.resumeCapture();
+          }
         },
         onBeforeSeal: async () => {
           await observerRuntime?.observer.flush();
@@ -785,6 +795,9 @@ void (async () => {
         onBeforeStop: async () => {
           voiceBridge?.beginStop();
           await voiceBridge?.stopCapture();
+        },
+        onStopRolledBack: () => {
+          voiceBridge?.resumeCapture();
         }
       }
     );

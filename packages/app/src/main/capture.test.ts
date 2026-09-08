@@ -349,6 +349,25 @@ describe('session stop after record.stop append', () => {
     expect(typeof meta.sealedAt).toBe('string');
   });
 
+  it('rolls back to recording and notifies when stop fails before a durable record.stop', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-rollback-'));
+    let rolledBack = 0;
+    const orch = new SessionOrchestrator(() => root, stubPane, {
+      onEvent: () => {},
+      onState: () => {},
+      onBeforeSeal: async () => {
+        throw new Error('simulated pre-stop failure');
+      },
+      onStopRolledBack: () => {
+        rolledBack += 1;
+      }
+    });
+    await orch.start('https://example.test/');
+    await expect(orch.stop()).rejects.toThrow('simulated pre-stop failure');
+    expect(orch.snapshot().state).toBe('recording');
+    expect(rolledBack).toBe(1);
+  });
+
   it('retries {eventCount, sealedAt} and succeeds when meta recovers', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-stop-retry-'));
     const orch = new SessionOrchestrator(() => root, stubPane, {
