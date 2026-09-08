@@ -32,12 +32,17 @@ client (F-60).
 Measurement protocol for PRD §2.2 non-contractual goals: corpus of 10
 public sites + 10 local CI pages, J+1 replay, rates published under
 `docs/lot-6/`. First numbers: local 10/10 and public J+0 10/10 `--no-ai`.
-J+1 public is due 2026-09-09.
+**J+1 public is N/A / pending** (due 2026-09-09; `--public --j1`). Not
+claimed measured — do not invent a J+1 percentage.
 
 ### Exit criteria (PRD §11 Lot 6)
 
 - [x] Script executed outside Spyglass, headed (visible) and `--headless`
 - [x] Replay rates measured on the corpus and published
+      **Caveat (J1c):** published rates are local 10/10 and public **J+0**
+      10/10 `--no-ai`. **J+1 public is N/A / pending** (due 2026-09-09).
+      Wall-clock ≥24 h numbers are deferred, **not claimed measured**.
+      Run: `pnpm --filter @spyglass/runner exec node --experimental-transform-types src/corpus-cli.ts --public --j1 --out docs/lot-6/measured-rates.j1.json`
 
 ### How the exit demos were proven
 
@@ -58,6 +63,7 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
    (Node 24 strip-only cannot emit TypeScript parameter properties).
 3. **Corpus / protocol.** `docs/lot-6/protocol.md`, `corpus.json`,
    `MEASURED-RATES.md`. Local fixture 10/10; public J+0 10/10.
+   **J+1 public: N/A / pending** (deferred wall-clock, not a measured rate).
 
 ### Screenshots
 
@@ -89,9 +95,9 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 
 ## Adversarial pass 1 (auto-fix)
 
-Applied on tip `7438b3ddefdeb82a3bc9cb04c2de5512c91aa525`. Product decisions
-1–5 above are unchanged. L6-003 (J+1 exit checklist) is unchanged
-(ask-user pending).
+L6-001 and L6-002 landed on `6f3228bcb3842c750543f3107994a4cc250f7ec3`
+(from `7438b3ddefdeb82a3bc9cb04c2de5512c91aa525`). **L6-003 J1c** is this
+docs pass. Product decisions 1–5 above are unchanged.
 
 - **L6-001** Finalize writes `generated/` while the revision is still
   `reviewing`, then persists `status: 'finalized'` and calls
@@ -103,10 +109,13 @@ Applied on tip `7438b3ddefdeb82a3bc9cb04c2de5512c91aa525`. Product decisions
   `startUrl` (optional non-root base path prefix, query/hash preserved).
   Relative `startUrl` still uses WHATWG resolution. `file:` start URLs are
   left unchanged. Generated README matches this behavior.
+- **L6-003 J1c** `MEASURED-RATES.md` and this file publish J+1 public as
+  **N/A / pending** (due 2026-09-09, `--public --j1`). The Lot 6 exit
+  checklist item stays checked with the caveat that J+1 wall-clock numbers
+  are deferred, not claimed measured. No invented J+1 percentage.
 
-Unit tests after this pass: **353 passed, 1 skipped**, 49 files
-(`pnpm lint`, `pnpm typecheck`, `pnpm test`). L6-003 J+1 public replay
-remains pending.
+Unit tests after L6-001/002: **353 passed, 1 skipped**, 49 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals
 
