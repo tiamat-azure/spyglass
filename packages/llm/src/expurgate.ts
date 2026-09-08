@@ -179,5 +179,7 @@ function stripUnsafeUrlFallback(raw: string): string {
 }
 
 function isFieldKind(kind: string): boolean {
-  return kind === 'dom.input' || kind === 'dom.change' || kind === 'dom.select' || kind === 'dom.key';
+  return (
+    kind === 'dom.input' || kind === 'dom.change' || kind === 'dom.select' || kind === 'dom.key'
+  );
 }
