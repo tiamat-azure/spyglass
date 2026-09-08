@@ -341,6 +341,20 @@ Applied on tip `3fc72f440a90f5d48ad4d02665de919d2345d0d6`. Product decisions
 Unit tests after this pass: **381 passed, 1 skipped**, 52 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 14 (auto-fix)
+
+Applied on tip `07d6c51174727d3bbcab338b612f3268f1aa1aff`. Product decisions
+1–5, J1c, J8c, A19a, and H29a are unchanged.
+
+- **L6-031** Generated `scenario.ts` short-circuits `--help` / `-h` like
+  `runGeneratedScript`: prints help and `process.exit(0)` before writing
+  `{exitCode,runDir}` JSON.
+- **L6-032** `applyBaseUrl` ensures a trailing slash on the URL **pathname**,
+  not by concatenating `/` onto a raw string that may include query/hash.
+
+Unit tests after this pass: **383 passed, 1 skipped**, 52 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

@@ -18,9 +18,12 @@ export function applyBaseUrl(baseUrl: string | undefined, startUrl: string): str
   }
   let base: URL;
   try {
-    base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+    base = new URL(baseUrl);
   } catch {
     return startUrl;
+  }
+  if (!base.pathname.endsWith('/')) {
+    base.pathname = `${base.pathname}/`;
   }
 
   let start: URL;

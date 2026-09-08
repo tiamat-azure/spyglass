@@ -46,6 +46,18 @@ describe('applyBaseUrl (L6-002)', () => {
     expect(applyBaseUrl('', '/relative')).toBe('/relative');
   });
 
+  it('does not append slash onto query or hash of --base-url (L6-032)', () => {
+    expect(applyBaseUrl('https://staging.test/preview?x=1', 'login')).toBe(
+      'https://staging.test/preview/login'
+    );
+    expect(applyBaseUrl('https://staging.test/preview?x=1', 'https://prod.test/login')).toBe(
+      'https://staging.test/preview/login'
+    );
+    expect(applyBaseUrl('https://staging.test/preview#frag', 'login')).toBe(
+      'https://staging.test/preview/login'
+    );
+  });
+
   it('runScenario goto uses the rewritten absolute startUrl', async () => {
     const driver = new MemoryPageDriver({
       elements: [{ selector: '#go', visible: true }]

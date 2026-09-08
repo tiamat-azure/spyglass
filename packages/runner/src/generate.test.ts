@@ -68,7 +68,7 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(ts).toContain('runScenario');
     expect(ts.startsWith('#!/usr/bin/env -S node --experimental-transform-types\n')).toBe(true);
     expect(ts).not.toMatch(/^#!\/usr\/bin\/env node$/m);
-    expect(ts).toMatch(/import \{ runScenario \} from '@spyglass\/runner'/);
+    expect(ts).toMatch(/import \{ generatedHelpText, runScenario \} from '@spyglass\/runner'/);
     expect(ts).not.toContain('runGeneratedScript');
     expect(ts).toContain('scenario.json');
     expect(ts.replaceAll('\\n', '')).not.toMatch(/[\\]/);
@@ -386,6 +386,36 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const json = JSON.parse(await readFile(paths.scenarioJson, 'utf8')) as Scenario;
     expect(json.startUrl).toBe('https://captured.test/app');
     expect(json.startUrl).not.toBe('https://exemple.test/start');
+  });
+
+  it('generated scenario.ts --help does not print exit JSON (L6-031)', async () => {
+    const source = generatedScenarioTsSource();
+    expect(source).toContain('generatedHelpText()');
+    expect(source).toContain("argv.includes('--help')");
+    expect(source).toContain("argv.includes('-h')");
+    expect(source.indexOf('process.exit(0)')).toBeLessThan(
+      source.indexOf('JSON.stringify({ exitCode')
+    );
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-help-'));
+    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+    const { mkdir, symlink } = await import('node:fs/promises');
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
+    await symlink(
+      join(repoRoot(), 'packages/runner'),
+      join(paths.dir, 'node_modules', '@spyglass', 'runner')
+    );
+    const execFileAsync = promisify(execFile);
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ['--experimental-transform-types', 'scenario.ts', '--help'],
+      { cwd: paths.dir, timeout: 15_000 }
+    );
+    expect(stdout).toMatch(/--headless/);
+    expect(stdout).toMatch(/--no-ai/);
+    expect(stdout).not.toMatch(/"exitCode"/);
+    expect(stdout).not.toMatch(/"runDir"/);
   });
 
   it('generated scenario.ts catches runScenario failures and exits 1 (L6-026)', () => {

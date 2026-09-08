@@ -174,14 +174,19 @@ export function generatedScenarioTsSource(): string {
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runScenario } from '${RUNNER_PACKAGE}';
+import { generatedHelpText, runScenario } from '${RUNNER_PACKAGE}';
 
 const here = dirname(fileURLToPath(import.meta.url));
+const argv = process.argv.slice(2);
 try {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    process.stdout.write(generatedHelpText());
+    process.exit(0);
+  }
   const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
   const result = await runScenario(scenario, {
     headless: process.argv.includes('--headless'),
-    argv: process.argv.slice(2),
+    argv,
     env: process.env,
     scriptDir: here
   });
