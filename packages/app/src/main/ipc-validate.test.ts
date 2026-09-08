@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { refineSourceBanner } from '../shared/ipc.ts';
 import {
   asPcmFrame,
   parseConfigSetPayload,
@@ -8,6 +9,10 @@ import {
   parseGuestVisiblePayload,
   parseObservePayload,
   parseRaiseCeilingPayload,
+  parseRefineConfirmPayload,
+  parseRefineEditPayload,
+  parseRefineEstimatePayload,
+  parseRefineRunPayload,
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
@@ -74,6 +79,25 @@ describe('session payload validation', () => {
     const frame = asPcmFrame(new Int16Array([1, 2, 3]).buffer);
     expect(frame?.length).toBe(6);
     expect(asPcmFrame('nope')).toBeUndefined();
+  });
+
+  it('parses refine estimate/run/confirm/edit payloads', () => {
+    expect(parseRefineEstimatePayload({ aggressiveness: 'aggressive' })).toEqual({
+      aggressiveness: 'aggressive'
+    });
+    expect(parseRefineEstimatePayload(null)).toEqual({});
+    expect(parseRefineRunPayload({ aggressiveness: 'balanced', confirm: true })).toEqual({
+      aggressiveness: 'balanced',
+      confirm: true
+    });
+    expect(parseRefineRunPayload('nope')).toBeUndefined();
+    expect(parseRefineConfirmPayload({ routine: true })).toEqual({ routine: true });
+    expect(parseRefineConfirmPayload({ index: 2 })).toEqual({ index: 2 });
+    expect(parseRefineConfirmPayload({})).toBeUndefined();
+    expect(parseRefineEditPayload({ index: 0, intent: 'Je valide' })).toEqual({
+      index: 0,
+      intent: 'Je valide'
+    });
   });
 });
 
@@ -166,5 +190,18 @@ describe('withObserveMutex', () => {
       })
     ]);
     expect(order).toEqual([1, 2, 3]);
+  });
+});
+
+describe('refineSourceBanner (LOT4-R1)', () => {
+  it('labels fallback so it cannot be mistaken for smart', () => {
+    const fallback = refineSourceBanner('fallback');
+    expect(fallback.tone).toBe('fallback');
+    expect(fallback.text).toMatch(/repli déterministe/i);
+    expect(fallback.text).toMatch(/pas un raffinement smart/i);
+    const smart = refineSourceBanner('smart');
+    expect(smart.tone).toBe('smart');
+    expect(smart.text).toMatch(/smart/i);
+    expect(smart.text).not.toMatch(/repli/i);
   });
 });

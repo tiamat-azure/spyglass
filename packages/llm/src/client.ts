@@ -1,4 +1,4 @@
-import type { RawEvent } from '@spyglass/contracts';
+import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import {
   ANTHROPIC_MESSAGES_PATH,
   ANTHROPIC_VERSION,
@@ -7,9 +7,11 @@ import {
   LLM_FAST_MODEL_DEFAULT,
   LLM_FAST_PROVIDER_DEFAULT,
   LLM_FAST_TIMEOUT_MS_DEFAULT,
+  LLM_SMART_MAX_TOKENS_DEFAULT,
   LLM_SMART_MODEL_DEFAULT,
   LLM_SMART_PROVIDER_DEFAULT,
-  LLM_SMART_TIMEOUT_MS_DEFAULT
+  LLM_SMART_TIMEOUT_MS_DEFAULT,
+  pinSmartModel
 } from './constants.ts';
 import {
   assertNoLeak,
@@ -19,6 +21,16 @@ import {
   sensitiveQueryValues
 } from './expurgate.ts';
 import { buildNarrationMessages, type NarrationItem, parseNarrationResponse } from './narration.ts';
+import {
+  allowedRefineIds,
+  bindLlmProposal,
+  buildRefineMessages,
+  type ExpurgatedRefineEvent,
+  mockRefineProposals,
+  parseRefineResponse,
+  type RefineAggressiveness,
+  refineFromRaw
+} from './refine.ts';
 
 export type LlmProfileName = 'fast' | 'smart';
 
@@ -52,6 +64,17 @@ export type NarrateResult =
   | {
       ok: true;
       narrations: NarrationItem[];
+      inputTokens: number;
+      outputTokens: number;
+      latencyMs: number;
+    }
+  | { ok: false; error: string; latencyMs: number };
+
+export type RefineTransportResult =
+  | {
+      ok: true;
+      steps: RefinedStep[];
+      source: 'smart' | 'fallback';
       inputTokens: number;
       outputTokens: number;
       latencyMs: number;
@@ -126,6 +149,68 @@ export class LlmGateway {
     }
   }
 
+  /**
+   * Smart-profile refinement (F-41). Expurgation is mandatory. Invalid model
+   * output is rejected as a whole (prompt contract §2) and replaced by the
+   * local deterministic fallback — never a partial merge.
+   */
+  async refine(
+    events: readonly RawEvent[],
+    aggressiveness: RefineAggressiveness = 'balanced'
+  ): Promise<RefineTransportResult> {
+    const started = Date.now();
+    const fallback = refineFromRaw(events, aggressiveness);
+    const cleanIds = allowedRefineIds(events);
+    const forbidden = collectForbidden(events);
+    const messages = buildRefineMessages(events, aggressiveness);
+    assertNoLeak(messages, forbidden);
+    const profile = this.profiles().smart;
+    const request = toTransportRequest('smart', profile, messages.system, messages.user, {
+      maxTokens: LLM_SMART_MAX_TOKENS_DEFAULT
+    });
+    assertNoLeak(request.body, forbidden);
+    try {
+      const result = await this.resolveNarrateTransport().complete(request);
+      assertNoLeak(result, forbidden);
+      const parsed = parseRefineResponse(result.text, cleanIds);
+      if ('error' in parsed) {
+        return {
+          ok: true,
+          steps: fallback,
+          source: 'fallback',
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          latencyMs: Date.now() - started
+        };
+      }
+      const bound = bindLlmProposal(parsed.steps, events, aggressiveness);
+      if ('error' in bound) {
+        return {
+          ok: true,
+          steps: fallback,
+          source: 'fallback',
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          latencyMs: Date.now() - started
+        };
+      }
+      return {
+        ok: true,
+        steps: bound,
+        source: 'smart',
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        latencyMs: Date.now() - started
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        latencyMs: Date.now() - started
+      };
+    }
+  }
+
   async testConnection(profileName: LlmProfileName): Promise<ConnectionTestResult> {
     const started = Date.now();
     const profile = this.profiles()[profileName];
@@ -185,7 +270,8 @@ export function resolveProfile(
   const providerDefault = name === 'fast' ? LLM_FAST_PROVIDER_DEFAULT : LLM_SMART_PROVIDER_DEFAULT;
   const modelDefault = name === 'fast' ? LLM_FAST_MODEL_DEFAULT : LLM_SMART_MODEL_DEFAULT;
   const provider = nonempty(env[`${prefix}_PROVIDER`]) ?? providerDefault;
-  const model = nonempty(env[`${prefix}_MODEL`]) ?? modelDefault;
+  const modelRaw = nonempty(env[`${prefix}_MODEL`]) ?? modelDefault;
+  const model = name === 'smart' ? pinSmartModel(modelRaw) : modelRaw;
   const baseUrl =
     nonempty(env[`${prefix}_BASE_URL`]) ??
     (provider === 'openai' ? DEFAULT_OPENAI_BASE_URL : DEFAULT_FAST_BASE_URL);
@@ -210,8 +296,11 @@ export function toTransportRequest(
   profile: LlmProfileName,
   config: ProfileConfig,
   system: string,
-  user: string
+  user: string,
+  options?: { maxTokens?: number }
 ): TransportRequest {
+  const maxTokens =
+    options?.maxTokens ?? (profile === 'smart' ? LLM_SMART_MAX_TOKENS_DEFAULT : 1024);
   const provider = config.provider.toLowerCase();
   if (provider === 'openai' || provider === 'openai-compatible') {
     const url = joinUrl(config.baseUrl, '/chat/completions');
@@ -227,7 +316,8 @@ export function toTransportRequest(
           { role: 'system', content: system },
           { role: 'user', content: user }
         ],
-        temperature: 0
+        temperature: 0,
+        max_tokens: maxTokens
       },
       timeoutMs: config.timeoutMs,
       profile
@@ -243,7 +333,7 @@ export function toTransportRequest(
     },
     body: {
       model: config.model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: user }]
     },
@@ -299,11 +389,33 @@ export function createMockTransport(options: MockTransportOptions = {}): LlmTran
       }
       const user = extractUserContent(request.body);
       let events: ExpurgatedEvent[] = [];
+      let refineTask = false;
+      let aggressiveness: RefineAggressiveness = 'balanced';
       try {
-        const parsed = JSON.parse(user) as { events?: ExpurgatedEvent[] };
+        const parsed = JSON.parse(user) as {
+          task?: unknown;
+          aggressiveness?: unknown;
+          events?: ExpurgatedEvent[];
+        };
         events = Array.isArray(parsed.events) ? parsed.events : [];
+        refineTask = parsed.task === 'refine';
+        if (
+          parsed.aggressiveness === 'conservative' ||
+          parsed.aggressiveness === 'balanced' ||
+          parsed.aggressiveness === 'aggressive'
+        ) {
+          aggressiveness = parsed.aggressiveness;
+        }
       } catch {
         events = [];
+      }
+      if (refineTask) {
+        const steps = mockRefineProposals(events as ExpurgatedRefineEvent[], aggressiveness);
+        return {
+          text: JSON.stringify({ steps }),
+          inputTokens: Math.max(1, tokensPerCall - 40),
+          outputTokens: Math.max(20, tokensPerCall)
+        };
       }
       const narrations =
         options.enrich?.(events) ??

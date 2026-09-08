@@ -33,6 +33,7 @@ export type ExpurgatedTarget = {
   text?: string;
   testId?: string;
   name?: string;
+  id?: string;
 };
 
 export type ExpurgatedEvent = {
@@ -83,6 +84,7 @@ export function expurgateTarget(
   }
   assignScrubbed(clean, 'testId', target.testId);
   assignScrubbed(clean, 'name', target.name);
+  assignScrubbed(clean, 'id', target.id);
   return Object.keys(clean).length > 0 ? clean : undefined;
 }
 

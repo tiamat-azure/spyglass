@@ -2,7 +2,7 @@
   "name": "@spyglass/llm",
   "version": "0.0.0",
   "private": true,
-  "description": "Two-profile LLM gateway, gabarits, expurgation, and token budget (Lot 2).",
+  "description": "Two-profile LLM gateway, gabarits, expurgation, token budget, and refinement (Lot 4).",
   "type": "module",
   "exports": {
     ".": {

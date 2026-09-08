@@ -5,11 +5,12 @@ import type {
   ConfigSetRequest,
   MaskedProfileConfig,
   NavState,
+  RefineRevisionView,
   SessionStatePayload,
   StagehandObserveResponse,
   UsagePayload
 } from '../../shared/ipc.ts';
-import { DEFAULT_SPLIT_RATIO } from '../../shared/ipc.ts';
+import { DEFAULT_SPLIT_RATIO, refineSourceBanner } from '../../shared/ipc.ts';
 import { attachVoiceCapture } from './voice-capture.ts';
 
 const CHAT_MIN_PX = 300;
@@ -231,6 +232,143 @@ function applyUsage(
   }
 }
 
+function aggressivenessValue(): 'conservative' | 'balanced' | 'aggressive' {
+  const value = refineAggressiveness.value;
+  if (value === 'conservative' || value === 'aggressive') {
+    return value;
+  }
+  return 'balanced';
+}
+
+async function refreshRefinePanel(phase: string): Promise<void> {
+  const show =
+    phase === 'sealed' || phase === 'refining' || phase === 'reviewing' || phase === 'finalized';
+  refinePanel.hidden = !show;
+  refinePanel.dataset.phase = phase;
+  if (!show || api === undefined) {
+    return;
+  }
+  if (phase === 'sealed') {
+    refineStatus.textContent = 'Session scellée — estimation smart avant déclenchement.';
+    await loadEstimate();
+  } else if (phase === 'refining') {
+    refineStatus.textContent = 'Raffinement en cours (profil smart)…';
+  } else if (phase === 'reviewing') {
+    const revision = refinePanel.dataset.revision;
+    refineStatus.textContent =
+      revision !== undefined && revision.length > 0
+        ? `Révision ${revision} éditable — confirmez les weak avant de finaliser.`
+        : 'Révision éditable — confirmez les weak avant de finaliser.';
+  } else if (phase === 'finalized') {
+    refineStatus.textContent = 'Scénario raffiné finalisé — brut inchangé.';
+  }
+}
+
+async function loadEstimate(): Promise<void> {
+  if (api === undefined) {
+    return;
+  }
+  const result = await api.refine.estimate(aggressivenessValue());
+  if (!result.ok) {
+    refineEstimate.textContent = result.error ?? 'estimation indisponible';
+    refineEstimate.dataset.requiresConfirm = 'false';
+    refineConfirmRow.hidden = true;
+    return;
+  }
+  refineEstimate.textContent = `Estimation smart : ${String(result.estimatedTokens)} tokens (seuil ${String(result.threshold)} · ${result.model} · par opération)`;
+  refineEstimate.dataset.requiresConfirm = result.requiresConfirm ? 'true' : 'false';
+  refineConfirmRow.hidden = !result.requiresConfirm;
+  if (!result.requiresConfirm) {
+    refineConfirm.checked = false;
+  }
+}
+
+function renderRefineRevision(revision: RefineRevisionView | undefined): void {
+  refineSteps.replaceChildren();
+  refineWeakList.replaceChildren();
+  if (revision === undefined) {
+    refinePanel.dataset.revision = '';
+    refinePanel.dataset.source = '';
+    refineSource.hidden = true;
+    refineSource.textContent = '';
+    refineFinalizeBtn.disabled = true;
+    refineBlock.hidden = true;
+    refineWeaks.hidden = true;
+    return;
+  }
+  refinePanel.dataset.revision = String(revision.revision);
+  refinePanel.dataset.source = revision.source;
+  const banner = refineSourceBanner(revision.source);
+  refineSource.hidden = false;
+  refineSource.dataset.tone = banner.tone;
+  refineSource.textContent = banner.text;
+  for (const step of revision.steps) {
+    const item = document.createElement('li');
+    item.className = 'refine-step';
+    item.dataset.index = String(step.index);
+    item.dataset.strength = step.strength;
+    if (step.weakGroup !== undefined) {
+      item.dataset.weakGroup = step.weakGroup;
+    }
+    item.dataset.confirmed = step.confirmedByUser ? 'true' : 'false';
+    const badge = document.createElement('span');
+    badge.className = 'strength-badge';
+    badge.dataset.strength = step.strength;
+    badge.textContent = step.strength;
+    const intent = document.createElement('p');
+    intent.textContent = step.intent;
+    const action = document.createElement('p');
+    action.textContent = `${step.actionType} · ${step.selector} · ${step.verificationType}`;
+    const expected = document.createElement('p');
+    expected.textContent = `attendu ${step.expected}`;
+    const ids = document.createElement('p');
+    ids.className = 'source-ids';
+    ids.textContent = `sourceEvents ${step.sourceEvents.join(', ')}`;
+    item.append(badge, intent, action, expected, ids);
+    if (revision.status === 'reviewing') {
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'retract';
+      edit.textContent = 'Éditer l’intention';
+      edit.addEventListener('click', () => {
+        const next = window.prompt('Intention', step.intent);
+        if (next !== null && next.trim().length > 0) {
+          void api?.refine.edit({ index: step.index, intent: next.trim() });
+        }
+      });
+      item.append(edit);
+    }
+    refineSteps.append(item);
+  }
+  const weaks = revision.steps.filter((step) => step.strength === 'weak');
+  refineWeaks.hidden = weaks.length === 0 || revision.status === 'finalized';
+  for (const step of weaks) {
+    const item = document.createElement('li');
+    item.className = 'refine-weak-item';
+    item.dataset.index = String(step.index);
+    item.dataset.weakGroup = step.weakGroup ?? 'doubtful';
+    item.dataset.confirmed = step.confirmedByUser ? 'true' : 'false';
+    const label = document.createElement('p');
+    label.textContent = `${step.weakGroup === 'routine' ? 'routinière' : 'douteuse'} · ${step.weakReason ?? ''} · ${step.intent}`;
+    item.append(label);
+    if (!step.confirmedByUser && step.weakGroup !== 'routine') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'observe-btn';
+      button.textContent = 'Confirmer';
+      button.addEventListener('click', () => {
+        void api?.refine.confirm({ index: step.index });
+      });
+      item.append(button);
+    }
+    refineWeakList.append(item);
+  }
+  refineConfirmRoutine.disabled = revision.routineUnconfirmed === 0;
+  const blocked = revision.unconfirmedWeak > 0;
+  refineBlock.hidden = !blocked;
+  refineFinalizeBtn.disabled = blocked || revision.status === 'finalized';
+}
+
 function sourceLabel(source: string): string {
   if (source === 'ui') {
     return 'réglée';
@@ -286,6 +424,10 @@ function applyConfigForm(config: ConfigGetResponse): void {
   requireEl<HTMLInputElement>('session-token-limit').value = String(config.sessionTokenLimitFast);
   requireEl<HTMLInputElement>('token-warn-ratio').value = String(config.tokenWarnRatio);
   requireEl<HTMLInputElement>('rate-limit').value = String(config.rateLimitCallsPerMin);
+  const smartConfirm = document.getElementById('smart-token-confirm');
+  if (smartConfirm instanceof HTMLInputElement) {
+    smartConfirm.value = String(config.smartTokenConfirm);
+  }
   requireEl<HTMLInputElement>('enrichment-enabled').checked = config.enrichmentEnabled;
   const encryption = requireEl<HTMLElement>('encryption-status');
   encryption.textContent = config.encryptionAvailable
@@ -321,6 +463,20 @@ const tokenMeter = requireEl<HTMLElement>('token-meter');
 const tokenFill = requireEl<HTMLElement>('token-fill');
 const tokenCounts = requireEl<HTMLElement>('token-counts');
 const tokenHint = requireEl<HTMLElement>('token-hint');
+const refinePanel = requireEl<HTMLElement>('refine-panel');
+const refineStatus = requireEl<HTMLElement>('refine-status');
+const refineSource = requireEl<HTMLElement>('refine-source');
+const refineEstimate = requireEl<HTMLElement>('refine-estimate');
+const refineAggressiveness = requireEl<HTMLSelectElement>('refine-aggressiveness');
+const refineConfirmRow = requireEl<HTMLElement>('refine-confirm-row');
+const refineConfirm = requireEl<HTMLInputElement>('refine-confirm');
+const refineRunBtn = requireEl<HTMLButtonElement>('refine-run');
+const refineFinalizeBtn = requireEl<HTMLButtonElement>('refine-finalize');
+const refineBlock = requireEl<HTMLElement>('refine-block');
+const refineWeaks = requireEl<HTMLElement>('refine-weaks');
+const refineWeakList = requireEl<HTMLOListElement>('refine-weak-list');
+const refineConfirmRoutine = requireEl<HTMLButtonElement>('refine-confirm-routine');
+const refineSteps = requireEl<HTMLOListElement>('refine-steps');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -409,6 +565,7 @@ if (api !== undefined) {
           : 'Recording idle';
     browserSlot.dataset.recording = busy ? 'true' : 'false';
     voice?.setArmed(recording);
+    void refreshRefinePanel(state.state);
   });
 
   api.session.onEvent((event) => {
@@ -443,6 +600,11 @@ if (api !== undefined) {
 
   api.usage.onUpdate((usage: UsagePayload) => {
     applyUsage(tokenMeter, tokenFill, tokenCounts, tokenHint, usage, log);
+  });
+
+  api.refine.onState((payload) => {
+    renderRefineRevision(payload.revision);
+    void refreshRefinePanel(payload.phase);
   });
 
   void api.stagehand.cdp().then((info) => {
@@ -644,6 +806,10 @@ requireEl<HTMLButtonElement>('settings-save').addEventListener('click', () => {
   const limit = Number.parseInt(requireEl<HTMLInputElement>('session-token-limit').value, 10);
   const warn = Number.parseFloat(requireEl<HTMLInputElement>('token-warn-ratio').value);
   const rate = Number.parseInt(requireEl<HTMLInputElement>('rate-limit').value, 10);
+  const smartConfirm = Number.parseInt(
+    requireEl<HTMLInputElement>('smart-token-confirm').value,
+    10
+  );
   void (async () => {
     const first = await api.config.set({
       profile: 'fast',
@@ -651,7 +817,8 @@ requireEl<HTMLButtonElement>('settings-save').addEventListener('click', () => {
       enrichmentEnabled: requireEl<HTMLInputElement>('enrichment-enabled').checked,
       sessionTokenLimitFast: limit,
       tokenWarnRatio: warn,
-      rateLimitCallsPerMin: rate
+      rateLimitCallsPerMin: rate,
+      smartTokenConfirm: smartConfirm
     });
     const second = await api.config.set({ profile: 'smart', ...smart });
     status.dataset.ok = first.ok && second.ok ? 'true' : 'false';
@@ -662,6 +829,53 @@ requireEl<HTMLButtonElement>('settings-save').addEventListener('click', () => {
           : (first.error ?? 'Saved')
         : (first.error ?? second.error ?? 'save failed');
   })();
+});
+
+refineAggressiveness.addEventListener('change', () => {
+  void loadEstimate();
+});
+
+refineRunBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  refineRunBtn.disabled = true;
+  void api.refine
+    .run(aggressivenessValue(), refineConfirm.checked)
+    .then((result) => {
+      if (!result.ok) {
+        refineStatus.textContent = result.error;
+        if (result.needsConfirm === true) {
+          refineConfirmRow.hidden = false;
+          refineEstimate.dataset.requiresConfirm = 'true';
+        }
+        return;
+      }
+      renderRefineRevision(result.revision);
+    })
+    .finally(() => {
+      refineRunBtn.disabled = false;
+    });
+});
+
+refineFinalizeBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  void api.refine.finalize().then((result) => {
+    if (!result.ok) {
+      refineBlock.hidden = false;
+      refineBlock.textContent = `Finalisation bloquée : ${result.error}${
+        result.unconfirmedWeak !== undefined ? ` (${String(result.unconfirmedWeak)})` : ''
+      }`;
+      return;
+    }
+    renderRefineRevision(result.revision);
+  });
+});
+
+refineConfirmRoutine.addEventListener('click', () => {
+  void api?.refine.confirm({ routine: true });
 });
 
 let dragging = false;

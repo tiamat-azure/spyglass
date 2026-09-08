@@ -591,13 +591,13 @@ sessions/<sessionId>/
 | `LLM_FAST_PROVIDER` | Fournisseur du profil `fast` (narration) | `anthropic` |
 | `LLM_FAST_API_KEY` | Clé d'API du profil `fast` | requis |
 | `LLM_FAST_BASE_URL` | Point d'entrée du profil `fast` | optionnel |
-| `LLM_FAST_MODEL` | Modèle de narration | Claude Haiku, version à figer au lot 2 |
+| `LLM_FAST_MODEL` | Modèle de narration | `claude-haiku-4-5-20251001` (I-03) |
 | `LLM_FAST_BATCH_MS` | Fenêtre de mise en lot de la narration | `500` |
 | `LLM_FAST_TIMEOUT_MS` | Budget de latence de l'enrichissement avant abandon du lot (F-23). Avec `LLM_FAST_BATCH_MS`, borne le pire cas à 1,7 s, sous la cible de 2 s p95 (2.2) | `1200` |
 | `LLM_SMART_PROVIDER` | Fournisseur du profil `smart` | `anthropic` |
 | `LLM_SMART_API_KEY` | Clé d'API du profil `smart` | requis |
 | `LLM_SMART_BASE_URL` | Point d'entrée du profil `smart` | optionnel |
-| `LLM_SMART_MODEL` | Modèle de raffinement et de rattrapage | Claude Sonnet, version à figer au lot 4 |
+| `LLM_SMART_MODEL` | Modèle de raffinement et de rattrapage | `claude-sonnet-4-5-20250929` (I-05) |
 | `SESSION_TOKEN_LIMIT_FAST` | Plafond de tokens cumulés du profil `fast` par session | `500000` |
 | `TOKEN_WARN_RATIO` | Fraction du plafond déclenchant l'avertissement | `0.5` |
 | `RATE_LIMIT_CALLS_PER_MIN` | Seuil de débit d'appels avant bascule en gabarits | `60` |
@@ -715,9 +715,9 @@ et seront tranchés au sein du lot concerné, sans remettre en cause le cadrage.
 | I-02 | Confirmation de l'hypothèse `loginRedirect` sur une application EntraID réelle (D-10). **Confirmée le 2026-09-08** : Outlook Web MSAL `interactionType: redirect`, vue unique, pas de popup. MFA / fédération d'annuaire non exercés (risque résiduel, `pageId` additif). Plan B non engagé. | Lot 0 bis (clos) |
 | I-03 | Version exacte du modèle du profil `fast` à figer, après mesure de latence et de qualité rédactionnelle en français | Lot 2 |
 | I-04 | Gabarits de narration du mode dégradé : couverture des types d'événements et qualité rédactionnelle | Lot 2 |
-| I-05 | Version exacte du modèle du profil `smart` à figer, après évaluation sur des raffinements et des diagnostics réels | Lot 4 |
+| I-05 | Version exacte du modèle du profil `smart` à figer, après évaluation sur des raffinements et des diagnostics réels. **Figée au lot 4** : `claude-sonnet-4-5-20250929` (dernier identifiant daté Sonnet 4.x). Résiduel : pas d'évaluation live dans cet environnement ; `claude-sonnet-4-6` est un id 4.6 dateless-but-pinned, non retenu. | Lot 4 |
 | I-06 | Format exact de l'instantané DOM allégé, arbitrage entre volume et pouvoir diagnostique | Lot 1 |
-| I-07 | Validation que le descripteur d'action construit localement (F-22) suffit à rejouer l'action via `act()`. **Repli pré-arbitré** en cas d'insuffisance mesurée : enrichissement `observe()` **groupé au raffinement** (un appel par scénario, profil `smart`, lot 4). Ce repli ne rouvre pas d'arbitrage : il préserve l'enregistrement hors ligne et n'ajoute de dépendance réseau qu'au raffinement, qui en a déjà une | Lot 1 |
+| I-07 | Validation que le descripteur d'action construit localement (F-22) suffit à rejouer l'action via `act()`. **Repli pré-arbitré** en cas d'insuffisance mesurée : enrichissement `observe()` **groupé au raffinement** (un appel par scénario, profil `smart`, **livré au lot 4**). Ce repli ne rouvre pas d'arbitrage : il préserve l'enregistrement hors ligne et n'ajoute de dépendance réseau qu'au raffinement, qui en a déjà une | Lot 1 / Lot 4 |
 | I-08 | Détection de la mutation DOM sans action utilisateur déclenchant un instantané supplémentaire (F-17) | Lot 1 |
 
 ## 13. Risques

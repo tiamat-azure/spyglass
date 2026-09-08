@@ -5,6 +5,10 @@ import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'ele
 import type {
   NavState,
   PopupRedirectedPayload,
+  RefineEstimateResponse,
+  RefineFinalizeResponse,
+  RefineRunResponse,
+  RefineStatePayload,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -29,6 +33,10 @@ import {
   parseGuestVisiblePayload,
   parseObservePayload,
   parseRaiseCeilingPayload,
+  parseRefineConfirmPayload,
+  parseRefineEditPayload,
+  parseRefineEstimatePayload,
+  parseRefineRunPayload,
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
@@ -38,6 +46,7 @@ import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds }
 import { isLlmOffline } from './llm-transport.ts';
 import { normalizeGotoUrl } from './nav-url.ts';
 import { createObserverRuntime, type ObserverRuntime } from './observer-host.ts';
+import { RefineEngine } from './refine-engine.ts';
 import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.ts';
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
@@ -66,6 +75,7 @@ installWebContentsSecurityDefaults();
 let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
 let observerRuntime: ObserverRuntime | undefined;
+let activeRefine: RefineEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
@@ -274,6 +284,21 @@ function requireSession(): SessionOrchestrator {
   return activeSession;
 }
 
+function emitRefineState(winRef: { current: BrowserWindow | undefined }): void {
+  const win = winRef.current;
+  if (win === undefined) {
+    return;
+  }
+  const payload: RefineStatePayload = {
+    phase: activeSession?.snapshot().state ?? 'idle'
+  };
+  const revision = activeRefine?.view();
+  if (revision !== undefined) {
+    payload.revision = revision;
+  }
+  emitToChrome(win, IPC.refineState, payload);
+}
+
 function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefined }): void {
   if (ipcRegistered) {
     return;
@@ -435,6 +460,8 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const started = await requireSession().start(startUrl);
     voiceBridge?.resumeCapture();
     observerRuntime?.observer.onSessionStart(started.sessionId);
+    activeRefine?.reset();
+    emitRefineState(winRef);
     return started;
   });
 
@@ -455,7 +482,9 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     voiceBridge?.beginStop();
     await voiceBridge?.stopCapture();
     try {
-      return await requireSession().stop();
+      const stopped = await requireSession().stop();
+      emitRefineState(winRef);
+      return stopped;
     } catch (error) {
       if (activeSession?.snapshot().state === 'recording') {
         voiceBridge?.resumeCapture();
@@ -584,6 +613,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     } else {
       observerRuntime.observer.setEnabled(settings.enrichmentEnabled());
     }
+    activeRefine?.configureThreshold(settings.smartTokenConfirm());
     return result;
   });
 
@@ -730,6 +760,100 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     const edited = await requireSession().recordVoiceEdited(payload.eventId, payload.text);
     return { ok: edited !== undefined };
   });
+
+  ipcMain.handle(
+    IPC.refineEstimate,
+    async (event, raw: unknown): Promise<RefineEstimateResponse> => {
+      if (rejectForeignIpc(event, winRef, IPC.refineEstimate)) {
+        return {
+          ok: false,
+          estimatedTokens: 0,
+          threshold: 0,
+          requiresConfirm: false,
+          model: '',
+          eventCount: 0,
+          error: 'forbidden'
+        };
+      }
+      if (activeRefine === undefined) {
+        return {
+          ok: false,
+          estimatedTokens: 0,
+          threshold: 0,
+          requiresConfirm: false,
+          model: '',
+          eventCount: 0,
+          error: 'refine engine missing'
+        };
+      }
+      const payload = parseRefineEstimatePayload(raw);
+      return await activeRefine.estimate(payload.aggressiveness ?? 'balanced');
+    }
+  );
+
+  ipcMain.handle(IPC.refineRun, async (event, raw: unknown): Promise<RefineRunResponse> => {
+    if (rejectForeignIpc(event, winRef, IPC.refineRun)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const payload = parseRefineRunPayload(raw);
+    if (payload === undefined || activeRefine === undefined) {
+      return { ok: false, error: 'invalid payload' };
+    }
+    const result = await activeRefine.run(
+      payload.aggressiveness ?? 'balanced',
+      payload.confirm === true
+    );
+    emitRefineState(winRef);
+    return result;
+  });
+
+  ipcMain.handle(IPC.refineConfirm, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.refineConfirm)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const payload = parseRefineConfirmPayload(raw);
+    if (payload === undefined || activeRefine === undefined) {
+      return { ok: false, error: 'invalid payload' };
+    }
+    const result = await activeRefine.confirm(payload);
+    emitRefineState(winRef);
+    return result;
+  });
+
+  ipcMain.handle(IPC.refineEdit, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.refineEdit)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const payload = parseRefineEditPayload(raw);
+    if (payload === undefined || activeRefine === undefined) {
+      return { ok: false, error: 'invalid payload' };
+    }
+    const result = await activeRefine.edit(payload.index, payload.intent ?? '');
+    emitRefineState(winRef);
+    return result;
+  });
+
+  ipcMain.handle(
+    IPC.refineFinalize,
+    async (event, raw: unknown): Promise<RefineFinalizeResponse> => {
+      if (rejectForeignIpc(event, winRef, IPC.refineFinalize)) {
+        return { ok: false, error: 'forbidden' };
+      }
+      if (!parseEmptyPayload(raw) || activeRefine === undefined) {
+        return { ok: false, error: 'invalid payload' };
+      }
+      const result = await activeRefine.finalize();
+      emitRefineState(winRef);
+      return result;
+    }
+  );
+
+  ipcMain.handle(IPC.refineGet, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.refineGet)) {
+      return undefined;
+    }
+    return activeRefine?.view();
+  });
 }
 
 void (async () => {
@@ -750,6 +874,27 @@ void (async () => {
     winRef.current = win;
     const runtimePromise = createObserverRuntime(win, () => requireSession()).then((runtime) => {
       observerRuntime = runtime;
+      activeRefine = new RefineEngine({
+        session: () => requireSession(),
+        refine: async (events, aggressiveness) => runtime.gateway.refine(events, aggressiveness),
+        model: () => runtime.settings.profileConfig('smart').model,
+        confirmThreshold: () => runtime.settings.smartTokenConfirm(),
+        offline: () => isLlmOffline(process.env),
+        observe: async () => {
+          const snapshot = requirePane().snapshot();
+          if (cdpPort <= 0) {
+            return { ok: false, observations: [] };
+          }
+          const result = await runStagehandObserve({
+            cdpUrl: cdpHttpUrl(cdpPort),
+            guestUrl: snapshot.url,
+            instruction: 'Find interactive elements on the displayed page',
+            appPath: app.getAppPath(),
+            chromeTargetId: pinnedChromeTargetId
+          });
+          return { ok: result.ok, observations: result.observations };
+        }
+      });
       return runtime;
     });
     if (cdpPort > 0) {
@@ -785,6 +930,7 @@ void (async () => {
         },
         onState: (state: SessionStatePayload) => {
           emitToChrome(win, IPC.sessionState, state);
+          emitRefineState(winRef);
           if (state.state === 'recording') {
             voiceBridge?.resumeCapture();
           }

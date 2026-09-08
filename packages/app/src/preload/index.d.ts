@@ -8,6 +8,13 @@ import type {
   ConfigTestResponse,
   NavState,
   PopupRedirectedPayload,
+  RefineConfirmRequest,
+  RefineEditRequest,
+  RefineEstimateResponse,
+  RefineFinalizeResponse,
+  RefineRevisionView,
+  RefineRunResponse,
+  RefineStatePayload,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
@@ -20,7 +27,7 @@ import type {
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '3';
+  lot: '4';
   versions: {
     electron: string;
     chrome: string;
@@ -74,6 +81,24 @@ export type SpyglassPreloadApi = {
     onPartial: (callback: (payload: VoicePartialPayload) => void) => () => void;
     onFinal: (callback: (payload: VoiceFinalPayload) => void) => () => void;
     onLevel: (callback: (payload: VoiceLevelPayload) => void) => () => void;
+  };
+  refine: {
+    estimate: (
+      aggressiveness?: 'conservative' | 'balanced' | 'aggressive'
+    ) => Promise<RefineEstimateResponse>;
+    run: (
+      aggressiveness?: 'conservative' | 'balanced' | 'aggressive',
+      confirm?: boolean
+    ) => Promise<RefineRunResponse>;
+    confirm: (
+      payload: RefineConfirmRequest
+    ) => Promise<{ ok: true; revision: RefineRevisionView } | { ok: false; error: string }>;
+    edit: (
+      payload: RefineEditRequest
+    ) => Promise<{ ok: true; revision: RefineRevisionView } | { ok: false; error: string }>;
+    finalize: () => Promise<RefineFinalizeResponse>;
+    get: () => Promise<RefineRevisionView | undefined>;
+    onState: (callback: (payload: RefineStatePayload) => void) => () => void;
   };
 };
 
