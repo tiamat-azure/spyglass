@@ -488,6 +488,9 @@ Applied on tip `bbafff9c73e09280dc5446f5ec3ca3d41615f16d`. Product decisions
   driver-less `runScenario` → `launchPlaywrightRun` and wins over
   `createCliGateway()` / `LlmRecoverer`.
 
+Unit tests after this pass: **405 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

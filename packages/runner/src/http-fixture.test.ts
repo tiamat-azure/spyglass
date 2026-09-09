@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,6 +7,26 @@ import {
   resolveFixtureHtmlPath,
   startFixtureServer
 } from './http-fixture.ts';
+
+function rawGetStatus(origin: string, path: string): Promise<number> {
+  return new Promise((resolveStatus, reject) => {
+    const url = new URL(origin);
+    const req = httpRequest(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path,
+        method: 'GET'
+      },
+      (res) => {
+        res.resume();
+        resolveStatus(res.statusCode ?? 0);
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 describe('fixture HTML paths (L6-025)', () => {
   it('resolves lot6-fixture.html under the fixtures dir and rejects traversal', () => {
@@ -42,10 +63,9 @@ describe('fixture HTML paths (L6-025)', () => {
       expect(missing.status).toBe(404);
       const traversal = await fetch(`${server.origin}/../../app/resources/lot1-fixture.html`);
       expect(traversal.status).toBe(404);
-      const encodedParent = await fetch(`${server.origin}/%2e%2e/lot6-fixture.html`);
-      expect(encodedParent.status).toBe(404);
-      const encodedDot = await fetch(`${server.origin}/%2e/lot6-fixture.html`);
-      expect(encodedDot.status).toBe(404);
+      expect(await rawGetStatus(server.origin, '/%2e%2e/lot6-fixture.html')).toBe(404);
+      expect(await rawGetStatus(server.origin, '/%2e/lot6-fixture.html')).toBe(404);
+      expect(await rawGetStatus(server.origin, '/%2E%2E/lot6-fixture.html')).toBe(404);
       const queryDots = await fetch(`${server.origin}/lot6-fixture.html?x=%2e%2e`);
       expect(queryDots.status).toBe(200);
     } finally {
