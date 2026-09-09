@@ -10,7 +10,11 @@ import type {
   SuggestedPatchEntry
 } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
-import { applyAssistedPatches, assertAssistedApplyAllowed } from './assisted-apply.ts';
+import {
+  applyAssistedPatches,
+  assertAssistedApplyAllowed,
+  confirmedDescriptor
+} from './assisted-apply.ts';
 import { descriptorHash } from './descriptor-hash.ts';
 import { defaultGitExec, isDefaultBranchName } from './git-repo.ts';
 import {
@@ -23,6 +27,7 @@ import {
 } from './health.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
+import { processSuggestedPatch } from './patch-lifecycle.ts';
 import { type Recoverer, StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
@@ -371,6 +376,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     }
     expect(result.prPrepared).toBe(false);
     expect(result.merged).toBe(false);
+    expect(result.health.appliedPatches).toBe(0);
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
   });
@@ -470,7 +476,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
-  it('keeps ok:true and increments health when preparePr throws (L7-011)', async () => {
+  it('keeps ok:true without incrementing health when preparePr throws (H5b)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-prthrow-'));
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
@@ -498,7 +504,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
       return;
     }
     expect(result.prPrepared).toBe(false);
-    expect(result.health.appliedPatches).toBe(1);
+    expect(result.health.appliedPatches).toBe(0);
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
     const head = (
@@ -577,6 +583,131 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(branch.stdout.trim()).toBe('main');
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+  });
+
+  it('reloads scenario.json from the default branch after checkout (L7-048)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-reload-default-'));
+    await initGitRepo(dir);
+    const mainStep = clickStep(0, '#old');
+    mainStep.intent = 'from-main';
+    const mainScn = scenario([mainStep]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(mainScn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    await execFileAsync('git', ['checkout', '-b', 'feature'], { cwd: dir });
+    const featureStep = clickStep(0, '#old');
+    featureStep.intent = 'from-feature';
+    const featureScn = scenario([featureStep]);
+    await writeFile(scenarioPath, `${JSON.stringify(featureScn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'feature copy'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: featureScn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(true);
+    const patched = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(patched.steps[0]?.intent).toBe('from-main');
+    expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
+  });
+
+  it('refuses a fill step with a click suggestion without rewriting type (L7-049)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-type-mismatch-'));
+    await initGitRepo(dir);
+    const scn = scenario([fillStep(0, '#email', 'recorded', 'email')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    const suggested: SuggestedPatch = {
+      schemaVersion: 1,
+      runId: 'run_b',
+      sessionId: 'ses_lot7',
+      applied: false,
+      patches: [
+        {
+          stepIndex: 0,
+          scope: 'action.descriptor',
+          original: { type: 'fill', selector: '#email', arguments: ['recorded'] },
+          suggested: { type: 'click', selector: '#new' },
+          diagnosis: 'type drift',
+          confidence: 0.9
+        }
+      ]
+    };
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, { ...suggested, runId: 'run_a' }, policy);
+    health = recordSuggestedPatches(health, suggested, policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested,
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('type-mismatch');
+    }
+    const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
+    expect(branch.stdout.trim()).toBe('main');
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.type).toBe('fill');
+    expect(onDisk.steps[0]?.action.descriptor.type).toBe('fill');
+    expect(
+      confirmedDescriptor({ type: 'fill', selector: '#email', arguments: ['recorded'] })
+    ).toEqual({ type: 'fill', selector: '#email', arguments: ['recorded'] });
+  });
+
+  it('maps non-git apply failures to internal-error (L7-052)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-internal-'));
+    const repo = join(root, 'repo');
+    const sessionDir = join(root, 'session');
+    await mkdir(repo, { recursive: true });
+    await mkdir(sessionDir, { recursive: true });
+    await initGitRepo(repo);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(repo, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    let health = emptyHealth('ses_lot7');
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    await saveHealth(sessionDir, health);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'commit') {
+        throw new Error('EIO: unexpected disk failure');
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await processSuggestedPatch({
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      policy,
+      scenarioPath,
+      sessionDir,
+      git
+    });
+    expect(result.assistedApply?.ok).toBe(false);
+    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
+      expect(result.assistedApply.code).toBe('internal-error');
+    }
+    const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo });
+    expect(branch.stdout.trim()).toBe('main');
   });
 
   it('folds DEFAULT_BRANCH_NAMES into isDefaultBranchName (L7-031)', () => {
@@ -781,7 +912,7 @@ describe('saveHealth schema', () => {
     expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ schemaVersion: 1 });
   });
 
-  it('resets when loaded health.json sessionId does not match (L7-029)', async () => {
+  it('throws when loaded health.json sessionId does not match (L7-050)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-session-mismatch-'));
     const foreign = {
       schemaVersion: 1,
@@ -799,8 +930,7 @@ describe('saveHealth schema', () => {
       ]
     };
     await writeFile(join(dir, 'health.json'), `${JSON.stringify(foreign, null, 2)}\n`, 'utf8');
-    const health = await loadHealth(dir, 'ses_lot7');
-    expect(health).toEqual(emptyHealth('ses_lot7'));
+    await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(/health.json sessionId mismatch/);
     expect(JSON.parse(await readFile(join(dir, 'health.json'), 'utf8'))).toEqual(foreign);
   });
 });

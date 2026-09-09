@@ -295,11 +295,16 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
 
 async function pickSessionDirectory(
   win: BrowserWindow | undefined,
-  title: string
+  title: string,
+  allowCreate: boolean
 ): Promise<string | undefined> {
+  const properties: Array<'openDirectory' | 'createDirectory'> = ['openDirectory'];
+  if (allowCreate) {
+    properties.push('createDirectory');
+  }
   const options = {
     title,
-    properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>
+    properties
   };
   const picked =
     win !== undefined && !win.isDestroyed()
@@ -964,7 +969,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (sessionDir === undefined) {
       return { ok: false, error: 'no session' };
     }
-    const destDir = await pickSessionDirectory(winRef.current, 'Exporter la session');
+    const destDir = await pickSessionDirectory(winRef.current, 'Exporter la session', true);
     if (destDir === undefined) {
       return { ok: false, error: 'cancelled' };
     }
@@ -980,7 +985,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (rejectForeignIpc(event, winRef, IPC.sessionImport)) {
       return { ok: false, error: 'forbidden' };
     }
-    const bundleDir = await pickSessionDirectory(winRef.current, 'Importer une session');
+    const bundleDir = await pickSessionDirectory(winRef.current, 'Importer une session', false);
     if (bundleDir === undefined) {
       return { ok: false, error: 'cancelled' };
     }

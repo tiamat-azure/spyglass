@@ -37,7 +37,9 @@ export type AssistedApplyRefusal = {
     | 'missing-repo'
     | 'scenario-outside-repo'
     | 'no-matching-patch'
-    | 'git-error';
+    | 'git-error'
+    | 'internal-error'
+    | 'type-mismatch';
 };
 
 export type AssistedApplySuccess = {
@@ -229,6 +231,7 @@ export async function applyAssistedPatches(input: {
   const hash = toApply[0]?.hash ?? 'patch';
   const branch = patchBranchName(input.suggested.sessionId, hash);
 
+  let scenario = input.scenario;
   if (startingBranch !== defaultBranch) {
     const switched = await checkoutOrGitError(git, repoRoot, startingBranch, [
       'checkout',
@@ -236,6 +239,16 @@ export async function applyAssistedPatches(input: {
     ]);
     if (switched !== undefined) {
       return switched;
+    }
+    try {
+      scenario = await loadScenarioJson(scenarioPath);
+    } catch (error) {
+      await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
+      return {
+        ok: false,
+        code: 'internal-error',
+        reason: error instanceof Error ? error.message : String(error)
+      };
     }
   }
   const created = await checkoutOrGitError(git, repoRoot, startingBranch, [
@@ -252,8 +265,14 @@ export async function applyAssistedPatches(input: {
     return { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' };
   }
 
+  const typeMismatch = typeMismatchForApply(scenario, toApply);
+  if (typeMismatch !== undefined) {
+    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
+    return typeMismatch;
+  }
+
   try {
-    const patched = applyDescriptorsToScenario(input.scenario, toApply, {
+    const patched = applyDescriptorsToScenario(scenario, toApply, {
       runId: input.suggested.runId,
       date: (input.now ?? new Date()).toISOString(),
       branch
@@ -310,11 +329,13 @@ export async function applyAssistedPatches(input: {
       }
     }
 
-    const health = incrementAppliedPatches(
-      input.health,
-      toApply.map((item) => item.stepIndex),
-      policy
-    );
+    const health = prPrepared
+      ? incrementAppliedPatches(
+          input.health,
+          toApply.map((item) => item.stepIndex),
+          policy
+        )
+      : input.health;
 
     const result: AssistedApplySuccess = {
       ok: true,
@@ -371,20 +392,32 @@ function withDescriptorHistory(
     ...step,
     action: {
       ...step.action,
-      descriptor: confirmedDescriptor(suggested, step.action.type)
+      descriptor: confirmedDescriptor(suggested)
     },
     patchHistory
   };
 }
 
-/** L7-003: apply the confirmed suggestion only; do not keep stale optional fields. */
-export function confirmedDescriptor(
-  suggested: ReplayDescriptor,
-  type: ReplayDescriptor['type']
-): ReplayDescriptor {
-  const next = cloneDescriptor(suggested);
-  next.type = type;
-  return next;
+/** L7-003 / L7-049: apply the confirmed suggestion as hashed; do not rewrite type. */
+export function confirmedDescriptor(suggested: ReplayDescriptor): ReplayDescriptor {
+  return cloneDescriptor(suggested);
+}
+
+function typeMismatchForApply(
+  scenario: Scenario,
+  patches: ReadonlyArray<{ stepIndex: number; suggested: ReplayDescriptor }>
+): AssistedApplyRefusal | undefined {
+  for (const patch of patches) {
+    const step = scenario.steps.find((entry) => entry.index === patch.stepIndex);
+    if (step === undefined || patch.suggested.type !== step.action.type) {
+      return {
+        ok: false,
+        code: 'type-mismatch',
+        reason: 'suggested descriptor type does not match the scenario step'
+      };
+    }
+  }
+  return undefined;
 }
 
 async function gitOkOrThrow(git: GitExec, cwd: string, args: readonly string[]): Promise<string> {

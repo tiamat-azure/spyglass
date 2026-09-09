@@ -42,12 +42,23 @@ node --experimental-transform-types scenario.ts --no-ai --dataset datasets/examp
 Unit proof: `packages/runner/src/lot7-parameters.test.ts`
 (`replays the same scenario with distinct datasets`).
 
-Evidence screenshots: `docs/lot-7/screenshots/` (health, dedicated branch,
-datasets). Chrome controls: `pnpm test:e2e` (`lot7-finition.spec.ts`).
+`docs/lot-7/screenshots/` PNGs from `scripts/capture-lot-7.mjs` are
+**illustrative fixtures** (scripted HTML pages), not live Spyglass app or
+target-repo captures:
+
+| File | Caption |
+|---|---|
+| [`screenshots/health-json.png`](screenshots/health-json.png) | Illustrative fixture: F-63 / F-65 `health.json` |
+| [`screenshots/assisted-branch.png`](screenshots/assisted-branch.png) | Illustrative fixture: dedicated patch branch (never `main`) |
+| [`screenshots/datasets.png`](screenshots/datasets.png) | Illustrative fixture: parameterized `--dataset` fills |
+
+Chrome controls: `pnpm test:e2e` (`lot7-finition.spec.ts`).
 
 ```bash
 NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 ```
+
+That script still renders fixture HTML; it does not capture a running app.
 
 ## 4. In-app pas-à-pas (F-59)
 

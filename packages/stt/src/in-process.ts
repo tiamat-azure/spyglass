@@ -1,5 +1,7 @@
 import type { SttEngine } from './engine.ts';
-import { createEngineFromEnv } from './resolve-engine.ts';
+import { createMockEngine } from './mock-engine.ts';
+import { parseMockTranscripts } from './protocol.ts';
+import { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
 
 type LiveUtterance = {
   utteranceId: string;
@@ -23,16 +25,7 @@ export type InProcessStt = {
   dispose: () => void;
 };
 
-/**
- * Engine session used by Electron main when the sidecar runs in-process
- * (CI / e2e / missing binary). Transport is still main-owned; the renderer
- * never opens a socket (ADR-0005).
- */
-export async function createInProcessStt(
-  env: NodeJS.ProcessEnv = process.env,
-  provided?: SttEngine
-): Promise<InProcessStt> {
-  const engine = provided ?? (await createEngineFromEnv(env));
+function wrapInProcessStt(engine: SttEngine): InProcessStt {
   let live: LiveUtterance | undefined;
   let pendingFinalizeId: string | undefined;
   const abort = (): void => {
@@ -86,4 +79,38 @@ export async function createInProcessStt(
       engine.dispose?.();
     }
   };
+}
+
+/**
+ * Engine session used by Electron main when the sidecar runs in-process
+ * (CI / e2e / missing binary). Transport is still main-owned; the renderer
+ * never opens a socket (ADR-0005).
+ *
+ * A5b: this factory is synchronous. Pass `provided` to wrap an existing
+ * engine (including whisper). Without `provided`, only the mock engine is
+ * constructed here — whisper requires {@link createInProcessSttFromEnv}.
+ */
+export function createInProcessStt(
+  env: NodeJS.ProcessEnv = process.env,
+  provided?: SttEngine
+): InProcessStt {
+  if (provided !== undefined) {
+    return wrapInProcessStt(provided);
+  }
+  if (resolveSttEngineName(env) === 'whisper') {
+    throw new Error(
+      'createInProcessStt is synchronous and cannot load whisper; call createInProcessSttFromEnv'
+    );
+  }
+  return wrapInProcessStt(
+    createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS))
+  );
+}
+
+/** Async companion that awaits `createEngineFromEnv` then wraps via the sync factory. */
+export async function createInProcessSttFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  provided?: SttEngine
+): Promise<InProcessStt> {
+  return createInProcessStt(env, provided ?? (await createEngineFromEnv(env)));
 }

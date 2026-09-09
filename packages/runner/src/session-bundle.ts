@@ -197,11 +197,12 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
   }
 }
 
-/** L7-030 / L7-040: unique backup per replace; restore dest if publish fails. */
+/** L7-030 / L7-040 / L7-051: unique backup per replace; restore dest if publish fails. */
 async function replaceDirectory(dest: string, staging: string): Promise<void> {
   await recoverOrphanedBackup(dest);
   const backup = `${dest}.spyglass-prev-${randomBytes(8).toString('hex')}`;
   let backedUp = false;
+  let published = false;
   try {
     try {
       await rename(dest, backup);
@@ -213,11 +214,12 @@ async function replaceDirectory(dest: string, staging: string): Promise<void> {
       }
     }
     await rename(staging, dest);
+    published = true;
     if (backedUp) {
-      await rm(backup, { recursive: true, force: true });
+      await rm(backup, { recursive: true, force: true }).catch(() => undefined);
     }
   } catch (error) {
-    if (backedUp) {
+    if (backedUp && !published) {
       await rm(dest, { recursive: true, force: true }).catch(() => undefined);
       await rename(backup, dest).catch(() => undefined);
     }

@@ -503,6 +503,7 @@ const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
 const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
 const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
 const sttUpgradeCopy = requireEl<HTMLElement>('stt-upgrade-copy');
+const sttUpgradeCopyDefault = sttUpgradeCopy.innerHTML;
 const sttUpgradeAccept = requireEl<HTMLButtonElement>('stt-upgrade-accept');
 
 if (api === undefined) {
@@ -887,14 +888,10 @@ sttUpgradeAccept.addEventListener('click', () => {
         sttUpgrade.hidden = true;
         return;
       }
-      sttUpgradeCopy.textContent =
-        result.error === 'timeout'
-          ? 'Téléchargement trop long. Réessayez ou refusez définitivement.'
-          : 'Téléchargement impossible. Réessayez ou refusez définitivement.';
+      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
     })
     .catch(() => {
-      sttUpgradeCopy.textContent =
-        'Téléchargement impossible. Réessayez ou refusez définitivement.';
+      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
     })
     .finally(() => {
       sttUpgradeAccept.disabled = false;

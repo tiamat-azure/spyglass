@@ -207,8 +207,17 @@ describe('packaged Observe', () => {
     expect(main).toContain('onStopRolledBack');
     expect(main).toContain("state.state === 'recording'");
     expect(main).toContain('dialog.showOpenDialog');
+    expect(main).toContain("pickSessionDirectory(winRef.current, 'Exporter la session', true)");
+    expect(main).toContain("pickSessionDirectory(winRef.current, 'Importer une session', false)");
     expect(renderer).toContain('exportSession');
     expect(renderer).toContain('importSession');
+    expect(renderer).toContain('sttUpgradeCopyDefault');
+    const ipcValidate = readFileSync(join(appRoot, 'src/main/ipc-validate.ts'), 'utf8');
+    expect(ipcValidate).not.toContain('parsePathPayload');
+    expect(inProcess).toContain('export function createInProcessStt(');
+    expect(inProcess).not.toContain('export async function createInProcessStt(');
+    expect(inProcess).toContain('createInProcessSttFromEnv');
+    expect(bridge).toContain('createInProcessSttFromEnv');
     const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
     expect(exportIdx).toBeGreaterThan(-1);
     expect(renderer.slice(exportIdx, exportIdx + 900)).not.toContain('window.prompt');

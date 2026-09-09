@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { correlateVoiceSegment } from './correlate.ts';
 import type { SttEngine } from './engine.ts';
-import { createInProcessStt } from './in-process.ts';
+import { createInProcessStt, createInProcessSttFromEnv } from './in-process.ts';
 import { STT_PACKAGE, sidecarStatus } from './index.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
@@ -166,6 +166,36 @@ describe('@spyglass/stt', () => {
     expect(isLoopbackWsHost('127.0.0.1.evil.test')).toBe(false);
     expect(isLoopbackWsHost('localhost.evil.test')).toBe(false);
     expect(isLoopbackWsHost('10.0.0.1')).toBe(false);
+  });
+
+  it('createInProcessStt is synchronous and is not a Promise (A5b)', () => {
+    const session = createInProcessStt(
+      { SPYGLASS_STT_ENGINE: 'mock' },
+      createMockEngine(['hors ligne'])
+    );
+    expect(session).not.toBeInstanceOf(Promise);
+    expect(typeof session.begin).toBe('function');
+    expect(typeof session.dispose).toBe('function');
+  });
+
+  it('throws when whisper is required without a provided engine (A5b)', () => {
+    expect(() => createInProcessStt({ SPYGLASS_STT_ENGINE: 'whisper' })).toThrow(
+      /createInProcessSttFromEnv/
+    );
+  });
+
+  it('createInProcessSttFromEnv loads a mock engine from env (A5b)', async () => {
+    const session = await createInProcessSttFromEnv({
+      SPYGLASS_STT_ENGINE: 'mock',
+      SPYGLASS_STT_MOCK_TRANSCRIPTS: 'hors ligne'
+    });
+    expect(session).not.toBeInstanceOf(Promise);
+    expect(session.engine).toBe('mock');
+    session.begin('u1', 1);
+    session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
+    const final = await session.end(2);
+    expect(final?.text).toBe('hors ligne');
+    session.dispose();
   });
 
   it('in-process session streams a final without opening a socket', async () => {

@@ -16,7 +16,7 @@ export {
 } from './download-model.ts';
 export type { SttEngine } from './engine.ts';
 export type { InProcessFinal, InProcessStt } from './in-process.ts';
-export { createInProcessStt } from './in-process.ts';
+export { createInProcessStt, createInProcessSttFromEnv } from './in-process.ts';
 export { createMockEngine } from './mock-engine.ts';
 export type {
   AudioRetention,

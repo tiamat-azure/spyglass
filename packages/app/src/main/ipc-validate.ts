@@ -319,17 +319,6 @@ export function asPcmFrame(input: unknown, maxBytes = 65_536): Buffer | undefine
   return undefined;
 }
 
-export function parsePathPayload(input: unknown, key: 'destDir' | 'bundleDir'): string | undefined {
-  if (typeof input !== 'object' || input === null) {
-    return undefined;
-  }
-  const value = (input as Record<string, unknown>)[key];
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return undefined;
-  }
-  return value;
-}
-
 export function parseSttUpgradeDecide(input: unknown): 'accept' | 'refuse' | undefined {
   if (typeof input !== 'object' || input === null) {
     return undefined;

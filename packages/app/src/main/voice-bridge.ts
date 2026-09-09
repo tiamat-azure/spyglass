@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  createInProcessStt,
+  createInProcessSttFromEnv,
   createVadState,
   frameDurationMs,
   gateVadUtterance,
@@ -223,7 +223,7 @@ export class VoiceBridge {
   private async connect(): Promise<VoiceBridgeStatus> {
     await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
-      this.inProcess = await createInProcessStt(this.env);
+      this.inProcess = await createInProcessSttFromEnv(this.env);
       this.status = {
         engine: this.inProcess.engine === 'whisper' ? 'whisper' : 'mock',
         model: this.inProcess.model,

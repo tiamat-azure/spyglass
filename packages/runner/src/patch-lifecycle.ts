@@ -78,7 +78,7 @@ export async function processSuggestedPatch(input: {
   } catch (error) {
     result.assistedApply = {
       ok: false,
-      code: 'git-error',
+      code: isGitApplyError(error) ? 'git-error' : 'internal-error',
       reason: error instanceof Error ? error.message : String(error)
     };
   }
@@ -99,6 +99,11 @@ function resolveScenarioPath(
     return resolve(repo, scenarioPath);
   }
   return resolve(scenarioPath);
+}
+
+function isGitApplyError(error: unknown): boolean {
+  const reason = error instanceof Error ? error.message : String(error);
+  return /git |commit failed|checkout |fatal:/iu.test(reason);
 }
 
 export async function loadDatasetFile(path: string): Promise<unknown> {

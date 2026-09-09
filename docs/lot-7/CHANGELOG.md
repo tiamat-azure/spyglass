@@ -44,8 +44,8 @@
   file (ENOENT) starts empty healthy counters. The corrupt file is not
   deleted or replaced.
 - **L7-011:** `preparePr` throwing still returns `ok: true` with
-  `prPrepared: false` after the branch commit, and still increments
-  health.
+  `prPrepared: false` after the branch commit. Health increment on that
+  path is superseded by **H5b** (increment only when `prPrepared`).
 - **L7-012:** If mutation/commit fails after `checkout -b`, HEAD is
   restored to the starting branch (`git checkout -f`).
 - **L7-013:** Session import refuses when dest is the source (or either
@@ -96,9 +96,8 @@
 - **L7-028:** A successful run with no suggested patch still records
   through `processSuggestedPatch`, which invalidates F-63 candidates so
   two matching recoveries separated by a clean run cannot promote.
-- **L7-029:** `loadHealth` returns empty counters when `health.json`
-  `sessionId` does not match the current session (no cross-session
-  `appliedPatches` / candidates).
+- **L7-029:** `loadHealth` used to return empty counters when `health.json`
+  `sessionId` did not match. **L7-050** replaces that with a throw.
 - **L7-030:** Session export and import replace dest by renaming it
   aside, then publishing the staging directory; dest is restored if
   publish fails.
@@ -143,4 +142,44 @@
   unreadable `large-fallback.json` throws.
 - **L7-043:** `firstUseNoted` is set only after a successful
   fallback-marker hook; transcription still cannot fail (L7-008).
+
+## Pass-6 adversarial fixes (L7-044 … L7-052) + Captain locks
+
+- **A5b:** `createInProcessStt` is synchronous (`InProcessStt`, not
+  `Promise<InProcessStt>`). Whisper without a provided engine throws and
+  points at `createInProcessSttFromEnv`, which awaits `createEngineFromEnv`
+  then wraps via the sync factory. VoiceBridge uses the async API.
+- **H5b:** Fragility counters increment only when `prPrepared` is true.
+  Local commit with a failed/missing PR still returns `ok: true`
+  (`prPrepared: false`) and does **not** increment `appliedPatches`
+  (overrides L7-011 health-on-local-commit).
+- **P6a:** An existing `STT_MODEL_PATH` is honoured over `STT_MODEL_DIR`
+  conventional small/large discovery when not in large-model fallback.
+  L7-016 still requires `ggml-small-q5_1.bin` when fallback is set and
+  the explicit basename is large.
+- **C6a:** `scripts/capture-lot-7.mjs` screenshots are labelled
+  **illustrative fixtures** in PR-NOTES / DEMO (not live app/repo
+  capture). The capture script is unchanged this lot.
+- **L7-044:** IPC contract documents F-47 export/import as main-process
+  `dialog.showOpenDialog` with `{}` invoke (E4a).
+- **L7-045:** `parsePathPayload` is removed; renderer no longer sends a
+  typed dest/bundle path.
+- **L7-046:** Export directory picker allows `createDirectory`; import
+  does not (existing directory only).
+- **L7-047:** STT upgrade banner restores the default copy HTML on
+  download failure/`catch` (banner stays visible, L7-006).
+- **L7-048:** After checking out the default branch from a non-default
+  start, assisted apply reloads `scenario.json` from disk and patches
+  that object. Load failure restores `startingBranch` (`internal-error`).
+- **L7-049:** `confirmedDescriptor` is clone-only (no `type` rewrite).
+  A suggested type that does not match the scenario step is refused
+  (`type-mismatch`) after `checkout -b`, restoring the start branch.
+- **L7-050:** `loadHealth` throws on `health.json` `sessionId` mismatch
+  (no silent `emptyHealth` / overwrite). L7-029 empty-reset is replaced.
+- **L7-051:** `replaceDirectory` sets `published` after a successful
+  staging rename; backup `rm` is `.catch`; rollback runs only when
+  `backedUp && !published`.
+- **L7-052:** `AssistedApplyRefusal.code` includes `internal-error` and
+  `type-mismatch`. `processSuggestedPatch` maps thrown apply failures
+  with `isGitApplyError` vs `internal-error`.
 

@@ -86,7 +86,7 @@ export async function loadHealth(sessionDir: string, sessionId: string): Promise
   }
   const health = parsed as ScenarioHealth;
   if (health.sessionId !== sessionId) {
-    return emptyHealth(sessionId);
+    throw new Error(`health.json sessionId mismatch: ${health.sessionId} !== ${sessionId}`);
   }
   return health;
 }

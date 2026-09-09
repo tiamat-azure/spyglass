@@ -70,11 +70,22 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 Lot 7-focused unit tests: `lot7-patch.test.ts` (29), `lot7-parameters.test.ts` (20),
 `upgrade.test.ts` (11), `stt-upgrade-store.test.ts` (4).
 
-Screenshots: `docs/lot-7/screenshots/` (`health-json.png`, `assisted-branch.png`,
-`datasets.png`, plus `chrome-lot7-controls.png` from e2e when
-`SPYGLASS_E2E_SCREENSHOT_DIR` is set).
+### Screenshots (illustrative fixtures)
 
-Capture HTML evidence:
+PNGs from `scripts/capture-lot-7.mjs` under `docs/lot-7/screenshots/` are
+**illustrative fixtures** (scripted HTML pages). They are **not** live
+Spyglass app or target-repo captures.
+
+| File | Caption |
+|---|---|
+| [`screenshots/health-json.png`](screenshots/health-json.png) | Illustrative fixture: F-63 / F-65 `health.json` after two matching recoveries |
+| [`screenshots/assisted-branch.png`](screenshots/assisted-branch.png) | Illustrative fixture: dedicated `spyglass/patch-…` branch; `main` SHA unchanged |
+| [`screenshots/datasets.png`](screenshots/datasets.png) | Illustrative fixture: distinct `--dataset` fill values (F-48) |
+
+Live chrome controls: `pnpm test:e2e` (`lot7-finition.spec.ts`) writes
+`chrome-lot7-controls.png` when `SPYGLASS_E2E_SCREENSHOT_DIR` is set.
+
+Capture HTML evidence (still fixture HTML, not the running app):
 
 ```bash
 NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
@@ -84,7 +95,8 @@ NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 
 1. **Assisted apply mutates the target `--repo` copy**, not
    `suggested-patch.json` (`applied` stays `false`). Fragility counters
-   increment when the branch commit lands, not when a human merges.
+   increment when a PR is prepared (`prPrepared: true`), not merely when
+   the local branch commit lands (H5b).
 2. **In-app replay** writes `health.json` on the session. Git/PR only when
    `PATCH_ASSISTED_APPLY` is on **and** the scenario file is inside
    `--repo`.
@@ -104,8 +116,12 @@ Pass-3 (L7-017 … L7-020), **W3a** (`--large` atomic download), and
 `CHANGELOG.md`.
 Pass-4 (L7-021 … L7-031) is in `CHANGELOG.md`.
 Pass-5 (L7-032 … L7-043) plus Captain locks **E4a / S4a / R4a / M4a /
-U4a** are in `CHANGELOG.md`. Still pending: **A5** (`createInProcessStt`
-sync vs Promise) and **H5** (keep L7-011 health-on-local-commit).
+U4a** are in `CHANGELOG.md`.
+Pass-6 (L7-044 … L7-052) plus Captain locks **A5b** (sync
+`createInProcessStt` + `createInProcessSttFromEnv`), **H5b** (health
+increment only when `prPrepared`), **P6a** (`STT_MODEL_PATH` over
+`STT_MODEL_DIR` conventional discovery), and **C6a** (capture screenshots
+are illustrative fixtures) are in `CHANGELOG.md`.
 
 ## Residuals
 

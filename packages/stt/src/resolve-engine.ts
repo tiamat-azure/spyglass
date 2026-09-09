@@ -56,8 +56,10 @@ export async function createEngineFromEnv(
       const explicit = env.STT_MODEL_PATH?.trim();
       const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
       const largeOk = existsSync(largePath);
-      if (explicitOk && !largeOk && !smallOk && !fallback) {
-        // M4a: honor an explicit custom filename when conventional models are absent.
+      if (explicitOk && !fallback) {
+        // P6a / M4a: honor STT_MODEL_PATH over STT_MODEL_DIR conventional
+        // small/large discovery. L7-016 still refuses large weights as the
+        // small engine when fallback is set.
         model = explicit;
       } else {
         const choice = chooseWhisperModel({
