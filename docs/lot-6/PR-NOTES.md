@@ -573,9 +573,12 @@ Applied on tip `46138a04f6d799061d0ec21ca04c04bc4632a3f9`. Product decisions
 
 - **L6-061 / D61a** `writeGeneratedPackage` writes a staging dir then
   `rename`s it over `generated/`. Mid-write failure only `rm`s the
-  staging dir. Finalize generate catch discards only when there was no
-  existing `generated/scenario.json` (L6-005 first generate still
+  staging dir. Finalize generate catch / abort discards only when there
+  was no existing `generated/scenario.json` (L6-005 first generate still
   fail-closed).
+
+Unit tests after this pass: **411 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
 ## Residuals
 
