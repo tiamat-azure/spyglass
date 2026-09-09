@@ -61,14 +61,14 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (265 files) |
+| `pnpm lint` | pass (267 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **452 passed**, 1 skipped (58 files) |
+| `pnpm test` | **489 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (13), `lot7-parameters.test.ts` (8),
-`upgrade.test.ts` (5), `stt-upgrade-store.test.ts` (1).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (28), `lot7-parameters.test.ts` (16),
+`upgrade.test.ts` (7), `stt-upgrade-store.test.ts` (4).
 
 Screenshots: `docs/lot-7/screenshots/` (`health-json.png`, `assisted-branch.png`,
 `datasets.png`, plus `chrome-lot7-controls.png` from e2e when
