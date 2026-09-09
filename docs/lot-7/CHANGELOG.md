@@ -1030,6 +1030,9 @@ Ask-user still held: F28, W28.
   `join(modelDir, STT_LARGE…)`. `STT_MODEL_PATH` and other alternate
   large locations that still select large get the same first-use hook.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**697 passed**, 1 skipped (62 files). `upgrade.test.ts` 33.
+
 Ask-user still held: W28.
 
 ## CI — macOS Electron e2e close hang
