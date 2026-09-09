@@ -141,6 +141,11 @@ function patch(selector: string, runId = 'run_1'): SuggestedPatch {
   };
 }
 
+async function gitShowJson<T>(dir: string, spec: string): Promise<T> {
+  const raw = (await execFileAsync('git', ['show', spec], { cwd: dir })).stdout;
+  return JSON.parse(raw) as T;
+}
+
 async function initGitRepo(dir: string): Promise<void> {
   await execFileAsync('git', ['init', '-b', 'main'], { cwd: dir });
   await execFileAsync('git', ['config', 'user.email', 'lot7@spyglass.test'], { cwd: dir });
@@ -375,16 +380,68 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const head = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
     ).stdout.trim();
-    expect(head).toBe(result.branch);
-    expect(head).not.toBe('main');
+    expect(head).toBe('main');
+    expect(head).not.toBe(result.branch);
+    const patchRef = (
+      await execFileAsync('git', ['show-ref', '--verify', `refs/heads/${result.branch}`], {
+        cwd: dir
+      })
+    ).stdout.trim();
+    expect(patchRef.length).toBeGreaterThan(0);
     const mainStill = (
       await execFileAsync('git', ['rev-parse', 'main'], { cwd: dir })
     ).stdout.trim();
     expect(mainStill).toBe(mainSha);
-    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
-    expect(onDisk.steps[0]?.patchHistory?.[0]?.scope).toBe('action.descriptor');
+    const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(working.steps[0]?.action.descriptor.selector).toBe('#old');
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(onPatch.steps[0]?.patchHistory?.[0]?.scope).toBe('action.descriptor');
     expect(result.health.appliedPatches).toBe(1);
+  });
+
+  it('checks out the pre-apply starting branch after success and leaves the patch branch (B16a)', async () => {
+    const dir = await tempDir('spyglass-lot7-b16a-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    await execFileAsync('git', ['checkout', '-b', 'feature'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({ url: 'https://github.com/example/target/pull/16' })
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.branch.startsWith('spyglass/patch-')).toBe(true);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('feature');
+    expect(head).not.toBe(result.branch);
+    const patchRef = (
+      await execFileAsync('git', ['show-ref', '--verify', `refs/heads/${result.branch}`], {
+        cwd: dir
+      })
+    ).stdout.trim();
+    expect(patchRef.length).toBeGreaterThan(0);
+    const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(working.steps[0]?.action.descriptor.selector).toBe('#old');
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
   it('returns ok:false pr-prep-failed when git push fails (L7-002 / P12a)', async () => {
@@ -455,8 +512,11 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       preparePr: async () => ({ url: 'https://github.com/example/target/pull/8' })
     });
     expect(result.ok).toBe(true);
-    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    const descriptor = onDisk.steps[0]?.action.descriptor;
+    if (!result.ok) {
+      return;
+    }
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    const descriptor = onPatch.steps[0]?.action.descriptor;
     expect(descriptor).toEqual({ type: 'click', selector: '#new' });
     expect(descriptor?.fallbackSelectors).toBeUndefined();
     expect(descriptor?.arguments).toBeUndefined();
@@ -545,7 +605,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       preparePr: async () => ({})
     });
     expect(result.ok).toBe(true);
-    const patched = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    if (!result.ok) {
+      return;
+    }
+    const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
@@ -635,6 +698,11 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(second.branch).toBe(first.branch);
     expect(second.commit).toBe(first.commit);
     expect(second.health.appliedPatches).toBe(1);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
+    expect(head).not.toBe(second.branch);
   });
 
   it('times out hung git exec instead of waiting forever (L7-093)', async () => {
@@ -1039,9 +1107,9 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     ]);
     expect(result.branch).toBe(patchBranchName('ses_lot7', full));
     expect(result.branch).not.toBe(patchBranchName('ses_lot7', firstOnly));
-    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#a');
-    expect(onDisk.steps[1]?.action.descriptor.selector).toBe('#b');
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#a');
+    expect(onPatch.steps[1]?.action.descriptor.selector).toBe('#b');
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
@@ -1193,7 +1261,17 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       preparePr: async () => ({})
     });
     expect(result.ok).toBe(true);
-    const patched = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    if (!result.ok) {
+      return;
+    }
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('feature');
+    const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(working.steps[0]?.intent).toBe('from-feature');
+    expect(working.steps[0]?.action.descriptor.selector).toBe('#old');
+    const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
     expect(patched.steps[0]?.intent).toBe('from-main');
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
@@ -1552,11 +1630,19 @@ describe('Lot 7 health.json wiring after recovery', () => {
       expect(JSON.stringify(result.suggestedPatch ?? {})).not.toMatch(/dataset-secret/);
       if (runId === 'run_b') {
         expect(result.assistedApply?.ok).toBe(true);
+        if (result.assistedApply?.ok === true) {
+          const onPatch = await gitShowJson<Scenario>(
+            repo,
+            `${result.assistedApply.branch}:scenario.json`
+          );
+          expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
+          expect(onPatch.steps[1]?.action.descriptor.selector).toBe('#new');
+        }
       }
     }
-    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
-    expect(onDisk.steps[1]?.action.descriptor.selector).toBe('#new');
+    const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(working.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
+    expect(working.steps[1]?.action.descriptor.selector).toBe('#old');
   });
 
   it('strips dataset secrets from suggested fill args before disk and health (P13a)', async () => {

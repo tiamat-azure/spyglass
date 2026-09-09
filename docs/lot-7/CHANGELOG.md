@@ -503,7 +503,19 @@ large is in play).
   Explicit `STT_MODEL_PATH` still wins. F-39 small fallback stays in
   `createEngineFromEnv` / `chooseWhisperModel`.
 
-Ask-user still held: **B16**, **F16**, **A17** (`createEngineFromEnv`
+Ask-user still held: **F16** (fail-loud corrupt `large-fallback.json` always vs only when
+large is in play).
+
+## Captain lock B16a (checkout back after assisted-apply success)
+
+- **B16a:** After assisted-apply **success**, checkout the captured
+  pre-apply starting ref (`StartingHead` name, or SHA when detached).
+  Do not call `currentBranch()` after success (HEAD is the patch branch).
+  Leave `spyglass/patch-*` locally (and pushed) for human review. P12a /
+  P14a PR-prep failures still stay on the patch branch for resume
+  (L7-084).
+
+Ask-user still held: **F16**, **A17** (`createEngineFromEnv`
 sync vs async API).
 
 ## CI — macOS Electron e2e close hang

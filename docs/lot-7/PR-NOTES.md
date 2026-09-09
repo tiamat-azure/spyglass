@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **575 passed**, 1 skipped (61 files) |
+| `pnpm test` | **576 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (49), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (50), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -155,6 +155,8 @@ Windows CI: L7-108 backoff starts after the second failed first-use persist
 so L7-097 can still sample a later non-overlapping finalize.
 Pass-16 (L7-109 … L7-116) is in `CHANGELOG.md`.
 Pass-17 (L7-117 … L7-125) is in `CHANGELOG.md`.
+Captain lock **B16a** (checkout starting branch after assisted-apply
+success; leave `spyglass/patch-*` for review) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -183,3 +185,8 @@ Pass-17 (L7-117 … L7-125) is in `CHANGELOG.md`.
   open PR is `ok: false` / `code: 'open-pr'`; remote is left alone.
   Local branch stays for resume. Health is not incremented (H5b / P12a).
   L7-094 stubs `createPr` so Windows does not hang on live `gh pr create`.
+- **B16a:** After apply **success**, checkout the captured pre-apply
+  starting ref (`StartingHead` name, or SHA when detached). Do not read
+  `currentBranch()` after success (HEAD is the patch branch).
+  `spyglass/patch-*` stays local and pushed for review. P12a/P14a
+  **failures** stay on the patch branch for L7-084 resume.

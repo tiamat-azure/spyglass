@@ -467,6 +467,11 @@ export async function applyAssistedPatches(input: {
     policy
   );
 
+  // B16a: after success, return to the pre-apply starting ref. Do not use
+  // currentBranch() here — HEAD is the patch branch. Leave spyglass/patch-*
+  // in place for human review (do not pass it as danglingPatchBranch).
+  await restoreStartingBranch(git, repoRoot, starting);
+
   const result: AssistedApplySuccess = {
     ok: true,
     branch,
