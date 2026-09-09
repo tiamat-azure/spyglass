@@ -173,6 +173,8 @@ Captain lock **M18a** (`STT_MODEL_FILE` wins over large basename when
 the configured file exists) is in `CHANGELOG.md`.
 Captain lock **W18a** (`--large` ensures small F-39 fallback) is in
 `CHANGELOG.md`.
+Captain lock **R19a** (parameterized recovery blanks every
+`snapshot.values` entry) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -221,3 +223,5 @@ Captain lock **W18a** (`--large` ensures small F-39 fallback) is in
   files still prefer large. `STT_MODEL_PATH` stays first.
 - **W18a:** `fetch-whisper.mjs --large` downloads `ggml-small-q5_1.bin`
   when missing so F-39 small fallback exists after a clean `--large` run.
+- **R19a:** Parameterized recovery blanks every `snapshot.values` entry
+  (not only the recorded selector key). Aligns with L7-161.

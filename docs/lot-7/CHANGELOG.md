@@ -692,6 +692,15 @@ Ask-user still held: **W18**, **R19**, **D20**, **H21**.
 
 Ask-user still held: **R19**, **D20**, **H21**.
 
+## Captain lock R19a (fail-closed snapshot.values redaction)
+
+- **R19a:** `redactSnapshotForRecovery` blanks every `snapshot.values` entry
+  on parameterized runs (L7-161 aligned). Recovery does not keep live field
+  values under a different selector key. Text/url/title still redact known
+  parameter/secret tokens (L7-079 / L7-124 / L7-151).
+
+Ask-user still held: **D20**, **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

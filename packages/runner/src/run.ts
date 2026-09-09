@@ -730,15 +730,11 @@ function redactSnapshotForRecovery(
     return snapshot;
   }
   const secrets = new Set<string>();
-  const values: Record<string, string> = { ...snapshot.values };
   for (const step of parameterized) {
     const selector = step.action.descriptor.selector;
-    if (Object.hasOwn(values, selector)) {
-      const live = values[selector];
-      if (live !== undefined && live.length > 0) {
-        secrets.add(live);
-      }
-      values[selector] = '';
+    const live = snapshot.values[selector];
+    if (live !== undefined && live.length > 0) {
+      secrets.add(live);
     }
     for (const argument of step.action.descriptor.arguments ?? []) {
       if (argument.length > 0) {
@@ -755,21 +751,11 @@ function redactSnapshotForRecovery(
     url = redactSecretFromText(url, secret);
     title = redactSecretFromText(title, secret);
   }
-  // L7-161: secrets may appear under keys other than the recorded selector.
-  for (const key of Object.keys(values)) {
-    const current = values[key];
-    if (current === undefined || current.length === 0) {
-      continue;
-    }
-    let next = current;
-    for (const secret of ordered) {
-      if (next === secret) {
-        next = '';
-        break;
-      }
-      next = redactSecretFromText(next, secret);
-    }
-    values[key] = next;
+  // R19a / L7-161: parameterized recovery must not ship live field values.
+  // Blank the entire map — do not rely on exact raw selector key match.
+  const values: Record<string, string> = {};
+  for (const key of Object.keys(snapshot.values)) {
+    values[key] = '';
   }
   return { ...snapshot, values, text, url, title };
 }
