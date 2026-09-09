@@ -8,8 +8,9 @@
  * L7-086: the default (non-`--large`) path uses only Node builtins so a plain
  * `node` invocation does not fail at import time. `--large` dynamically imports
  * the STT TypeScript modules (Node 24 type stripping).
+ * W18a: `--large` ensures `ggml-small-q5_1.bin` (F-39 fallback) before returning.
  */
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -53,6 +54,18 @@ async function download(url, dest) {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
 }
 
+/** W18a: skip if present so re-running `--large` does not re-fetch ~190MB. */
+async function ensureSmallFallback() {
+  const dest = join(outDir, MODEL_NAME);
+  if (existsSync(dest)) {
+    process.stdout.write(`F-39 fallback already present: ${dest}\n`);
+    return;
+  }
+  process.stdout.write(`Downloading ${MODEL_NAME} (F-39 fallback, ~190MB)…\n`);
+  await download(MODEL_URL, dest);
+  process.stdout.write(`Wrote ${dest}\n`);
+}
+
 async function main() {
   const large = process.argv.includes('--large');
   await mkdir(outDir, { recursive: true });
@@ -77,7 +90,8 @@ async function main() {
       expectedSha256: STT_LARGE_SHA256,
       minBytes: STT_LARGE_MIN_BYTES
     });
-    process.stdout.write(`Wrote ${largePath}\nKeep ggml-small-q5_1.bin as fallback (F-39).\n`);
+    process.stdout.write(`Wrote ${largePath}\n`);
+    await ensureSmallFallback();
     return;
   }
   const modelPath = join(outDir, MODEL_NAME);

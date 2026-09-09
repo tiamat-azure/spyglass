@@ -149,6 +149,31 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 
+  it('ensures ggml-small-q5_1.bin on --large before returning (W18a)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const largeStart = src.indexOf('if (large)');
+    const largeEnd = src.indexOf('const modelPath');
+    expect(largeStart).toBeGreaterThan(-1);
+    expect(largeEnd).toBeGreaterThan(largeStart);
+    const largeBlock = src.slice(largeStart, largeEnd);
+    expect(largeBlock).toContain('await ensureSmallFallback()');
+    expect(largeBlock.indexOf('await ensureSmallFallback()')).toBeLessThan(
+      largeBlock.lastIndexOf('return')
+    );
+    const fnStart = src.indexOf('async function ensureSmallFallback');
+    const fnEnd = src.indexOf('async function main');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('MODEL_NAME');
+    expect(body).toContain('existsSync');
+    expect(body).toContain('await download(');
+    expect(src).toMatch(/const MODEL_NAME = 'ggml-small-q5_1\.bin'/);
+  });
+
   it('does not statically import TypeScript modules (L7-086)', async () => {
     const src = await readFile(
       new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),

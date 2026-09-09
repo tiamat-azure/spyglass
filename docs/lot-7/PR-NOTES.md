@@ -171,6 +171,8 @@ Captain lock **E18a** (packaged production ignores FAKE / env
 `STT_LARGE_SHA256`) is in `CHANGELOG.md`.
 Captain lock **M18a** (`STT_MODEL_FILE` wins over large basename when
 the configured file exists) is in `CHANGELOG.md`.
+Captain lock **W18a** (`--large` ensures small F-39 fallback) is in
+`CHANGELOG.md`.
 
 ## Residuals
 
@@ -217,3 +219,5 @@ the configured file exists) is in `CHANGELOG.md`.
 - **M18a:** An existing `STT_MODEL_FILE` / `STT_MODEL` match is chosen
   before L7-125 large-basename discovery. Unset or missing configured
   files still prefer large. `STT_MODEL_PATH` stays first.
+- **W18a:** `fetch-whisper.mjs --large` downloads `ggml-small-q5_1.bin`
+  when missing so F-39 small fallback exists after a clean `--large` run.

@@ -683,6 +683,15 @@ Ask-user still held: **M18**, **W18**, **R19**, **D20**, **H21**.
 
 Ask-user still held: **W18**, **R19**, **D20**, **H21**.
 
+## Captain lock W18a (--large ensures small F-39 fallback)
+
+- **W18a:** `scripts/fetch-whisper.mjs --large` ensures `ggml-small-q5_1.bin`
+  is on disk before returning (download if missing, skip if present). A
+  clean `--large` run still leaves F-39 small fallback available. Large
+  still uses `downloadResponseToFileAtomic` (W3a / L7-155).
+
+Ask-user still held: **R19**, **D20**, **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
