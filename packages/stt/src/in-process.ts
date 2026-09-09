@@ -1,7 +1,9 @@
 import type { SttEngine } from './engine.ts';
-import { createMockEngine } from './mock-engine.ts';
-import { parseMockTranscripts } from './protocol.ts';
-import { createEngineFromEnvAsync, resolveSttEngineName } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 
 type LiveUtterance = {
   utteranceId: string;
@@ -87,8 +89,9 @@ function wrapInProcessStt(engine: SttEngine): InProcessStt {
  * never opens a socket (ADR-0005).
  *
  * A5b: this factory is synchronous. Pass `provided` to wrap an existing
- * engine (including whisper). Without `provided`, only the mock engine is
- * constructed here — whisper requires {@link createInProcessSttFromEnv}.
+ * engine (including whisper). Without `provided`, the non-whisper branch
+ * delegates to sync {@link createEngineFromEnv} (L7-197). Whisper requires
+ * {@link createInProcessSttFromEnv}.
  */
 export function createInProcessStt(
   env: NodeJS.ProcessEnv = process.env,
@@ -102,9 +105,7 @@ export function createInProcessStt(
       'createInProcessStt is synchronous and cannot load whisper; call createInProcessSttFromEnv'
     );
   }
-  return wrapInProcessStt(
-    createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS))
-  );
+  return wrapInProcessStt(createEngineFromEnv(env));
 }
 
 /** Async companion that awaits `createEngineFromEnvAsync` then wraps via the sync factory. */

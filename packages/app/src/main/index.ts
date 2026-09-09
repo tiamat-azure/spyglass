@@ -854,8 +854,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         if (win !== undefined && snap.decision === 'propose') {
           emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
         }
-      } catch {
+      } catch (error) {
         /* L7-022: upgrade bookkeeping must not fail voice-edit */
+        /* L7-190: log/emit store failures instead of a silent discard */
+        console.error(
+          '[spyglass] STT upgrade bookkeeping failed:',
+          error instanceof Error ? error.message : error
+        );
       }
     }
     return { ok: edited !== undefined };

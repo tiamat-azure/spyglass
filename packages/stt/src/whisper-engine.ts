@@ -432,7 +432,8 @@ export const FIRST_USE_BACKOFF_MAX_MS = 8_000;
  */
 export async function notifyFirstUseLatency(
   hook: ((latencyMs: number) => void | Promise<void>) | undefined,
-  latencyMs: number
+  latencyMs: number,
+  warnOnFinalFailure = false
 ): Promise<boolean> {
   if (hook === undefined) {
     return true;
@@ -440,7 +441,14 @@ export async function notifyFirstUseLatency(
   try {
     await hook(latencyMs);
     return true;
-  } catch {
+  } catch (error) {
+    // L7-199: one-shot warning on the last failed persist attempt only.
+    if (warnOnFinalFailure) {
+      console.warn(
+        '[spyglass] first-use latency persist failed:',
+        error instanceof Error ? error.message : error
+      );
+    }
     return false;
   }
 }
@@ -526,7 +534,11 @@ export function createWhisperEngine(options: {
       // after joining a failed in-flight hook.
       const pending = (async () => {
         firstUseAttempts += 1;
-        const noted = await notifyFirstUseLatency(hook, sample);
+        const noted = await notifyFirstUseLatency(
+          hook,
+          sample,
+          firstUseAttempts >= FIRST_USE_RETRY_LIMIT
+        );
         if (noted) {
           firstUseNoted = true;
           return;

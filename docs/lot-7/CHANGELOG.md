@@ -810,6 +810,33 @@ Ask-user still held: none for these captain locks.
 
 Ask-user still held: none for these captain locks.
 
+## Pass-26 adversarial fixes (L7-190 … L7-201)
+
+- **L7-190:** Voice-edit stays non-blocking (L7-022); STT upgrade
+  bookkeeping failures are logged instead of discarded.
+- **L7-191:** `closeElectron` force-kills only on the close timeout;
+  other `close()` errors are rethrown after timer cleanup.
+- **L7-192:** Replay cancellation is passed into `runScenario`;
+  `pendingStop` is honoured before a successful return. Non-stepwise
+  stop is applied at the next step boundary.
+- **L7-194:** AI recovery redacts `lastError` with the same
+  parameter-derived secret set used for snapshot text.
+- **L7-195:** Overwrite-false publish maps only `EEXIST` / `ENOTEMPTY`
+  (after re-checking dest) to "already exists"; `EPERM` is not aliased.
+- **L7-196:** Content-Length vs written-bytes is skipped when
+  `content-encoding` is present.
+- **L7-197:** In-process non-whisper construction delegates to sync
+  `createEngineFromEnv`.
+- **L7-198:** `assertNoSymlinks` names export vs import in the error.
+- **L7-199:** First-use latency persist emits a one-shot warning on the
+  final failed attempt.
+- **L7-200:** Large-model first-use hook uses `selection.largeOk`
+  instead of a second `existsSync`.
+- **L7-201:** `resolveSttModelDir` trims `STT_MODEL_PATH` before
+  `dirname`.
+
+Ask-user still held: W26, C26, I26 (not assumed).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

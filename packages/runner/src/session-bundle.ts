@@ -43,7 +43,7 @@ export async function exportSessionFolder(
   const overwrite = options.overwrite === true;
   const source = resolve(sessionDir);
   const dest = resolve(destDir);
-  await assertNoSymlinks(source);
+  await assertNoSymlinks(source, 'export');
   const meta = await readSessionMeta(sessionDir);
   await assertNoCopyOverlap(source, dest);
   return await withDestLock(dest, async () => {
@@ -82,7 +82,7 @@ export async function importSessionFolder(
   sessionsRoot: string
 ): Promise<{ sessionDir: string; sessionId: string }> {
   const source = resolve(bundleDir);
-  await assertNoSymlinks(source);
+  await assertNoSymlinks(source, 'import');
   const meta = await readSessionMeta(source);
   const sessionId = meta.sessionId;
   if (!isSafeSessionId(sessionId)) {
@@ -104,7 +104,7 @@ export async function importSessionFolder(
     const staging = await mkdtemp(join(root, '.spyglass-import-'));
     try {
       await cp(source, staging, { recursive: true, dereference: false });
-      await assertNoSymlinks(staging);
+      await assertNoSymlinks(staging, 'import');
       await replaceDirectory(dest, staging, {
         overwrite: false,
         existsError: 'import refused: session already exists'
@@ -268,8 +268,8 @@ async function assertNoCopyOverlap(source: string, dest: string): Promise<void> 
   }
 }
 
-/** L7-039: import must not copy symlinks (escape / TOCTOU). */
-async function assertNoSymlinks(root: string): Promise<void> {
+/** L7-039 / L7-198: refuse symlinks; message names export vs import. */
+async function assertNoSymlinks(root: string, action: 'import' | 'export'): Promise<void> {
   const stack = [root];
   while (stack.length > 0) {
     const current = stack.pop();
@@ -278,7 +278,7 @@ async function assertNoSymlinks(root: string): Promise<void> {
     }
     const st = await lstat(current);
     if (st.isSymbolicLink()) {
-      throw new Error('import refused: symlinks are not allowed');
+      throw new Error(`${action} refused: symlinks are not allowed`);
     }
     if (!st.isDirectory()) {
       continue;
@@ -371,8 +371,11 @@ async function replaceDirectory(
       return;
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'EPERM') {
-        throw new Error(options.existsError);
+      // L7-195: EPERM is not "already exists" (permissions / Windows rename).
+      if (code === 'EEXIST' || code === 'ENOTEMPTY') {
+        if (await pathExists(dest)) {
+          throw new Error(options.existsError);
+        }
       }
       throw err;
     }

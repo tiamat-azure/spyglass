@@ -135,7 +135,7 @@ function finishWhisperFromEnv(
         ? ctx.timeoutMs
         : WHISPER_TIMEOUT_MS_DEFAULT
   };
-  if (existsSync(ctx.selection.largePath) && sameResolvedPath(model, ctx.selection.largePath)) {
+  if (ctx.selection.largeOk && sameResolvedPath(model, ctx.selection.largePath)) {
     const budgetMs = parseMaxLatencyMs(env);
     engineOpts.onFirstUseLatency = async (latencyMs) => {
       await recordFirstUseLatency({ modelDir: ctx.modelDir, latencyMs, budgetMs });

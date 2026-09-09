@@ -94,6 +94,35 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     expect(await readFile(dest, 'utf8')).toBe(payload);
   });
 
+  it('skips Content-Length vs written bytes when content-encoding is set (L7-196)', async () => {
+    const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-enc-')), 'model.bin');
+    const payload = 'decoded-weights';
+    const response = new Response(payload, {
+      status: 200,
+      statusText: 'OK',
+      headers: {
+        'content-length': '9999',
+        'content-encoding': 'gzip'
+      }
+    });
+    const encoded = await downloadResponseToFileAtomic({ dest, response, minBytes: 1 });
+    expect(encoded.bytes).toBe(payload.length);
+    expect(await readFile(dest, 'utf8')).toBe(payload);
+  });
+
+  it('still rejects Content-Length mismatch when content-encoding is absent', async () => {
+    const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-clen-')), 'model.bin');
+    const response = new Response('short', {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-length': '9999' }
+    });
+    await expect(downloadResponseToFileAtomic({ dest, response, minBytes: 1 })).rejects.toThrow(
+      /Content-Length/
+    );
+    await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('does not default downloadResponseToFileAtomic minBytes to STT_LARGE_MIN_BYTES (L7-114)', async () => {
     const src = await readFile(new URL('./download-model.ts', import.meta.url), 'utf8');
     const start = src.indexOf('export async function downloadResponseToFileAtomic');
@@ -198,5 +227,34 @@ describe('Lot 7 first-use latency isolation (L7-008)', () => {
       }, 3500)
     ).resolves.toBe(false);
     await expect(notifyFirstUseLatency(async () => undefined, 10)).resolves.toBe(true);
+  });
+
+  it('emits a one-shot warning on the final failed persist attempt (L7-199)', async () => {
+    const warnings: unknown[][] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+    try {
+      await expect(
+        notifyFirstUseLatency(async () => {
+          throw new Error('disk full');
+        }, 10)
+      ).resolves.toBe(false);
+      expect(warnings).toHaveLength(0);
+      await expect(
+        notifyFirstUseLatency(
+          async () => {
+            throw new Error('disk full');
+          },
+          10,
+          true
+        )
+      ).resolves.toBe(false);
+      expect(warnings).toHaveLength(1);
+      expect(String(warnings[0])).toMatch(/first-use latency persist failed/);
+    } finally {
+      console.warn = original;
+    }
   });
 });

@@ -84,9 +84,12 @@ export async function downloadResponseToFileAtomic(input: {
   if (input.response.body === null) {
     throw new Error('empty download body');
   }
+  const encodingRaw = input.response.headers.get('content-encoding');
+  const hasContentEncoding = encodingRaw !== null && encodingRaw.trim().length > 0;
   const lengthRaw = input.response.headers.get('content-length');
   let expectedBytes: number | undefined;
-  if (lengthRaw !== null && lengthRaw.trim().length > 0) {
+  // L7-196: Content-Length is the encoded size when content-encoding is set.
+  if (!hasContentEncoding && lengthRaw !== null && lengthRaw.trim().length > 0) {
     const parsed = Number.parseInt(lengthRaw, 10);
     if (Number.isInteger(parsed) && parsed >= 0) {
       expectedBytes = parsed;

@@ -298,6 +298,12 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(resolveSttModelDir({ STT_MODEL_DIR: ' /opt/whisper ' })).toBe('/opt/whisper');
   });
 
+  it('trims STT_MODEL_PATH before dirname (L7-201)', () => {
+    expect(resolveSttModelDir({ STT_MODEL_PATH: ' /opt/whisper/ggml-small-q5_1.bin ' })).toBe(
+      '/opt/whisper'
+    );
+  });
+
   it('lists large model candidates via STT_LARGE_MODEL_FILE (L7-156)', async () => {
     const src = await readFile(new URL('./whisper-engine.ts', import.meta.url), 'utf8');
     const start = src.indexOf('export function whisperCandidateModels');

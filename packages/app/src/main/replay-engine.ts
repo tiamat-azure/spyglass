@@ -74,7 +74,12 @@ export class ReplayEngine {
     this.pendingContinues = 0;
     const waiting = this.waiting;
     this.waiting = undefined;
-    waiting?.('stop');
+    if (waiting !== undefined) {
+      waiting('stop');
+      return;
+    }
+    // Non-stepwise: no gate waiter. pendingStop is honoured at the next
+    // step boundary and before returning success (L7-192).
   }
 
   async start(request: ReplayStartRequest = {}): Promise<ReplayStartResponse> {
@@ -126,30 +131,37 @@ export class ReplayEngine {
         ...(request.datasetPath !== undefined ? { datasetPath: request.datasetPath } : {}),
         ...(recoverer !== undefined ? { recoverer } : {}),
         onProgress: this.deps.onProgress,
-        ...(request.stepByStep === true
-          ? {
-              stepGate: {
-                wait: async (): Promise<'continue' | 'stop'> => {
-                  if (this.pendingStop) {
-                    return 'stop';
-                  }
-                  if (this.pendingContinues > 0) {
-                    this.pendingContinues -= 1;
-                    return 'continue';
-                  }
-                  return await new Promise<'continue' | 'stop'>((resolve) => {
-                    this.waiting = resolve;
-                  });
-                }
-              }
+        stepGate: {
+          wait: async (): Promise<'continue' | 'stop'> => {
+            if (this.pendingStop) {
+              return 'stop';
             }
-          : {})
+            if (request.stepByStep !== true) {
+              return 'continue';
+            }
+            if (this.pendingContinues > 0) {
+              this.pendingContinues -= 1;
+              return 'continue';
+            }
+            return await new Promise<'continue' | 'stop'>((resolve) => {
+              this.waiting = resolve;
+            });
+          }
+        }
       });
       if (result.exitCode !== 0) {
         const failed = result.report.steps.find((step) => step.status === 'failed');
         const error =
           failed?.error?.trim() || `replay failed with exit code ${String(result.exitCode)}`;
         return { ok: false, error, runId: result.report.runId };
+      }
+      // L7-192: do not report success when stop arrived after the last gate.
+      if (this.pendingStop) {
+        return {
+          ok: false,
+          error: 'replay stopped by user',
+          runId: result.report.runId
+        };
       }
       return { ok: true, runId: result.report.runId };
     } catch (error) {

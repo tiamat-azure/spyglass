@@ -556,11 +556,12 @@ async function recoverStep(input: {
       ? undefined
       : await captureFailure(input.driver, input.reportDir, input.step.index, 'recover');
     const redactFrom = input.argumentScenario ?? input.scenario;
+    const secrets = collectParameterSecrets(redactFrom, [input.beforeDom, afterDom]);
     const context = {
       scenario: input.scenario,
       step: input.step,
       attempt,
-      error: lastError,
+      error: redactTextWithSecrets(lastError, secrets),
       beforeDom: redactSnapshotForRecovery(input.beforeDom, redactFrom),
       afterDom: redactSnapshotForRecovery(afterDom, redactFrom),
       multimodal: input.multimodal,
@@ -723,34 +724,13 @@ function redactSnapshotForRecovery(
   snapshot: { url: string; title: string; text: string; values: Record<string, string> },
   scenario: Scenario
 ): { url: string; title: string; text: string; values: Record<string, string> } {
-  const parameterized = scenario.steps.filter(
-    (step) => step.action.parameterRef !== undefined && step.action.parameterRef.length > 0
-  );
-  if (parameterized.length === 0) {
+  if (!scenario.steps.some(hasParameterRef)) {
     return snapshot;
   }
-  const secrets = new Set<string>();
-  for (const step of parameterized) {
-    const selector = step.action.descriptor.selector;
-    const live = snapshot.values[selector];
-    if (live !== undefined && live.length > 0) {
-      secrets.add(live);
-    }
-    for (const argument of step.action.descriptor.arguments ?? []) {
-      if (argument.length > 0) {
-        secrets.add(argument);
-      }
-    }
-  }
-  let text = snapshot.text;
-  let url = snapshot.url;
-  let title = snapshot.title;
-  const ordered = [...secrets].sort((left, right) => right.length - left.length);
-  for (const secret of ordered) {
-    text = redactSecretFromText(text, secret);
-    url = redactSecretFromText(url, secret);
-    title = redactSecretFromText(title, secret);
-  }
+  const secrets = collectParameterSecrets(scenario, [snapshot]);
+  const text = redactTextWithSecrets(snapshot.text, secrets);
+  const url = redactTextWithSecrets(snapshot.url, secrets);
+  const title = redactTextWithSecrets(snapshot.title, secrets);
   // R19a / L7-161: parameterized recovery must not ship live field values.
   // Blank the entire map — do not rely on exact raw selector key match.
   const values: Record<string, string> = {};
@@ -758,6 +738,41 @@ function redactSnapshotForRecovery(
     values[key] = '';
   }
   return { ...snapshot, values, text, url, title };
+}
+
+/** L7-194: same parameter-derived secret set for snapshots and lastError. */
+function collectParameterSecrets(
+  scenario: Scenario,
+  snapshots: Array<{ values: Record<string, string> }>
+): string[] {
+  const parameterized = scenario.steps.filter(hasParameterRef);
+  if (parameterized.length === 0) {
+    return [];
+  }
+  const secrets = new Set<string>();
+  for (const step of parameterized) {
+    const selector = step.action.descriptor.selector;
+    for (const snapshot of snapshots) {
+      const live = snapshot.values[selector];
+      if (live !== undefined && live.length > 0) {
+        secrets.add(live);
+      }
+    }
+    for (const argument of step.action.descriptor.arguments ?? []) {
+      if (argument.length > 0) {
+        secrets.add(argument);
+      }
+    }
+  }
+  return [...secrets].sort((left, right) => right.length - left.length);
+}
+
+function redactTextWithSecrets(text: string, secrets: string[]): string {
+  let out = text;
+  for (const secret of secrets) {
+    out = redactSecretFromText(out, secret);
+  }
+  return out;
 }
 
 /** L7-124: redact PIN/OTP/tokens without substring-stripping unrelated words. */

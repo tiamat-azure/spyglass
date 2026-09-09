@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 
 /** Playwright `electronApp.close()` waits for `app.quit()` / process exit. */
 const CLOSE_TIMEOUT_MS = 12_000;
+/** L7-191: only this rejection from the close race may force-kill. */
+export const ELECTRON_CLOSE_TIMEOUT_MESSAGE = 'electron close timeout';
 /** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
 export const KILL_EXIT_GRACE_MS = 2_000;
 
@@ -36,12 +38,17 @@ export async function closeElectron(electronApp: LaunchedElectron): Promise<void
       closing,
       new Promise<void>((_, reject) => {
         timer = setTimeout(() => {
-          reject(new Error('electron close timeout'));
+          reject(new Error(ELECTRON_CLOSE_TIMEOUT_MESSAGE));
         }, CLOSE_TIMEOUT_MS);
         timer.unref();
       })
     ]);
-  } catch {
+  } catch (error) {
+    const timedOut = error instanceof Error && error.message === ELECTRON_CLOSE_TIMEOUT_MESSAGE;
+    if (!timedOut) {
+      // L7-191: non-timeout close() failures must not SIGKILL; rethrow after finally cleanup.
+      throw error;
+    }
     const child = electronApp.process();
     killElectronChild(child);
     await waitForProcessExit(child);

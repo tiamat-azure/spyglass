@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  closeElectron,
   KILL_EXIT_GRACE_MS,
   killElectronChild,
   waitForProcessExit
@@ -63,5 +64,24 @@ describe('closeElectron waitForProcessExit (L7-117)', () => {
       exitCode: null
     });
     expect(Date.now() - started).toBeGreaterThanOrEqual(KILL_EXIT_GRACE_MS - 100);
+  });
+
+  it('rethrows non-timeout close() errors without SIGKILL (L7-191)', async () => {
+    let killed = false;
+    await expect(
+      closeElectron({
+        close: async () => {
+          throw new Error('quit failed');
+        },
+        process: () => ({
+          kill: () => {
+            killed = true;
+            return true;
+          },
+          pid: 99
+        })
+      })
+    ).rejects.toThrow(/quit failed/);
+    expect(killed).toBe(false);
   });
 });

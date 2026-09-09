@@ -156,6 +156,12 @@ describe('packaged Observe', () => {
     const main = readFileSync(join(appRoot, 'src/main/index.ts'), 'utf8');
     expect(main).toContain('IPC.voiceAbort');
     expect(main).toContain('voiceBridge?.abort()');
+    const voiceEditIdx = main.indexOf('IPC.voiceEdit');
+    expect(voiceEditIdx).toBeGreaterThan(-1);
+    const voiceEditHandler = main.slice(voiceEditIdx, voiceEditIdx + 1400);
+    expect(voiceEditHandler).toContain('/* L7-022: upgrade bookkeeping must not fail voice-edit */');
+    expect(voiceEditHandler).toContain('[spyglass] STT upgrade bookkeeping failed:');
+    expect(voiceEditHandler).toContain('console.error');
     const ws = readFileSync(join(appRoot, '../../packages/stt/src/ws-localhost.ts'), 'utf8');
     expect(ws).toContain('export function isLoopbackWsHost');
     expect(ws).not.toContain("startsWith('127.0.0.1')");
@@ -266,14 +272,19 @@ describe('packaged Observe', () => {
     expect(resolveEngine).toContain('export function createEngineFromEnv(');
     expect(resolveEngine).not.toContain('export async function createEngineFromEnv(');
     expect(resolveEngine).toContain('export async function createEngineFromEnvAsync(');
+    expect(resolveEngine).toContain('ctx.selection.largeOk');
+    expect(resolveEngine).not.toContain('existsSync(ctx.selection.largePath)');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');
+    expect(whisper).toContain('warnOnFinalFailure');
+    expect(whisper).toContain('console.warn');
     const downloadModel = readFileSync(
       join(appRoot, '../../packages/stt/src/download-model.ts'),
       'utf8'
     );
     expect(downloadModel).toContain('body?.cancel()');
+    expect(downloadModel).toContain('content-encoding');
     const sessionBundle = readFileSync(
       join(appRoot, '../../packages/runner/src/session-bundle.ts'),
       'utf8'
@@ -281,6 +292,8 @@ describe('packaged Observe', () => {
     expect(sessionBundle).toContain('destination is not empty');
     expect(sessionBundle).toContain('session already exists');
     expect(sessionBundle).toContain('mtimeMs');
+    expect(sessionBundle).toContain('export refused: symlinks are not allowed');
+    expect(sessionBundle).toContain('import refused: symlinks are not allowed');
     const importFn = sessionBundle.slice(
       sessionBundle.indexOf('export async function importSessionFolder')
     );
@@ -291,6 +304,11 @@ describe('packaged Observe', () => {
     const replaceFn = sessionBundle.slice(sessionBundle.indexOf('async function replaceDirectory'));
     expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
     expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
+    const noOverwritePublish = replaceFn.slice(0, replaceFn.indexOf('const backup'));
+    expect(noOverwritePublish).toContain("code === 'EEXIST'");
+    expect(noOverwritePublish).toContain("code === 'ENOTEMPTY'");
+    expect(noOverwritePublish).not.toContain("code === 'EPERM'");
+    expect(noOverwritePublish).toContain('pathExists(dest)');
     const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
     expect(replaceCatch).not.toContain('await rm(dest');
     expect(replaceCatch).toContain('await rename(backup, dest)');
@@ -316,7 +334,9 @@ describe('packaged Observe', () => {
     expect(inProcess).not.toContain('export async function createInProcessStt(');
     expect(inProcess).toContain('createInProcessSttFromEnv');
     expect(inProcess).toContain('createEngineFromEnvAsync');
+    expect(inProcess).toContain('wrapInProcessStt(createEngineFromEnv(env))');
     expect(inProcess).not.toContain('await createEngineFromEnv(');
+    expect(inProcess).not.toContain('createMockEngine');
     expect(bridge).toContain('createInProcessSttFromEnv');
     expect(bridge).toContain('await createInProcessSttFromEnv');
     expect(bridge).not.toMatch(/createInProcessStt\(/);
@@ -364,5 +384,8 @@ describe('packaged Observe', () => {
     expect(closeElectron).toContain('KILL_EXIT_GRACE_MS');
     expect(closeElectron).not.toContain('child.killed === true');
     expect(closeElectron).toContain('void closing.catch(() => {})');
+    expect(closeElectron).toContain('ELECTRON_CLOSE_TIMEOUT_MESSAGE');
+    expect(closeElectron).toContain('if (!timedOut)');
+    expect(closeElectron).toContain('throw error');
   });
 });

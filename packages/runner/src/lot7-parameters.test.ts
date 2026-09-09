@@ -663,6 +663,52 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('redacts lastError with the same parameter secrets before recovery (L7-194)', async () => {
+    const secret = 's3cret-password';
+    const step = fillStep(0, '#password', secret, 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: string[] = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        captured.push(context.error);
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: 'visible page',
+      elements: [
+        { selector: '#password', visible: true, value: '', text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    driver.fill = async () => {
+      throw new Error(`fill failed for ${secret}`);
+    };
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const error of captured) {
+      expect(error).not.toContain(secret);
+      expect(error).toMatch(/fill failed/);
+    }
+  });
+
   it('blanks every snapshot.values entry on parameterized recovery (R19a)', async () => {
     const secret = 's3cret-password';
     const step = fillStep(0, '#password', secret, 'password');
@@ -1093,7 +1139,9 @@ describe('Lot 7 F-47 session export/import', () => {
     const dest = join(root, 'bundle');
     await exportSessionFolder(sessionDir, dest);
     await symlink(join(root, 'outside'), join(dest, 'escape'));
-    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(
+      /import refused: symlinks/
+    );
   });
 
   it('does not swallow permission errors in realpathExisting overlap guards (L7-177)', async () => {
@@ -1106,6 +1154,18 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(body).toContain('isMissingPathError');
     expect(body).toContain("code === 'ENOENT'");
     expect(body).not.toMatch(/catch \{/);
+  });
+
+  it('does not map EPERM to destination already exists (L7-195)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('async function replaceDirectory');
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(start);
+    const noOverwrite = body.slice(0, body.indexOf('const backup'));
+    expect(noOverwrite).toContain("code === 'EEXIST'");
+    expect(noOverwrite).toContain("code === 'ENOTEMPTY'");
+    expect(noOverwrite).not.toContain("code === 'EPERM'");
+    expect(noOverwrite).toContain('pathExists(dest)');
   });
 
   it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {
@@ -1121,7 +1181,7 @@ describe('Lot 7 F-47 session export/import', () => {
     await writeFile(leaked, 'KEEP\n', 'utf8');
     await symlink(leaked, join(sessionDir, SESSION_BUNDLE_MANIFEST));
     const dest = join(root, 'bundle');
-    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/symlink/);
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/export refused: symlink/);
     expect(await readFile(leaked, 'utf8')).toBe('KEEP\n');
     await expect(readFile(join(dest, SESSION_BUNDLE_MANIFEST))).rejects.toMatchObject({
       code: 'ENOENT'
@@ -1138,7 +1198,9 @@ describe('Lot 7 F-47 session export/import', () => {
       'utf8'
     );
     await symlink(join(root, 'outside'), join(sessionDir, 'escape'));
-    await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toThrow(/symlink/);
+    await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toThrow(
+      /export refused: symlink/
+    );
   });
 
   it('refuses import when spyglass-session.json disagrees with meta.json (L7-187)', async () => {
@@ -1203,7 +1265,9 @@ describe('Lot 7 F-47 session export/import', () => {
     await writeFile(leaked, '{"sessionId":"leaked"}\n', 'utf8');
     await rm(join(dest, 'meta.json'));
     await symlink(leaked, join(dest, 'meta.json'));
-    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(
+      /import refused: symlinks/
+    );
   });
 
   it('recovers an orphaned backup then refuses to overwrite it (L7-040 / L7-063)', async () => {
