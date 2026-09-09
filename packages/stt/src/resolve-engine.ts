@@ -11,6 +11,7 @@ import {
   chooseWhisperModel,
   parseMaxLatencyMs,
   readLargeFallback,
+  readLargeFallbackSync,
   recordFirstUseLatency,
   resolveSttModelDir,
   STT_LARGE_MODEL_FILE,
@@ -28,91 +29,192 @@ export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttE
   return whisperAvailable(env) ? 'whisper' : 'mock';
 }
 
-export async function createEngineFromEnv(
+type WhisperPathsResolved = NonNullable<ReturnType<typeof resolveWhisperPaths>>;
+
+type WhisperModelSelection = {
+  modelDir: string;
+  largePath: string;
+  smallPath: string;
+  smallOk: boolean;
+  explicit: string | undefined;
+  explicitOk: boolean;
+  largeOk: boolean;
+  explicitIsConventional: boolean;
+  envForcedSmall: boolean;
+  explicitCustomPath: boolean;
+  paths: WhisperPathsResolved;
+};
+
+type WhisperBuildContext = {
+  paths: WhisperPathsResolved;
+  language: string;
+  timeoutMs: number;
+  modelDir: string;
+  selection: WhisperModelSelection;
+};
+
+/**
+ * A17b: synchronous engine factory (`SttEngine`, not `Promise<SttEngine>`).
+ * Whisper reads `large-fallback.json` with sync I/O (F16b). Callers that
+ * should not block the event loop use {@link createEngineFromEnvAsync}.
+ */
+export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEngine {
+  if (resolveSttEngineName(env) !== 'whisper') {
+    return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));
+  }
+  const begun = beginWhisperFromEnv(env);
+  if (isReadyEngine(begun)) {
+    return begun;
+  }
+  const fallback = needsLargeFallbackMarker(begun.selection)
+    ? readLargeFallbackSync(begun.modelDir)
+    : begun.selection.envForcedSmall;
+  return finishWhisperFromEnv(env, begun, fallback);
+}
+
+/**
+ * A17b: async companion. Same selection as {@link createEngineFromEnv} but
+ * awaits {@link readLargeFallback} for the marker.
+ */
+export async function createEngineFromEnvAsync(
   env: NodeJS.ProcessEnv = process.env
 ): Promise<SttEngine> {
-  const name = resolveSttEngineName(env);
-  if (name === 'whisper') {
-    const paths = resolveWhisperPaths(env);
-    if (paths === undefined) {
-      throw new Error(
-        'STT_ENGINE=whisper but whisper-cli and/or ggml-small-q5_1.bin are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.'
-      );
-    }
-    const language =
-      env.STT_LANGUAGE === undefined || env.STT_LANGUAGE.length === 0 ? 'fr' : env.STT_LANGUAGE;
-    const timeoutRaw = env.STT_MAX_LATENCY_MS;
-    const timeoutMs =
-      timeoutRaw === undefined || timeoutRaw.length === 0
-        ? WHISPER_TIMEOUT_MS_DEFAULT
-        : Number.parseInt(timeoutRaw, 10);
-    const modelDir = resolveSttModelDir(env);
-    let model = paths.model;
-    if (modelDir !== undefined) {
-      const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
-      const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
-      const smallOk = existsSync(smallPath);
-      const explicit = env.STT_MODEL_PATH?.trim();
-      const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
-      const largeOk = existsSync(largePath);
-      const explicitIsConventional =
-        (smallOk && explicit !== undefined && sameResolvedPath(explicit, smallPath)) ||
-        (largeOk && explicit !== undefined && sameResolvedPath(explicit, largePath));
-      const envForcedSmall = env.STT_LARGE_FALLBACK === '1';
-      const explicitCustomPath = explicitOk && !explicitIsConventional;
-      // F16b: fail-loud on corrupt/unreadable large-fallback.json only when
-      // large could actually be selected. Small-only and custom STT_MODEL_PATH
-      // setups skip the marker (env STT_LARGE_FALLBACK=1 already short-circuits).
-      let fallback = envForcedSmall;
-      if (largeOk && !envForcedSmall && !explicitCustomPath) {
-        fallback = await readLargeFallback(modelDir);
-      }
-      if (explicitOk && !fallback && !explicitIsConventional) {
-        // P6a / M4a: honor STT_MODEL_PATH over STT_MODEL_DIR conventional
-        // small/large discovery. F3a still prefers large when fallback is
-        // false and the explicit path is the conventional small in MODEL_DIR.
-        // L7-016 still refuses large weights as the small engine when fallback.
-        model = explicit;
-      } else {
-        const choice = chooseWhisperModel({
-          ...(largeOk ? { largePath } : {}),
-          ...(smallOk ? { smallPath } : {}),
-          largeFallback: fallback,
-          modelDir
-        });
-        if (choice.kind === 'small') {
-          // L7-096: fallback must load the conventional small file, never a
-          // custom STT_MODEL_PATH that merely is not named like the large file.
-          // M4a/P6a still honour explicit path on the non-fallback branch above.
-          model = requireSmallModelFile(smallPath, explicitOk ? explicit : paths.model);
-        } else {
-          model = choice.file;
-        }
-      }
-      const engineOpts: Parameters<typeof createWhisperEngine>[0] = {
-        bin: paths.bin,
-        model,
-        language,
-        timeoutMs:
-          Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
-      };
-      if (existsSync(largePath) && sameResolvedPath(model, largePath)) {
-        const budgetMs = parseMaxLatencyMs(env);
-        engineOpts.onFirstUseLatency = async (latencyMs) => {
-          await recordFirstUseLatency({ modelDir, latencyMs, budgetMs });
-        };
-      }
-      return createWhisperEngine(engineOpts);
-    }
+  if (resolveSttEngineName(env) !== 'whisper') {
+    return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));
+  }
+  const begun = beginWhisperFromEnv(env);
+  if (isReadyEngine(begun)) {
+    return begun;
+  }
+  const fallback = needsLargeFallbackMarker(begun.selection)
+    ? await readLargeFallback(begun.modelDir)
+    : begun.selection.envForcedSmall;
+  return finishWhisperFromEnv(env, begun, fallback);
+}
+
+function isReadyEngine(value: SttEngine | WhisperBuildContext): value is SttEngine {
+  return 'name' in value && 'begin' in value;
+}
+
+function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildContext {
+  const paths = resolveWhisperPaths(env);
+  if (paths === undefined) {
+    throw new Error(
+      'STT_ENGINE=whisper but whisper-cli and/or ggml-small-q5_1.bin are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.'
+    );
+  }
+  const language =
+    env.STT_LANGUAGE === undefined || env.STT_LANGUAGE.length === 0 ? 'fr' : env.STT_LANGUAGE;
+  const timeoutRaw = env.STT_MAX_LATENCY_MS;
+  const timeoutMs =
+    timeoutRaw === undefined || timeoutRaw.length === 0
+      ? WHISPER_TIMEOUT_MS_DEFAULT
+      : Number.parseInt(timeoutRaw, 10);
+  const modelDir = resolveSttModelDir(env);
+  if (modelDir === undefined) {
     return createWhisperEngine({
       bin: paths.bin,
-      model,
+      model: paths.model,
       language,
       timeoutMs:
         Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
     });
   }
-  return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));
+  return {
+    paths,
+    language,
+    timeoutMs,
+    modelDir,
+    selection: collectModelSelection(env, paths, modelDir)
+  };
+}
+
+function finishWhisperFromEnv(
+  env: NodeJS.ProcessEnv,
+  ctx: WhisperBuildContext,
+  fallback: boolean
+): SttEngine {
+  const model = selectWhisperModel(ctx.selection, fallback);
+  const engineOpts: Parameters<typeof createWhisperEngine>[0] = {
+    bin: ctx.paths.bin,
+    model,
+    language: ctx.language,
+    timeoutMs:
+      Number.isFinite(ctx.timeoutMs) && ctx.timeoutMs > 0
+        ? ctx.timeoutMs
+        : WHISPER_TIMEOUT_MS_DEFAULT
+  };
+  if (existsSync(ctx.selection.largePath) && sameResolvedPath(model, ctx.selection.largePath)) {
+    const budgetMs = parseMaxLatencyMs(env);
+    engineOpts.onFirstUseLatency = async (latencyMs) => {
+      await recordFirstUseLatency({ modelDir: ctx.modelDir, latencyMs, budgetMs });
+    };
+  }
+  return createWhisperEngine(engineOpts);
+}
+
+function collectModelSelection(
+  env: NodeJS.ProcessEnv,
+  paths: WhisperPathsResolved,
+  modelDir: string
+): WhisperModelSelection {
+  const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
+  const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
+  const smallOk = existsSync(smallPath);
+  const explicit = env.STT_MODEL_PATH?.trim();
+  const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
+  const largeOk = existsSync(largePath);
+  const explicitIsConventional =
+    (smallOk && explicit !== undefined && sameResolvedPath(explicit, smallPath)) ||
+    (largeOk && explicit !== undefined && sameResolvedPath(explicit, largePath));
+  const envForcedSmall = env.STT_LARGE_FALLBACK === '1';
+  const explicitCustomPath = explicitOk && !explicitIsConventional;
+  return {
+    modelDir,
+    largePath,
+    smallPath,
+    smallOk,
+    explicit,
+    explicitOk,
+    largeOk,
+    explicitIsConventional,
+    envForcedSmall,
+    explicitCustomPath,
+    paths
+  };
+}
+
+/** F16b: fail-loud on corrupt/unreadable large-fallback.json only when large could be selected. */
+function needsLargeFallbackMarker(selection: WhisperModelSelection): boolean {
+  return selection.largeOk && !selection.envForcedSmall && !selection.explicitCustomPath;
+}
+
+function selectWhisperModel(selection: WhisperModelSelection, fallback: boolean): string {
+  if (selection.explicitOk && !fallback && !selection.explicitIsConventional) {
+    // P6a / M4a: honor STT_MODEL_PATH over STT_MODEL_DIR conventional
+    // small/large discovery. F3a still prefers large when fallback is
+    // false and the explicit path is the conventional small in MODEL_DIR.
+    // L7-016 still refuses large weights as the small engine when fallback.
+    return selection.explicit as string;
+  }
+  const choice = chooseWhisperModel({
+    ...(selection.largeOk ? { largePath: selection.largePath } : {}),
+    ...(selection.smallOk ? { smallPath: selection.smallPath } : {}),
+    largeFallback: fallback,
+    modelDir: selection.modelDir
+  });
+  if (choice.kind === 'small') {
+    // L7-096: fallback must load the conventional small file, never a
+    // custom STT_MODEL_PATH that merely is not named like the large file.
+    // M4a/P6a still honour explicit path on the non-fallback branch above.
+    return requireSmallModelFile(
+      selection.smallPath,
+      selection.explicitOk && selection.explicit !== undefined
+        ? selection.explicit
+        : selection.paths.model
+    );
+  }
+  return choice.file;
 }
 
 /** L7-132: treat `dir/./file` and `dir/file` as the same model path. */

@@ -14,7 +14,11 @@ import {
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-import { resolveSttEngineName } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
@@ -221,6 +225,23 @@ describe('@spyglass/stt', () => {
     const final = await session.end(2);
     expect(final?.text).toBe('hors ligne');
     session.dispose();
+  });
+
+  it('createEngineFromEnv is synchronous and is not a Promise (A17b)', () => {
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'mock',
+      SPYGLASS_STT_MOCK_TRANSCRIPTS: 'hors ligne'
+    });
+    expect(engine).not.toBeInstanceOf(Promise);
+    expect(engine.name).toBe('mock');
+    expect(engine.model).toBe('mock-offline');
+  });
+
+  it('createEngineFromEnvAsync returns a Promise (A17b)', async () => {
+    const pending = createEngineFromEnvAsync({ SPYGLASS_STT_ENGINE: 'mock' });
+    expect(pending).toBeInstanceOf(Promise);
+    const engine = await pending;
+    expect(engine.name).toBe('mock');
   });
 
   it('in-process session streams a final without opening a socket', async () => {

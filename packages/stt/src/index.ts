@@ -42,7 +42,11 @@ export {
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-export { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
+export {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 export type { SidecarHandle } from './sidecar.ts';
 export { runSidecarMain, startSidecarServer } from './sidecar.ts';
 export type { SttModelChoice, SttUpgradeDecision } from './upgrade.ts';
@@ -53,6 +57,7 @@ export {
   parseMaxLatencyMs,
   parseUpgradePromptAfter,
   readLargeFallback,
+  readLargeFallbackSync,
   recordFirstUseLatency,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,

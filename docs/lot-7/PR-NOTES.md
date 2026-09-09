@@ -164,6 +164,8 @@ Pass-19 (L7-128 … L7-133) is in `CHANGELOG.md`.
 Pass-20 (L7-134 … L7-141) is in `CHANGELOG.md`.
 Pass-21 (L7-142 … L7-157) is in `CHANGELOG.md`.
 Pass-22 (L7-158 … L7-164) is in `CHANGELOG.md`.
+Captain lock **A17b** (sync `createEngineFromEnv` + named
+`createEngineFromEnvAsync`) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -201,3 +203,6 @@ Pass-22 (L7-158 … L7-164) is in `CHANGELOG.md`.
   only when large could be selected. Small-only setups ignore the marker.
   Direct `readLargeFallback` still throws (L7-042). Status IPC still
   reports `fallback-unreadable` (L7-061).
+- **A17b:** `createEngineFromEnv` is sync. Whisper marker I/O uses
+  `readLargeFallbackSync`. Callers that must not block (sidecar,
+  `createInProcessSttFromEnv`) use `createEngineFromEnvAsync`.

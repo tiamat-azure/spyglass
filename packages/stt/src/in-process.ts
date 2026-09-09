@@ -1,7 +1,7 @@
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import { parseMockTranscripts } from './protocol.ts';
-import { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
+import { createEngineFromEnvAsync, resolveSttEngineName } from './resolve-engine.ts';
 
 type LiveUtterance = {
   utteranceId: string;
@@ -107,10 +107,10 @@ export function createInProcessStt(
   );
 }
 
-/** Async companion that awaits `createEngineFromEnv` then wraps via the sync factory. */
+/** Async companion that awaits `createEngineFromEnvAsync` then wraps via the sync factory. */
 export async function createInProcessSttFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   provided?: SttEngine
 ): Promise<InProcessStt> {
-  return createInProcessStt(env, provided ?? (await createEngineFromEnv(env)));
+  return createInProcessStt(env, provided ?? (await createEngineFromEnvAsync(env)));
 }

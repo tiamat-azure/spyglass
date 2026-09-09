@@ -651,6 +651,18 @@ Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
 Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
 **H21**.
 
+## Captain lock A17b (sync createEngineFromEnv + named async factory)
+
+- **A17b:** `createEngineFromEnv` is synchronous (`SttEngine`, not
+  `Promise<SttEngine>`). Whisper reads `large-fallback.json` with sync I/O
+  so F16b / F3a / L7-016 stay on the sync path. Async engine creation is
+  `createEngineFromEnvAsync` (awaits `readLargeFallback`). Sidecar and
+  `createInProcessSttFromEnv` use the async factory. Sync mock/whisper
+  callers keep `createEngineFromEnv`. Aligns with A5b (sync factory +
+  separately named async API).
+
+Ask-user still held: **E18**, **M18**, **W18**, **R19**, **D20**, **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

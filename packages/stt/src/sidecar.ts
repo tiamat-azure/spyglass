@@ -1,6 +1,6 @@
 import type { SttEngine } from './engine.ts';
 import { parseClientMessage, type ServerMessage, STT_SAMPLE_RATE } from './protocol.ts';
-import { createEngineFromEnv } from './resolve-engine.ts';
+import { createEngineFromEnvAsync } from './resolve-engine.ts';
 import { type LocalWsConnection, type LocalWsServer, listenLocalWs } from './ws-localhost.ts';
 
 type Session = {
@@ -23,7 +23,7 @@ export async function startSidecarServer(
   env: NodeJS.ProcessEnv = process.env,
   provided?: SttEngine
 ): Promise<SidecarHandle> {
-  const engine = provided ?? (await createEngineFromEnv(env));
+  const engine = provided ?? (await createEngineFromEnvAsync(env));
   const sessions = new Map<string, Session>();
   let current: Session | undefined;
 

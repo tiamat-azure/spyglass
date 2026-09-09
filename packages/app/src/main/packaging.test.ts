@@ -163,6 +163,8 @@ describe('packaged Observe', () => {
     const sidecar = readFileSync(join(appRoot, '../../packages/stt/src/sidecar.ts'), 'utf8');
     expect(sidecar).toContain('sessions.set(message.utteranceId');
     expect(sidecar).toContain('Do not abort or reuse a shared session');
+    expect(sidecar).toContain('await createEngineFromEnvAsync');
+    expect(sidecar).not.toContain('await createEngineFromEnv(');
     expect(main).toContain('await voiceBridge?.stopCapture()');
     expect(bridge).toContain('releaseSidecarTransport');
     expect(bridge).toContain('setCaptureMode');
@@ -240,6 +242,9 @@ describe('packaged Observe', () => {
       'utf8'
     );
     expect(resolveEngine).toContain('await recordFirstUseLatency');
+    expect(resolveEngine).toContain('export function createEngineFromEnv(');
+    expect(resolveEngine).not.toContain('export async function createEngineFromEnv(');
+    expect(resolveEngine).toContain('export async function createEngineFromEnvAsync(');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');
@@ -279,6 +284,8 @@ describe('packaged Observe', () => {
     expect(inProcess).toContain('export function createInProcessStt(');
     expect(inProcess).not.toContain('export async function createInProcessStt(');
     expect(inProcess).toContain('createInProcessSttFromEnv');
+    expect(inProcess).toContain('createEngineFromEnvAsync');
+    expect(inProcess).not.toContain('await createEngineFromEnv(');
     expect(bridge).toContain('createInProcessSttFromEnv');
     expect(bridge).toContain('await createInProcessSttFromEnv');
     expect(bridge).not.toMatch(/createInProcessStt\(/);

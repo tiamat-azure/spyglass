@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './download-model.ts';
@@ -87,20 +87,10 @@ export function shouldFallbackToSmall(latencyMs: number, budgetMs: number): bool
 }
 
 /**
- * L7-042: missing file is `false`; corrupt/unreadable throws.
- * F16b: `createEngineFromEnv` calls this only when large could be selected.
+ * L7-042 / L7-157: missing file is `false`; corrupt/unreadable throws.
+ * Returns the parsed boolean directly (not `fallback === true`).
  */
-export async function readLargeFallback(modelDir: string): Promise<boolean> {
-  let rawText: string;
-  try {
-    rawText = await readFile(join(modelDir, STT_FALLBACK_MARKER), 'utf8');
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return false;
-    }
-    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
-  }
+function parseLargeFallbackJson(rawText: string): boolean {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
@@ -115,6 +105,42 @@ export async function readLargeFallback(modelDir: string): Promise<boolean> {
     throw new Error('corrupt large-fallback.json: fallback');
   }
   return fallback;
+}
+
+/**
+ * L7-042: missing file is `false`; corrupt/unreadable throws.
+ * F16b: engine factories call this only when large could be selected.
+ */
+export async function readLargeFallback(modelDir: string): Promise<boolean> {
+  let rawText: string;
+  try {
+    rawText = await readFile(join(modelDir, STT_FALLBACK_MARKER), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return false;
+    }
+    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
+  }
+  return parseLargeFallbackJson(rawText);
+}
+
+/**
+ * A17b: sync companion for {@link readLargeFallback}. Same ENOENT / corrupt
+ * contract so `createEngineFromEnv` can stay synchronous.
+ */
+export function readLargeFallbackSync(modelDir: string): boolean {
+  let rawText: string;
+  try {
+    rawText = readFileSync(join(modelDir, STT_FALLBACK_MARKER), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return false;
+    }
+    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
+  }
+  return parseLargeFallbackJson(rawText);
 }
 
 export async function writeLargeFallback(modelDir: string, fallback: boolean): Promise<void> {

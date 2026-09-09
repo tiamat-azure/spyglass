@@ -2,11 +2,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createEngineFromEnv } from './resolve-engine.ts';
+import { createEngineFromEnv, createEngineFromEnvAsync } from './resolve-engine.ts';
 import {
   chooseWhisperModel,
   parseUpgradePromptAfter,
   readLargeFallback,
+  readLargeFallbackSync,
   recordFirstUseLatency,
   resolveSttModelDir,
   STT_FALLBACK_MARKER,
@@ -88,12 +89,25 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
 });
 
 describe('Lot 7 STT small-engine fallback (L7-016)', () => {
+  it('createEngineFromEnv is synchronous and is not a Promise (A17b)', () => {
+    const engine = createEngineFromEnv({ SPYGLASS_STT_ENGINE: 'mock' });
+    expect(engine).not.toBeInstanceOf(Promise);
+    expect(engine.name).toBe('mock');
+  });
+
+  it('createEngineFromEnvAsync is the named async factory (A17b)', async () => {
+    const pending = createEngineFromEnvAsync({ SPYGLASS_STT_ENGINE: 'mock' });
+    expect(pending).toBeInstanceOf(Promise);
+    const engine = await pending;
+    expect(engine.name).toBe('mock');
+  });
+
   it('refuses to use the large weights as the small engine', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-small-'));
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
     await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
-    await expect(
+    expect(() =>
       createEngineFromEnv({
         SPYGLASS_STT_ENGINE: 'whisper',
         STT_MODEL_DIR: dir,
@@ -101,7 +115,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
         STT_MODEL_PATH: join(dir, STT_LARGE_MODEL_FILE),
         STT_LARGE_FALLBACK: '1'
       })
-    ).rejects.toThrow(/ggml-small-q5_1\.bin/);
+    ).toThrow(/ggml-small-q5_1\.bin/);
   });
 
   it('honours fallback: false in large-fallback.json (F3a)', async () => {
@@ -115,24 +129,27 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
       `${JSON.stringify({ fallback: false })}\n`,
       'utf8'
     );
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_MODEL_DIR: dir,
       STT_BIN: join(dir, 'whisper-cli'),
       STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
     });
+    expect(engine).not.toBeInstanceOf(Promise);
     expect(engine.model).toBe(join(dir, STT_LARGE_MODEL_FILE));
   });
 
   it('treats a missing large-fallback.json as false (L7-042)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-fb-miss-'));
     expect(await readLargeFallback(dir)).toBe(false);
+    expect(readLargeFallbackSync(dir)).toBe(false);
   });
 
   it('throws on corrupt large-fallback.json (L7-042)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-fb-bad-'));
     await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
     await expect(readLargeFallback(dir)).rejects.toThrow(/corrupt large-fallback.json/);
+    expect(() => readLargeFallbackSync(dir)).toThrow(/corrupt large-fallback.json/);
   });
 
   it('replaces a corrupt large-fallback.json atomically (L7-140)', async () => {
@@ -148,7 +165,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
     await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
     await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_MODEL_DIR: dir,
       STT_BIN: join(dir, 'whisper-cli'),
@@ -164,8 +181,16 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
     await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
     await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
-    await expect(
+    expect(() =>
       createEngineFromEnv({
+        SPYGLASS_STT_ENGINE: 'whisper',
+        STT_MODEL_DIR: dir,
+        STT_BIN: join(dir, 'whisper-cli'),
+        STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
+      })
+    ).toThrow(/corrupt large-fallback.json/);
+    await expect(
+      createEngineFromEnvAsync({
         SPYGLASS_STT_ENGINE: 'whisper',
         STT_MODEL_DIR: dir,
         STT_BIN: join(dir, 'whisper-cli'),
@@ -180,7 +205,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
     const custom = join(dir, 'custom-weights.bin');
     await writeFile(custom, 'weights\n', 'utf8');
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_BIN: join(dir, 'whisper-cli'),
       STT_MODEL_PATH: custom
@@ -198,7 +223,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(modelDir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
     const explicit = join(other, STT_LARGE_MODEL_FILE);
     await writeFile(explicit, 'large-weights\n', 'utf8');
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_MODEL_DIR: modelDir,
       STT_BIN: join(modelDir, 'whisper-cli'),
@@ -215,7 +240,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
     const custom = join(dir, 'custom-weights.bin');
     await writeFile(custom, 'not-small\n', 'utf8');
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_MODEL_DIR: dir,
       STT_BIN: join(dir, 'whisper-cli'),
@@ -233,7 +258,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
     await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
     const dottedSmall = join(dir, '.', STT_SMALL_MODEL_FILE);
-    const engine = await createEngineFromEnv({
+    const engine = createEngineFromEnv({
       SPYGLASS_STT_ENGINE: 'whisper',
       STT_MODEL_DIR: dir,
       STT_BIN: join(dir, 'whisper-cli'),
@@ -259,8 +284,8 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
 
   it('returns the parsed fallback boolean directly (L7-157)', async () => {
     const src = await readFile(new URL('./upgrade.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('export async function readLargeFallback');
-    const end = src.indexOf('export async function writeLargeFallback');
+    const start = src.indexOf('function parseLargeFallbackJson');
+    const end = src.indexOf('export async function readLargeFallback');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const body = src.slice(start, end);
