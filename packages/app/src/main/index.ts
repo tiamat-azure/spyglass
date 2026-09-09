@@ -59,7 +59,18 @@ import { runStagehandObserve } from './stagehand-bridge.ts';
 import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
-if (process.platform === 'linux' || process.env.SPYGLASS_DISABLE_GPU === '1') {
+// Software rendering is needed where no GPU or compositor is reachable: CI,
+// containers, and the Playwright specs (which all set SPYGLASS_DISABLE_GPU
+// themselves). Forcing it on every Linux desktop was wrong twice over: it
+// degrades rendering, and on a window created with `show: false` it can starve
+// Chromium of the first frame that `ready-to-show` waits for, leaving the app
+// running with no visible window.
+const noDisplayServer =
+  process.platform === 'linux' &&
+  (process.env.DISPLAY ?? '') === '' &&
+  (process.env.WAYLAND_DISPLAY ?? '') === '';
+
+if (process.env.SPYGLASS_DISABLE_GPU === '1' || process.env.CI === 'true' || noDisplayServer) {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('disable-gpu');
   app.commandLine.appendSwitch('disable-dev-shm-usage');
@@ -76,6 +87,13 @@ if (userDataOverride !== undefined && userDataOverride.length > 0) {
 }
 
 installWebContentsSecurityDefaults();
+
+/**
+ * Grace period granted to `ready-to-show` after the renderer finished loading,
+ * before the startup sequence runs anyway. Long enough that `ready-to-show`
+ * wins the race whenever it is going to fire, short enough to stay unnoticed.
+ */
+const SHOW_FALLBACK_MS = 1500;
 
 let activePane: BrowserPane | undefined;
 let activeSession: SessionOrchestrator | undefined;
@@ -1083,7 +1101,25 @@ void (async () => {
 
     applyFallbackBounds();
 
-    win.once('ready-to-show', () => {
+    // `ready-to-show` is the right trigger when it fires: it means the renderer
+    // painted, so showing the window cannot flash. But Chromium only emits it
+    // after that first frame, which a hidden window under software rendering
+    // may never produce - the window then stays invisible forever and nothing
+    // below this callback ever runs. `did-finish-load` arms a short grace
+    // period as a backstop: `ready-to-show` still wins the race in the normal
+    // case, and the guard keeps the startup sequence single-shot.
+    let shellStarted = false;
+    let showFallback: NodeJS.Timeout | undefined;
+
+    const startShell = (): void => {
+      if (shellStarted) {
+        return;
+      }
+      shellStarted = true;
+      if (showFallback !== undefined) {
+        clearTimeout(showFallback);
+        showFallback = undefined;
+      }
       void (async () => {
         observerRuntime = await runtimePromise;
         win.show();
@@ -1129,6 +1165,12 @@ void (async () => {
         console.error('Shell startup failed:', error);
         quitAfterScreenshot(true);
       });
+    };
+
+    win.once('ready-to-show', startShell);
+    win.webContents.once('did-finish-load', () => {
+      showFallback = setTimeout(startShell, SHOW_FALLBACK_MS);
+      showFallback.unref();
     });
 
     const devUrl = process.env.ELECTRON_RENDERER_URL;
