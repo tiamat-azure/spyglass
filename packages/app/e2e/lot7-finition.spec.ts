@@ -35,6 +35,10 @@ test.describe('Lot 7 chrome (F-47 / F-59 / F-38)', () => {
       await expect(chrome.locator('#session-import')).toHaveCount(1);
       await expect(chrome.locator('#stt-upgrade-accept')).toHaveCount(1);
       await expect(chrome.locator('#stt-upgrade-refuse')).toHaveCount(1);
+      const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
+      if (shotDir !== undefined && shotDir.length > 0) {
+        await chrome.screenshot({ path: join(shotDir, 'chrome-lot7-controls.png') });
+      }
     } finally {
       await electronApp.close();
       await rm(userData, { recursive: true, force: true }).catch(() => undefined);

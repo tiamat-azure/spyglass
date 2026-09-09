@@ -42,6 +42,13 @@ node --experimental-transform-types scenario.ts --no-ai --dataset datasets/examp
 Unit proof: `packages/runner/src/lot7-parameters.test.ts`
 (`replays the same scenario with distinct datasets`).
 
+Evidence screenshots: `docs/lot-7/screenshots/` (health, dedicated branch,
+datasets). Chrome controls: `pnpm test:e2e` (`lot7-finition.spec.ts`).
+
+```bash
+NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
+```
+
 ## 4. In-app pas-à-pas (F-59)
 
 After finalize, check **Pas à pas**, click **Rejouer**, then **Suivant**

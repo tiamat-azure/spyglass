@@ -57,8 +57,28 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 ### How the exit demos were proven
 
-See `DEMO.md`. Unit tests cover F-62–F-65 (temp git repo, no GitHub), F-48
-distinct datasets, F-47 round-trip, F-59 step gate, F-38/F-39 STT policy.
+## Test counts (local, this lot)
+
+| Command | Result |
+|---|---|
+| `pnpm lint` | pass (265 files) |
+| `pnpm typecheck` | pass (6 packages) |
+| `pnpm test` | **452 passed**, 1 skipped (58 files) |
+| `pnpm test:schemas` | 2 passed |
+| `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
+
+Lot 7-focused unit tests: `lot7-patch.test.ts` (13), `lot7-parameters.test.ts` (8),
+`upgrade.test.ts` (5), `stt-upgrade-store.test.ts` (1).
+
+Screenshots: `docs/lot-7/screenshots/` (`health-json.png`, `assisted-branch.png`,
+`datasets.png`, plus `chrome-lot7-controls.png` from e2e when
+`SPYGLASS_E2E_SCREENSHOT_DIR` is set).
+
+Capture HTML evidence:
+
+```bash
+NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
+```
 
 ## Product decisions (ask-user)
 
