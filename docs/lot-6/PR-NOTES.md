@@ -545,6 +545,9 @@ Applied on tip `9d6e8a6ae6d0fbfca3ad98bc09fa562a69dcfca9`. Product decisions
   `runScenario`. Hand-edited/missing `startUrl` fails with the schema
   error (align L6-024 / L6-028).
 
+Unit tests after this pass: **408 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
