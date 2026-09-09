@@ -115,24 +115,26 @@ function scrubKnownValuesFromDescriptor(
   if (descriptor.arguments === undefined) {
     return;
   }
-  const next: string[] = [];
-  for (const [index, item] of descriptor.arguments.entries()) {
+  const trailing: string[] = [];
+  for (const item of descriptor.arguments.slice(1)) {
     if (typeof item === 'string' && item.length > 0 && known.has(item)) {
-      if (index === 0) {
-        next.push(undefined as unknown as string);
-      }
       continue;
     }
     if (typeof item === 'string') {
-      next.push(item);
+      trailing.push(item);
     }
   }
-  const kept = next.some((item) => typeof item === 'string' && item.length > 0);
-  if (!kept) {
+  const head = descriptor.arguments[0];
+  const keepHead = typeof head === 'string' && head.length > 0 && !known.has(head);
+  if (!keepHead && trailing.length === 0) {
     delete descriptor.arguments;
     return;
   }
-  descriptor.arguments = next;
+  if (keepHead) {
+    descriptor.arguments = [head, ...trailing];
+    return;
+  }
+  descriptor.arguments = [undefined as unknown as string, ...trailing];
 }
 
 function knownValuesForPatch(
