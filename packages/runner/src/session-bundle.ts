@@ -192,10 +192,7 @@ async function assertBundleManifestAgrees(dir: string, sessionId: string): Promi
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
-      throw new SessionBundleError(
-        'invalid-meta',
-        'import refused: missing spyglass-session.json'
-      );
+      throw new SessionBundleError('invalid-meta', 'import refused: missing spyglass-session.json');
     }
     throw new SessionBundleError(
       'invalid-meta',

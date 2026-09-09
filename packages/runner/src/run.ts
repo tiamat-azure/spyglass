@@ -729,7 +729,7 @@ function stepForRecovery(step: RefinedStep): RefinedStep {
 function redactSnapshotForRecovery(
   snapshot: { url: string; title: string; text: string; values: Record<string, string> },
   scenario: Scenario,
-  secrets: readonly string[]
+  secrets: string[]
 ): { url: string; title: string; text: string; values: Record<string, string> } {
   if (!scenario.steps.some(hasParameterRef)) {
     return snapshot;

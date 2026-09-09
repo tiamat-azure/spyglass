@@ -1290,6 +1290,48 @@ Windows `verify`: L7-243 containment test uses a cwd-relative `--repo`
 
 Ask-user still held: **D34**.
 
+## Pass-36 adversarial fixes (L7-247 … L7-262)
+
+- **L7-247:** `parseReplayStartPayload` rejects `null` / non-objects with
+  structured `invalid payload` (omitted payload is still `{}`).
+- **L7-248:** in-process STT init failures are caught and mapped to the
+  same structured connect-failure path as sidecar WS errors.
+- **L7-249:** `stepGate.wait` keeps a single waiter; a second wait stops
+  the previous gate instead of orphaning it.
+- **L7-250:** D27a `process.chdir` tests restore cwd in `finally` around
+  the chdir itself.
+- **L7-251:** source-slice tests fail loud when `indexOf` markers are
+  missing (`>= 0` before `slice`).
+- **L7-252:** L7-219 FIFO runtime uses `it.skipIf` / `ctx.skip()` when
+  `mkfifo` is unavailable (not a bare green `return`).
+- **L7-253:** hung-git suite timeout is above the 15s kill-bound
+  (`GIT_TEST_MS` 25s non-Windows / 40s Windows).
+- **L7-254:** `scrubKnownValuesFromDescriptor` keeps non-string head args
+  (object/number); vacant-string/`null` rules stay for string/empty
+  heads.
+- **L7-255:** `trailingArguments` keeps index-preserving vacant `null`
+  when `cloneJsonArg` yields undefined (N29a).
+- **L7-256:** dataset-load failure artifacts use the per-run
+  `runPath(reportDir, runId)` layout and pass `scenario`.
+- **L7-257:** `redactSnapshotForRecovery` uses the caller’s combined
+  before+after secret set.
+- **L7-258:** missing/invalid/mismatched manifest, special-file, and
+  meta read/parse failures are `SessionBundleError` + `bundleCode`.
+- **L7-259:** non-overwrite publish refuses if dest still exists after
+  an explicit empty-dir vacate (W26a/O7a); no POSIX rename-as-replace.
+- **L7-260:** `recoverOrphanedBackup` try/catches rename and only
+  resurrects directories owned by this dest (`basename.spyglass-prev-*`).
+- **L7-261:** `chooseWhisperModel` / `largeModelPresent` use a regular-file
+  check (L7-245), not bare `existsSync`.
+- **L7-262:** `--large` ensures whisper-cli before the 575MB large
+  download. Darwin D34 product behavior is unchanged.
+
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**744 passed**, 1 skipped (62 files).
+
+Ask-user still held: **D34**, **L7-P36** (L36a/b/c pending Firstmate:
+L7-230 live patch args; SECRET_NAME matching; user-stop status).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

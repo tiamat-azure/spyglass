@@ -855,7 +855,7 @@ describe('Lot 7 F-48 parameterization', () => {
       'function redactSnapshotForRecovery',
       'const PARAMETER_SECRET_MIN_LENGTH'
     );
-    expect(fn).toContain('secrets: readonly string[]');
+    expect(fn).toContain('secrets: string[]');
     expect(fn).not.toContain('collectParameterSecrets(scenario, [snapshot])');
   });
 
@@ -1410,7 +1410,11 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(disk.sessionId).toBe(extracted.scenario.sessionId);
     expect(disk.warnings.join('\n')).toMatch(/dataset:/);
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
-    const fn = sourceBetween(src, 'async function datasetLoadFailure', 'async function scenarioWithDataset');
+    const fn = sourceBetween(
+      src,
+      'async function datasetLoadFailure',
+      'async function scenarioWithDataset'
+    );
     expect(fn).toContain('runArtifactsDir');
     expect(fn).toContain('scenario: input.scenario');
   });

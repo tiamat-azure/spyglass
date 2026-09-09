@@ -11,9 +11,9 @@ import {
 import {
   chooseWhisperModel,
   isLargeFallbackError,
-  largeModelPresent,
   LARGE_FALLBACK_ERROR_TAG,
   largeFallbackMarkerDirs,
+  largeModelPresent,
   parseMaxLatencyMs,
   parseUpgradePromptAfter,
   readLargeFallback,

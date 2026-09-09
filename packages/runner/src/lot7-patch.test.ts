@@ -2726,11 +2726,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
     const reportRaw = await readFile(join(reportDir, 'report.json'), 'utf8');
     expect(reportRaw).toContain('ses_lot7');
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
-    const lifecycle = sourceBetween(
-      src,
-      'const lifecycleInput',
-      'if (runDir !== undefined)'
-    );
+    const lifecycle = sourceBetween(src, 'const lifecycleInput', 'if (runDir !== undefined)');
     expect(lifecycle).toContain('try {');
     expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
     expect(lifecycle).toContain('suggested: liveSuggested');

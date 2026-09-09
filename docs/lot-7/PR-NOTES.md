@@ -62,14 +62,14 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (274 files) |
+| `pnpm lint` | pass (276 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **672 passed**, 1 skipped (62 files) |
+| `pnpm test` | **744 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (79), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (59),
-`upgrade.test.ts` (30), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (99), `patch-redact.test.ts` (20), `lot7-parameters.test.ts` (76),
+`upgrade.test.ts` (37), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -420,4 +420,11 @@ large. Pass-34 (L7-240 … L7-246): document replay-start `datasetPath`;
 health validate returns migrated payload; migrate only missing-runIds
 legacy; resolve repo absolute before containment; SHA-256 before skip
 existing cli/large; model candidates must be regular files; L7-236
-original still omits live fill args. Held: **D34**.
+original still omits live fill args. Pass-36 (L7-247 … L7-262): reject
+null replay-start; catch in-process STT init; single step-gate waiter;
+restore cwd; fail-loud source markers; skip FIFO without mkfifo;
+hung-git timeout above 15s; keep non-string scrub heads; vacant trailing
+slots; per-run dataset-load artifacts; combined recovery secrets;
+structured bundle errors; refuse existing dest unless overwrite; owned
+backup recovery only; regular-file model paths; ensure CLI before large
+download. Held: **D34**, **L7-P36** (L36a/b/c).
