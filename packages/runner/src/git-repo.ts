@@ -32,7 +32,9 @@ export class GitApplyError extends Error {
 
 export class UnresolvedDefaultBranchError extends GitApplyError {
   readonly unresolvedDefault: typeof UNRESOLVED_DEFAULT_TAG = UNRESOLVED_DEFAULT_TAG;
-  constructor(message = 'unable to detect default branch (detached HEAD or unresolved)') {
+  constructor(
+    message = 'unable to detect default branch (need origin/HEAD or local/remote main/master)'
+  ) {
     super(message);
     this.name = 'UnresolvedDefaultBranchError';
   }
@@ -125,7 +127,8 @@ export async function currentBranch(exec: GitExec, cwd: string): Promise<string>
 }
 
 /**
- * Prefer origin/HEAD, then local main/master. F-64: never commit this name.
+ * G28b / F-64: PR `--base` is `origin/HEAD` or local/remote `main`/`master`
+ * only. Never the currently checked-out branch. L7-126: never literal HEAD.
  */
 export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<string> {
   const originHead = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], cwd);
@@ -137,16 +140,21 @@ export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<s
     }
   }
   for (const name of DEFAULT_BRANCH_NAMES) {
-    const probe = await exec(['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], cwd);
-    if (probe.code === 0) {
+    const local = await exec(['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], cwd);
+    if (local.code === 0) {
       return name;
     }
   }
-  const fallback = (await currentBranch(exec, cwd)).trim();
-  if (!isUsableDefaultBranch(fallback)) {
-    throw new UnresolvedDefaultBranchError();
+  for (const name of DEFAULT_BRANCH_NAMES) {
+    const remote = await exec(
+      ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${name}`],
+      cwd
+    );
+    if (remote.code === 0) {
+      return name;
+    }
   }
-  return fallback;
+  throw new UnresolvedDefaultBranchError();
 }
 
 export function isDefaultBranchName(branch: string, defaultBranch?: string): boolean {

@@ -968,6 +968,16 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: G28, P28, S28, X28, F28, W28.
 
+## Captain lock G28b (no checkout fallback for PR base)
+
+- **G28b:** `detectDefaultBranch` uses `origin/HEAD` or local/remote
+  `main`/`master` only. It does not fall back to the currently checked-out
+  branch as the PR `--base`. When those refs are missing, assisted apply
+  refuses with `code: 'unresolved-default'`. L7-126 (no literal `HEAD`)
+  still holds.
+
+Ask-user still held: P28, S28, X28, F28, W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

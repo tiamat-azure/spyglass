@@ -241,6 +241,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   so callers that skip `loadHealth` do not fail-closed on pre-Lot-7
   artifacts. Raw `validateUnknown('health', …)` still rejects missing
   `runIds` (L7-128). `schemaVersion` stays 1.
+- **G28b:** `detectDefaultBranch` requires `origin/HEAD` or local/remote
+  `main`/`master`. It does not use the currently checked-out branch as
+  the PR base. Missing those refs fail with `unresolved-default`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -293,4 +296,6 @@ Pass-28 (L7-210 … L7-212): re-check dirty worktree before write/commit,
 `consecutiveRuns` matches capped `runIds` window, looser hung-git
 SIGKILL bound. **R28a:** `validateHealth` migrates missing `runIds`
 before schema checks (H21a); raw schema still fail-closed (L7-128).
-Held: G28, P28, S28, X28, F28, W28.
+**G28b:** `detectDefaultBranch` is `origin/HEAD` or local/remote
+`main`/`master` only (no checkout fallback). Held: P28, S28, X28, F28,
+W28.

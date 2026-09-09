@@ -27,11 +27,14 @@ import {
 } from './descriptor-hash.ts';
 import {
   defaultGitExec,
+  detectDefaultBranch,
   GIT_EXEC_TIMEOUT_MS,
   GitApplyError,
+  type GitExec,
   gitChildExecOptions,
   isDefaultBranchName,
   isGitApplyError,
+  isUnresolvedDefaultBranchError,
   patchBranchName
 } from './git-repo.ts';
 import {
@@ -1530,12 +1533,53 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe('unresolved-default');
-      expect(result.reason).toMatch(/detached HEAD|unresolved/u);
+      expect(result.reason).toMatch(/origin\/HEAD|main\/master/u);
     }
     const named = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
     ).stdout.trim();
     expect(named).toBe('HEAD');
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+    const branches = (
+      await execFileAsync('git', ['branch', '--list', 'spyglass/patch-*'], { cwd: dir })
+    ).stdout.trim();
+    expect(branches).toBe('');
+  });
+
+  it('refuses when only a non-default branch is checked out (G28b)', async () => {
+    const dir = await tempDir('spyglass-lot7-g28b-checkout-');
+    await execFileAsync('git', ['init', '-b', 'develop'], { cwd: dir });
+    await execFileAsync('git', ['config', 'user.email', 'lot7@spyglass.test'], { cwd: dir });
+    await execFileAsync('git', ['config', 'user.name', 'Lot7 Tests'], { cwd: dir });
+    await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('unresolved-default');
+      expect(result.reason).toMatch(/origin\/HEAD|main\/master/u);
+    }
+    const named = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(named).toBe('develop');
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
     const branches = (
@@ -2219,6 +2263,55 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(isDefaultBranchName('master')).toBe(true);
     expect(isDefaultBranchName('develop')).toBe(false);
     expect(isDefaultBranchName('develop', 'develop')).toBe(true);
+  });
+});
+
+describe('detectDefaultBranch G28b', () => {
+  const cwd = '/tmp/spyglass-g28b-unused';
+
+  function refsGit(opts: { originHead?: string; local?: string[]; remote?: string[] }): GitExec {
+    return async (args) => {
+      if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+        if (opts.originHead !== undefined) {
+          return {
+            stdout: `refs/remotes/origin/${opts.originHead}\n`,
+            stderr: '',
+            code: 0
+          };
+        }
+        return { stdout: '', stderr: '', code: 1 };
+      }
+      if (args[0] === 'rev-parse' && args.includes('--verify')) {
+        const ref = args[args.length - 1] ?? '';
+        if (opts.local?.some((name) => ref === `refs/heads/${name}`)) {
+          return { stdout: 'abc\n', stderr: '', code: 0 };
+        }
+        if (opts.remote?.some((name) => ref === `refs/remotes/origin/${name}`)) {
+          return { stdout: 'abc\n', stderr: '', code: 0 };
+        }
+        return { stdout: '', stderr: '', code: 1 };
+      }
+      if (args[0] === 'rev-parse' && args.includes('--abbrev-ref')) {
+        return { stdout: 'develop\n', stderr: '', code: 0 };
+      }
+      return { stdout: '', stderr: 'unexpected git probe', code: 1 };
+    };
+  }
+
+  it('uses origin/HEAD even when it is not named main/master', async () => {
+    await expect(detectDefaultBranch(refsGit({ originHead: 'develop' }), cwd)).resolves.toBe(
+      'develop'
+    );
+  });
+
+  it('uses remote origin/main when local main/master and origin/HEAD are missing', async () => {
+    await expect(detectDefaultBranch(refsGit({ remote: ['main'] }), cwd)).resolves.toBe('main');
+  });
+
+  it('does not fall back to the checked-out branch (G28b)', async () => {
+    const git = refsGit({});
+    await expect(detectDefaultBranch(git, cwd)).rejects.toSatisfy(isUnresolvedDefaultBranchError);
+    await expect(detectDefaultBranch(git, cwd)).rejects.toThrow(/origin\/HEAD|main\/master/u);
   });
 });
 
