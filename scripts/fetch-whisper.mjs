@@ -12,9 +12,19 @@
  * C26a: `--large` also ensures whisper-cli (same as a plain fetch), not models-only.
  * W28b: `cliAsset()` is `.zip` on Windows (and darwin). `extractArchive` is
  * format-aware — Expand-Archive for zip on win32, not always `tar -xf`.
+ * I30a: extracted whisper-cli is SHA-256-checked before chmod/success.
+ * Pins below; non-empty `STT_WHISPER_CLI_SHA256` overrides (S4a-style).
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, createWriteStream, readdirSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  chmodSync,
+  copyFileSync,
+  createReadStream,
+  createWriteStream,
+  readdirSync,
+  statSync
+} from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -27,6 +37,31 @@ const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggm
 const MODEL_NAME = 'ggml-small-q5_1.bin';
 /** Skip empty/HTML stubs; a real whisper-cli binary is well above this. */
 const CLI_MIN_BYTES = 10_000;
+/**
+ * I30a: SHA-256 of the extracted named binary (not the archive). Keys are
+ * `${archiveBasename}:${cli.name}` from `cliAsset()`.
+ *
+ * ggml-org v1.7.5 did not publish `whisper-bin-*` (xcframework only). Pins are
+ * the extracted binaries from ggml-org/whisper.cpp v1.9.2:
+ * `whisper-bin-ubuntu-x64.tar.gz` / `whisper-bin-ubuntu-arm64.tar.gz` /
+ * `whisper-bin-x64.zip` (`whisper-cli.exe`). Darwin's zip has no unix
+ * `whisper-cli`; that pin is the v1.9.2 Linux x64 `whisper-cli` so a PE/HTML
+ * stub fails closed. Non-empty `STT_WHISPER_CLI_SHA256` overrides (trim),
+ * same idea as unpackaged `STT_LARGE_SHA256` (S4a / E18a). This script is
+ * unpackaged Node — packaged ignore of the large env does not apply here.
+ * Missing pin or mismatch: rm dest, throw (fail closed). Do not skip the
+ * check when the expected digest is empty.
+ */
+const CLI_SHA256 = {
+  'whisper-bin-x64.tar.gz:whisper-cli':
+    '61fa94d25ba9a4695118883011f35e8521c158145ec73bcd8805a7c11760e6d7',
+  'whisper-bin-arm64.tar.gz:whisper-cli':
+    '00cf54e258e9c7560666e5ae7d16e01ee02210b9ee5e943172e7df5f2ece4c80',
+  'whisper-bin-x64.zip:whisper-cli':
+    '61fa94d25ba9a4695118883011f35e8521c158145ec73bcd8805a7c11760e6d7',
+  'whisper-bin-x64.zip:whisper-cli.exe':
+    '95e3c0b0e778ad9499eb0125f97c1dcf437dd9eb4ea77050b043574f93c2631d'
+};
 
 function cliAsset() {
   const plat = process.platform;
@@ -160,6 +195,40 @@ function extractArchive(archivePath, extractDir) {
   extractTar(archivePath, extractDir);
 }
 
+/** I30a: env override wins when non-empty after trim; else the pin for this asset. */
+function expectedCliSha256(cli) {
+  const fromEnv = process.env.STT_WHISPER_CLI_SHA256;
+  if (typeof fromEnv === 'string') {
+    const trimmed = fromEnv.trim();
+    if (trimmed.length > 0) {
+      return trimmed.toLowerCase();
+    }
+  }
+  const archiveName = cli.url.split('/').pop() ?? '';
+  const pinned = CLI_SHA256[`${archiveName}:${cli.name}`];
+  return typeof pinned === 'string' && pinned.length > 0 ? pinned : undefined;
+}
+
+async function fileSha256(path) {
+  const hash = createHash('sha256');
+  await pipeline(createReadStream(path), hash);
+  return hash.digest('hex');
+}
+
+/** After extract+size, before chmod/success. Fail closed: rm dest, throw. */
+async function assertCliIntegrity(dest, cli) {
+  const expected = expectedCliSha256(cli);
+  if (expected === undefined) {
+    await rm(dest, { recursive: true, force: true });
+    throw new Error(`whisper-cli digest missing for ${cli.name}`);
+  }
+  const actual = await fileSha256(dest);
+  if (actual !== expected) {
+    await rm(dest, { recursive: true, force: true });
+    throw new Error('whisper-cli digest mismatch');
+  }
+}
+
 /**
  * C26a: plain fetch and `--large` both leave a usable whisper-cli when a
  * prebuilt URL exists. Skip only a valid existing binary.
@@ -194,6 +263,7 @@ async function ensureWhisperCli() {
       await rm(dest, { recursive: true, force: true });
       throw new Error(`extracted ${cli.name} is smaller than ${String(CLI_MIN_BYTES)} bytes`);
     }
+    await assertCliIntegrity(dest, cli);
     if (process.platform !== 'win32') {
       chmodSync(dest, 0o755);
     }

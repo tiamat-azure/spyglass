@@ -1185,6 +1185,19 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: I30, C31, W31, R32.
 
+## Captain lock I30a (whisper-cli download integrity)
+
+- **I30a:** `ensureWhisperCli` SHA-256-checks the extracted whisper-cli after
+  the L7-225 size floor and before chmod/success (parity with large-model
+  digest). Mismatch or missing pin removes dest and throws (fail closed).
+  Pins are ggml-org/whisper.cpp v1.9.2 extracted `whisper-cli` /
+  `whisper-cli.exe` (v1.7.5 did not publish `whisper-bin-*`). Non-empty
+  `STT_WHISPER_CLI_SHA256` overrides, same idea as unpackaged
+  `STT_LARGE_SHA256` (S4a / E18a). Already-present CLI remains size-only
+  skip (L7-225 / L7-229). A30a `missing-session-dir` unchanged.
+
+Ask-user still held: C31, W31, R32.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

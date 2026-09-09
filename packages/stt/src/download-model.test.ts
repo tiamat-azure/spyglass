@@ -299,6 +299,40 @@ describe('W3a fetch-whisper --large', () => {
     expect(body).toContain('CLI_MIN_BYTES');
   });
 
+  it('verifies extracted whisper-cli sha256 before chmod (I30a)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    expect(src).toContain('STT_WHISPER_CLI_SHA256');
+    expect(src).toContain("createHash('sha256')");
+    expect(src).toMatch(/'whisper-bin-x64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).toMatch(/'whisper-bin-arm64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).toMatch(/'whisper-bin-x64\.zip:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).toMatch(/'whisper-bin-x64\.zip:whisper-cli\.exe':\s*'[0-9a-f]{64}'/);
+    const helpersStart = src.indexOf('function expectedCliSha256');
+    const fnStart = src.indexOf('async function ensureWhisperCli');
+    const fnEnd = src.indexOf('const SMALL_MIN_BYTES');
+    expect(helpersStart).toBeGreaterThan(-1);
+    expect(fnStart).toBeGreaterThan(helpersStart);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const helpers = src.slice(helpersStart, fnEnd);
+    expect(helpers).toContain('STT_WHISPER_CLI_SHA256');
+    expect(helpers).toContain("createHash('sha256')");
+    expect(helpers).toContain('whisper-cli digest mismatch');
+    expect(helpers).toContain('await rm(dest, { recursive: true, force: true })');
+    const body = src.slice(fnStart, fnEnd);
+    expect(body.indexOf('copyFileSync(found, dest)')).toBeLessThan(
+      body.lastIndexOf('existingCliOk(dest)')
+    );
+    expect(body.lastIndexOf('existingCliOk(dest)')).toBeLessThan(
+      body.indexOf('await assertCliIntegrity(dest, cli)')
+    );
+    expect(body.indexOf('await assertCliIntegrity(dest, cli)')).toBeLessThan(
+      body.indexOf('chmodSync')
+    );
+  });
+
   it('skips --large re-download when a valid large file is present (L7-229)', async () => {
     const src = await readFile(
       new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
