@@ -421,4 +421,56 @@ describe('ReplayEngine', () => {
     const scenario = await loadFinalizedScenario(dir);
     expect(scenario.steps[0]?.action.descriptor.selector).toBe('#rev10');
   });
+
+  it('does not let a corrupt older rev-N.json break a newer finalized replay (L6-062)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-l6062-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(join(dir, 'refined', 'rev-1.json'), '{', 'utf8');
+    await writeFile(
+      join(dir, 'refined', 'rev-2.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 2,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#rev2')]
+      }),
+      'utf8'
+    );
+    const scenario = await loadFinalizedScenario(dir);
+    expect(scenario.steps[0]?.action.descriptor.selector).toBe('#rev2');
+
+    await writeFile(
+      join(dir, 'refined', 'rev-3.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 3,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'reviewing',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#rev3')]
+      }),
+      'utf8'
+    );
+    const older = await loadFinalizedScenario(dir);
+    expect(older.steps[0]?.action.descriptor.selector).toBe('#rev2');
+  });
 });

@@ -110,8 +110,11 @@ export class ReplayEngine {
 }
 
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
-  const revisions = await readRefinedRevisions(sessionDir);
-  const latest = revisions.at(-1);
+  const refinedDir = join(sessionDir, 'refined');
+  const files = await listRefinedRevisionNames(refinedDir);
+  const latestName = files.at(-1);
+  const latest =
+    latestName !== undefined ? await readRevisionFile(refinedDir, latestName) : undefined;
   // G56a: leftover generated/ from generate-first is not authoritative unless
   // the latest rev-N is already finalized.
   if (latest?.status === 'finalized' && latest.steps.length > 0) {
@@ -127,8 +130,13 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
   const meta = JSON.parse(metaRaw) as { startUrl?: string };
   const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';
-  for (let index = revisions.length - 1; index >= 0; index -= 1) {
-    const revision = revisions[index];
+  for (let index = files.length - 1; index >= 0; index -= 1) {
+    const name = files[index];
+    if (name === undefined) {
+      continue;
+    }
+    const revision =
+      name === latestName ? latest : await readRevisionFile(refinedDir, name);
     if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
       return scenarioFromRevision(revision, startUrl);
     }
@@ -136,8 +144,7 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   throw new Error('no finalized revision');
 }
 
-async function readRefinedRevisions(sessionDir: string): Promise<RefinedRevisionFile[]> {
-  const refinedDir = join(sessionDir, 'refined');
+async function listRefinedRevisionNames(refinedDir: string): Promise<string[]> {
   let files: string[] = [];
   try {
     files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
@@ -151,11 +158,24 @@ async function readRefinedRevisions(sessionDir: string): Promise<RefinedRevision
   files.sort(
     (left, right) => Number.parseInt(left.slice(4), 10) - Number.parseInt(right.slice(4), 10)
   );
-  const revisions: RefinedRevisionFile[] = [];
-  for (const name of files) {
-    revisions.push(
-      JSON.parse(await readFile(join(refinedDir, name), 'utf8')) as RefinedRevisionFile
-    );
+  return files;
+}
+
+/** L6-062: skip unreadable non-selected rev-N.json instead of failing the walk. */
+async function readRevisionFile(
+  refinedDir: string,
+  name: string
+): Promise<RefinedRevisionFile | undefined> {
+  try {
+    const value = JSON.parse(await readFile(join(refinedDir, name), 'utf8')) as unknown;
+    if (typeof value !== 'object' || value === null) {
+      return undefined;
+    }
+    return value as RefinedRevisionFile;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return undefined;
+    }
+    throw error;
   }
-  return revisions;
 }

@@ -580,6 +580,21 @@ Applied on tip `46138a04f6d799061d0ec21ca04c04bc4632a3f9`. Product decisions
 Unit tests after this pass: **411 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 20 (Copilot auto-fix)
+
+Applied on tip `789ec78d8c3ce1fc38dd02ac11f5686bfa33c0ce`. Product decisions
+1–16 and prior locks (incl. D61a) are unchanged.
+
+- **L6-062** Rejouer `loadFinalizedScenario` parses `rev-N.json` newest-first
+  and skips per-file JSON parse errors, so a corrupt older revision cannot
+  block replay when a newer finalized revision exists. G56a still keys off
+  the highest-numbered file.
+- **L6-063** Corpus L6-058 test no longer `process.chdir()`s (Vitest
+  worker-unsafe). Relative `--out` is asserted as `repoRoot()` plus a
+  source check that relative paths use `resolve(repoRoot(), outArg)`.
+- **L6-064** Staging `scenario.ts` keeps `writeFile(..., { mode: 0o755 })`
+  and drops the redundant follow-up `chmod`.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

@@ -85,24 +85,20 @@ describe('Lot 6 measurement protocol corpus', () => {
   });
 
   it('resolves relative --out from repoRoot not cwd (L6-058)', async () => {
-    const cwd = process.cwd();
-    const runnerDir = join(repoRoot(), 'packages/runner');
-    try {
-      process.chdir(runnerDir);
-      const relativeOut = 'docs/lot-6/filter-cwd.json';
-      const fromCwd = resolve(process.cwd(), relativeOut);
-      const fromRoot = resolve(repoRoot(), relativeOut);
-      expect(fromCwd).not.toBe(fromRoot);
-      expect(await resolveCorpusOutPath(['--out', relativeOut], 'J+1')).toBe(fromRoot);
-      expect(await resolveCorpusOutPath(['--out', fromRoot], 'J+1')).toBe(fromRoot);
-    } finally {
-      process.chdir(cwd);
-    }
+    const relativeOut = 'docs/lot-6/filter-cwd.json';
+    const fromRoot = resolve(repoRoot(), relativeOut);
+    const fromFilterCwd = resolve(join(repoRoot(), 'packages/runner'), relativeOut);
+    expect(fromFilterCwd).not.toBe(fromRoot);
+    expect(await resolveCorpusOutPath(['--out', relativeOut], 'J+1')).toBe(fromRoot);
+    expect(await resolveCorpusOutPath(['--out', fromRoot], 'J+1')).toBe(fromRoot);
     const src = await readFile(
       join(dirname(fileURLToPath(import.meta.url)), 'corpus-cli.ts'),
       'utf8'
     );
     expect(src).toContain('resolve(repoRoot(), outArg)');
+    expect(src).toContain('isAbsolute(outArg)');
+    expect(src).not.toMatch(/resolve\(process\.cwd\(\)/);
+    expect(src).not.toContain('process.chdir');
   });
 
   it('O34a jail realpaths symlink parents that point outside the repo (L6-047)', async () => {

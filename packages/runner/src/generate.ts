@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Scenario } from '@spyglass/contracts';
 import { RUNNER_PACKAGE } from './package-name.ts';
@@ -99,7 +99,6 @@ export async function writeGeneratedPackage(
       encoding: 'utf8',
       mode: 0o755
     });
-    await chmod(stagingTs, 0o755);
     await writeFile(
       runPath(staging, GENERATED_README),
       generatedReadme(scenario.sessionId),

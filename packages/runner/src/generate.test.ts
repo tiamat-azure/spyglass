@@ -537,6 +537,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
   it('writes scenario.ts executable on Unix (L6-027)', async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-mode-'));
     const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+    const src = await readFile(join(repoRoot(), 'packages/runner/src/generate.ts'), 'utf8');
+    expect(src).toContain('mode: 0o755');
+    expect(src).not.toContain('chmod(stagingTs');
     if (process.platform === 'win32') {
       return;
     }
