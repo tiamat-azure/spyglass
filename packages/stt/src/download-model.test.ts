@@ -58,9 +58,9 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
       statusText: 'Not Found',
       headers: { 'content-length': String(html.length) }
     });
-    await expect(
-      downloadResponseToFileAtomic({ dest, response, minBytes: 1 })
-    ).rejects.toThrow(/HTTP 404/);
+    await expect(downloadResponseToFileAtomic({ dest, response, minBytes: 1 })).rejects.toThrow(
+      /HTTP 404/
+    );
     await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
