@@ -100,7 +100,11 @@ export async function writeGeneratedPackage(
       mode: 0o755
     });
     await chmod(stagingTs, 0o755);
-    await writeFile(runPath(staging, GENERATED_README), generatedReadme(scenario.sessionId), 'utf8');
+    await writeFile(
+      runPath(staging, GENERATED_README),
+      generatedReadme(scenario.sessionId),
+      'utf8'
+    );
     await writeFile(
       runPath(staging, GENERATED_PACKAGE_JSON),
       `${JSON.stringify(generatedPackageManifest(scenario.sessionId, version), null, 2)}\n`,
