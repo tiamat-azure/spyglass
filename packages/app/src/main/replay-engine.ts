@@ -110,34 +110,52 @@ export class ReplayEngine {
 }
 
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
+  const revisions = await readRefinedRevisions(sessionDir);
+  const latest = revisions.at(-1);
+  // G56a: leftover generated/ from generate-first is not authoritative unless
+  // the latest rev-N is already finalized.
+  if (latest?.status === 'finalized' && latest.steps.length > 0) {
+    try {
+      return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+  const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
+  const meta = JSON.parse(metaRaw) as { startUrl?: string };
+  const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';
+  for (let index = revisions.length - 1; index >= 0; index -= 1) {
+    const revision = revisions[index];
+    if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
+      return scenarioFromRevision(revision, startUrl);
+    }
+  }
+  throw new Error('no finalized revision');
+}
+
+async function readRefinedRevisions(sessionDir: string): Promise<RefinedRevisionFile[]> {
+  const refinedDir = join(sessionDir, 'refined');
+  let files: string[] = [];
   try {
-    return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+    files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code !== 'ENOENT') {
       throw error;
     }
-    // Sessions finalized before Lot 6 only have refined/rev-N.json.
+    return [];
   }
-  const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
-  const meta = JSON.parse(metaRaw) as { startUrl?: string };
-  const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';
-  const refinedDir = join(sessionDir, 'refined');
-  const files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
   files.sort(
     (left, right) => Number.parseInt(left.slice(4), 10) - Number.parseInt(right.slice(4), 10)
   );
-  for (let index = files.length - 1; index >= 0; index -= 1) {
-    const name = files[index];
-    if (name === undefined) {
-      continue;
-    }
-    const revision = JSON.parse(
-      await readFile(join(refinedDir, name), 'utf8')
-    ) as RefinedRevisionFile;
-    if (revision.status === 'finalized' && revision.steps.length > 0) {
-      return scenarioFromRevision(revision, startUrl);
-    }
+  const revisions: RefinedRevisionFile[] = [];
+  for (const name of files) {
+    revisions.push(
+      JSON.parse(await readFile(join(refinedDir, name), 'utf8')) as RefinedRevisionFile
+    );
   }
-  throw new Error('no finalized revision');
+  return revisions;
 }

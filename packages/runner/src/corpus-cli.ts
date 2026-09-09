@@ -68,9 +68,16 @@ export async function resolveCorpusOutPath(
               : 'measured-rates.json'
         );
   const rootReal = await realpath(resolve(repoRoot()));
+  const lot6Real = await realpathExistingPrefix(resolve(repoRoot(), 'docs/lot-6'));
   const realTarget = await realpathExistingPrefix(resolved);
   if (!isInsideDir(rootReal, realTarget)) {
     throw new Error(`--out path escapes the repo: ${resolved}`);
+  }
+  if (!isInsideDir(lot6Real, realTarget) || resolve(realTarget) === resolve(lot6Real)) {
+    throw new Error(`--out path escapes docs/lot-6: ${resolved}`);
+  }
+  if (!resolved.toLowerCase().endsWith('.json')) {
+    throw new Error('--out must be a .json file under docs/lot-6');
   }
   return resolved;
 }

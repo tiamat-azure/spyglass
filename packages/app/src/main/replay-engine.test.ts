@@ -103,6 +103,87 @@ describe('ReplayEngine', () => {
     expect(refused.ok).toBe(false);
   });
 
+  it('ignores leftover generated unless the latest rev is finalized (G56a / L6-056)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-g56a-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'reviewing',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/leftover',
+        steps: [clickStep('#leftover')]
+      }),
+      'utf8'
+    );
+    await expect(loadFinalizedScenario(dir)).rejects.toThrow(/no finalized revision/);
+
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-2.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 2,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'reviewing',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#rev2')]
+      }),
+      'utf8'
+    );
+    const older = await loadFinalizedScenario(dir);
+    expect(older.startUrl).toBe('https://exemple.test/start');
+    expect(older.steps[0]?.action.descriptor.selector).toBe('#go');
+    expect(older.steps[0]?.action.descriptor.selector).not.toBe('#leftover');
+  });
+
   it('runs a finalized scenario without AI', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-'));
     await mkdir(join(dir, 'refined'), { recursive: true });

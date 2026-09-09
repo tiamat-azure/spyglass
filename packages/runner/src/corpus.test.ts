@@ -76,6 +76,12 @@ describe('Lot 6 measurement protocol corpus', () => {
     await expect(
       resolveCorpusOutPath(['--out', resolve(repoRoot(), '..', 'spyglass-out-escape.json')], 'J+0')
     ).rejects.toThrow(/escapes the repo/);
+    await expect(
+      resolveCorpusOutPath(['--out', resolve(repoRoot(), 'README.md')], 'J+0')
+    ).rejects.toThrow(/escapes docs\/lot-6/);
+    await expect(
+      resolveCorpusOutPath(['--out', resolve(repoRoot(), 'docs/lot-6/notes.md')], 'J+0')
+    ).rejects.toThrow(/must be a \.json file/);
   });
 
   it('O34a jail realpaths symlink parents that point outside the repo (L6-047)', async () => {
@@ -87,7 +93,7 @@ describe('Lot 6 measurement protocol corpus', () => {
     try {
       await expect(
         resolveCorpusOutPath(['--out', join(link, 'rates.json')], 'J+0')
-      ).rejects.toThrow(/escapes the repo/);
+      ).rejects.toThrow(/escapes/);
     } finally {
       await rm(link, { recursive: true, force: true });
       await rm(outside, { recursive: true, force: true });

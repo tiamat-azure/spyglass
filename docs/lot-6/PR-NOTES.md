@@ -128,6 +128,14 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
     `SPYGLASS_NO_SANDBOX=1`. Do **not** require the env var alone. Emit a
     stderr warning whenever the sandbox is disabled (CI-derived and/or
     explicit).
+13. **G56a / L6-056.** In-app `loadFinalizedScenario` prefers
+    `generated/scenario.json` only when the **latest** `rev-N.json` is
+    `finalized`. Leftover `generated/` from generate-first (L6-001) must
+    not replay a reviewing session. Older-session fallback to a finalized
+    `rev-N.json` is unchanged (L6-020 fail-closed on corrupt generated).
+14. **O57a / L6-057.** Corpus `--out` must resolve under `docs/lot-6/` as a
+    `.json` file (realpath jail). Whole-repo O34a is not enough; fail
+    closed outside that tree.
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -490,6 +498,21 @@ Applied on tip `bbafff9c73e09280dc5446f5ec3ca3d41615f16d`. Product decisions
 
 Unit tests after this pass: **405 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 17 (Captain locks)
+
+Applied on tip `15c08e480fe8a44e115a3a209b1d2a716e95a04f`. Product decisions
+1–12 and prior locks (incl. N52b, O34a, L6-001 generate-first) are
+unchanged. Locks **G56a** and **O57a**.
+
+- **L6-056 / G56a** `loadFinalizedScenario` loads `generated/scenario.json`
+  only if the latest `rev-N` is `finalized`. A crash between generate-first
+  and persist cannot make Rejouer replay leftover generated for a
+  reviewing session. If latest is reviewing, older finalized revs are
+  used; if none, throw `no finalized revision`.
+- **L6-057 / O57a** Corpus `--out` is jailed to `docs/lot-6/` (`.json`
+  only), with the existing realpath symlink check. Paths inside the repo
+  but outside that tree fail closed.
 
 ## Residuals
 
