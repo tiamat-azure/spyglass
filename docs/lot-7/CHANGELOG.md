@@ -990,6 +990,9 @@ Ask-user still held: P28, S28, X28, F28, W28.
   that step looks non-parameterized. Non-secret fills and navigate URLs
   stay. A27b trailing args remain unless they equal a known secret.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**688 passed**, 1 skipped (62 files). `patch-redact.test.ts` 16.
+
 Ask-user still held: S28, X28, F28, W28.
 
 ## CI — macOS Electron e2e close hang
