@@ -2,11 +2,7 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
-import {
-  parseMockTranscripts,
-  parseWhisperTimeoutMs,
-  type SttEngineName
-} from './protocol.ts';
+import { parseMockTranscripts, parseWhisperTimeoutMs, type SttEngineName } from './protocol.ts';
 import {
   chooseWhisperModel,
   largeFallbackMarkerDirs,
