@@ -12,8 +12,10 @@ import type {
 } from '@spyglass/contracts';
 import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
+import type { PreparePr } from './assisted-apply.ts';
 import { applyBaseUrl } from './base-url.ts';
 import type { PageDriver } from './driver.ts';
+import type { GitExec } from './git-repo.ts';
 import { generatedHelpText } from './help-text.ts';
 import {
   parseGeneratedArgv,
@@ -62,6 +64,8 @@ export type RunScenarioHooks = RunScenarioOptions & {
   argv?: readonly string[];
   scriptDir?: string;
   stepGate?: StepGate;
+  git?: GitExec;
+  preparePr?: PreparePr;
 };
 
 const TEXT_ONLY_WARNING =
@@ -438,6 +442,12 @@ async function runScenarioOnDriver(
   const sessionDir = resolved.sessionDir ?? options.sessionDir;
   if (sessionDir !== undefined) {
     lifecycleInput.sessionDir = sessionDir;
+  }
+  if (options.git !== undefined) {
+    lifecycleInput.git = options.git;
+  }
+  if (options.preparePr !== undefined) {
+    lifecycleInput.preparePr = options.preparePr;
   }
   const lifecycle = await processSuggestedPatch(lifecycleInput);
   if (lifecycle.healthPath !== undefined) {

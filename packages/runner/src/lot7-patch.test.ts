@@ -586,7 +586,9 @@ describe('Lot 7 health.json wiring after recovery', () => {
         repo,
         datasetPath,
         runId,
-        env: { PATCH_ASSISTED_APPLY: 'true' }
+        env: { PATCH_ASSISTED_APPLY: 'true' },
+        git: defaultGitExec,
+        preparePr: async () => ({})
       });
       expect(driver.fills.map((row) => row.value)).toEqual(['dataset-secret']);
       if (runId === 'run_b') {
