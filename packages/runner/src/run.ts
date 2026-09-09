@@ -221,7 +221,6 @@ async function runScenarioOnDriver(
       warnings
     });
   }
-  const original = scenario.steps.map((step) => originalDescriptorForPatch(step));
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
   let failed = false;
@@ -278,6 +277,7 @@ async function runScenarioOnDriver(
         break;
       }
     }
+    const recordedStep = findStepByIndex(scenario, step.index);
     const timeoutMs = step.verification.timeoutMs ?? resolved.timeoutMs;
     const beforeDom = await options.driver.snapshot();
     const acted = await performAction(options.driver, step.action.descriptor);
@@ -326,7 +326,7 @@ async function runScenarioOnDriver(
       const recovered = await recoverStep({
         scenario: scenarioForRecovery(scenario),
         argumentScenario: executable,
-        step: stepForRecovery(scenario.steps[index] ?? step),
+        step: stepForRecovery(recordedStep ?? step),
         driver: options.driver,
         recoverer: options.recoverer,
         timeoutMs,
@@ -349,12 +349,15 @@ async function runScenarioOnDriver(
             {
               stepIndex: step.index,
               scope: 'action.descriptor',
-              original: original[index] ?? cloneDescriptor(step.action.descriptor),
+              original:
+                recordedStep !== undefined
+                  ? originalDescriptorForPatch(recordedStep)
+                  : cloneDescriptor(step.action.descriptor),
               suggested: recovered.descriptor,
               diagnosis: recovered.diagnosis,
               confidence: recovered.confidence
             },
-            scenario.steps[index] ?? findStepByIndex(scenario, step.index)
+            recordedStep
           )
         );
         emit(options, {
@@ -731,13 +734,19 @@ function redactSnapshotForRecovery(
   let text = snapshot.text;
   const ordered = [...secrets].sort((left, right) => right.length - left.length);
   for (const secret of ordered) {
-    // L7-113: 1–2 char values would over-strip unrelated DOM text (`ab` vs "about").
-    if (secret.length < 3) {
-      continue;
-    }
-    text = text.split(secret).join('');
+    text = redactSecretFromText(text, secret);
   }
   return { ...snapshot, values, text };
+}
+
+/** L7-124: redact PIN/OTP/tokens without substring-stripping unrelated words. */
+function redactSecretFromText(text: string, secret: string): string {
+  if (secret.length === 0) {
+    return text;
+  }
+  const escaped = secret.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'gu');
+  return text.replace(pattern, '');
 }
 
 async function datasetLoadFailure(input: {

@@ -46,11 +46,12 @@ export async function closeElectron(electronApp: LaunchedElectron): Promise<void
   }
 }
 
-async function waitForProcessExit(child: ElectronChild | null | undefined): Promise<void> {
+/** L7-117: `killed` only means kill() was called; wait until exitCode or grace. */
+export async function waitForProcessExit(child: ElectronChild | null | undefined): Promise<void> {
   if (child === undefined || child === null) {
     return;
   }
-  if (child.killed === true || (child.exitCode !== undefined && child.exitCode !== null)) {
+  if (child.exitCode !== undefined && child.exitCode !== null) {
     return;
   }
   await Promise.race([

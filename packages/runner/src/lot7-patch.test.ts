@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type {
   RefinedStep,
@@ -14,7 +13,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyAssistedPatches,
   assertAssistedApplyAllowed,
-  confirmedDescriptor
+  confirmedDescriptor,
+  defaultHasOpenPr,
+  tryGhPrCreate
 } from './assisted-apply.ts';
 import { descriptorHash, patchSetHash } from './descriptor-hash.ts';
 import {
@@ -638,10 +639,14 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
 
   it('times out hung git exec instead of waiting forever (L7-093)', async () => {
     expect(GIT_EXEC_TIMEOUT_MS).toBe(120_000);
-    const src = await readFile(fileURLToPath(new URL('./git-repo.ts', import.meta.url)), 'utf8');
-    expect(src).toContain('timeout: GIT_EXEC_TIMEOUT_MS');
-    expect(src).toContain("killSignal: 'SIGKILL'");
-    expect(src).toContain("GIT_TERMINAL_PROMPT: '0'");
+    const dir = await tempDir('spyglass-lot7-gitexec-');
+    await initGitRepo(dir);
+    const result = await defaultGitExec(
+      ['rev-parse', '--verify', 'refs/heads/spyglass-missing-branch'],
+      dir
+    );
+    expect(result.code).not.toBe(0);
+    expect(result.stderr.trim().length).toBeGreaterThan(0);
   });
 
   it('retries push after a non-fast-forward when origin already has the branch (L7-094)', async () => {
@@ -848,13 +853,29 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
   });
 
   it('logs caught gh errors to stderr while staying fail-closed (L7-110)', async () => {
-    const src = await readFile(
-      fileURLToPath(new URL('./assisted-apply.ts', import.meta.url)),
-      'utf8'
-    );
-    expect(src).toMatch(/process\.stderr\.write\(`spyglass: \$\{op\} failed: \$\{message\}\\n`\)/);
-    expect(src).toContain("logGhError('gh pr list'");
-    expect(src).toContain("logGhError('gh pr create'");
+    const logs: string[] = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      logs.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const missing = join(tmpdir(), `spyglass-l7110-missing-${String(Date.now())}`);
+      const listed = await defaultHasOpenPr({ repo: missing, branch: 'spyglass/patch-none' });
+      expect(listed).toBe(true);
+      const created = await tryGhPrCreate({
+        repo: missing,
+        branch: 'spyglass/patch-none',
+        defaultBranch: 'main',
+        title: 't',
+        body: 'b'
+      });
+      expect(created.ok).toBe(false);
+      expect(logs.some((line) => line.includes('gh pr list failed'))).toBe(true);
+      expect(logs.some((line) => line.includes('gh pr create failed'))).toBe(true);
+    } finally {
+      process.stderr.write = origWrite;
+    }
   });
 
   it('refuses remote delete/recreate when an open PR exists (P14a)', async () => {
@@ -961,22 +982,66 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
   });
 
   it('names the patch branch from the full toApply set (L7-101)', async () => {
-    const one = [{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#a' }) }];
-    const two = [
+    const dir = await tempDir('spyglass-lot7-l7101-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old-a'), clickStep(1, '#old-b')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    const suggested = (runId: string): SuggestedPatch => ({
+      schemaVersion: 1,
+      runId,
+      sessionId: 'ses_lot7',
+      applied: false,
+      patches: [
+        {
+          stepIndex: 0,
+          scope: 'action.descriptor',
+          original: { type: 'click', selector: '#old-a' },
+          suggested: { type: 'click', selector: '#a' },
+          diagnosis: 'selector drift',
+          confidence: 0.9
+        },
+        {
+          stepIndex: 1,
+          scope: 'action.descriptor',
+          original: { type: 'click', selector: '#old-b' },
+          suggested: { type: 'click', selector: '#b' },
+          diagnosis: 'selector drift',
+          confidence: 0.9
+        }
+      ]
+    });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, suggested('run_a'), policy);
+    health = recordSuggestedPatches(health, suggested('run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: suggested('run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({ url: 'https://github.com/example/target/pull/101' })
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const full = patchSetHash([
       { stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#a' }) },
       { stepIndex: 1, hash: descriptorHash({ type: 'click', selector: '#b' }) }
-    ];
-    expect(patchSetHash(one)).not.toBe(patchSetHash(two));
-    expect(patchBranchName('ses_lot7', patchSetHash(one))).not.toBe(
-      patchBranchName('ses_lot7', patchSetHash(two))
-    );
-    const src = await readFile(
-      fileURLToPath(new URL('./assisted-apply.ts', import.meta.url)),
-      'utf8'
-    );
-    expect(src).toContain('patchSetHash(toApply)');
-    expect(src).not.toContain('toApply[0]?.hash');
-    expect(src).not.toContain('candidate.consecutiveRuns < policy.confirmRuns');
+    ]);
+    const firstOnly = patchSetHash([
+      { stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#a' }) }
+    ]);
+    expect(result.branch).toBe(patchBranchName('ses_lot7', full));
+    expect(result.branch).not.toBe(patchBranchName('ses_lot7', firstOnly));
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#a');
+    expect(onDisk.steps[1]?.action.descriptor.selector).toBe('#b');
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
@@ -1009,6 +1074,52 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     ).rejects.toThrow(/commit failed/);
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
     expect(branch.stdout.trim()).toBe('main');
+  });
+
+  it('restores the starting commit SHA when apply starts in detached HEAD (L7-119)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7119-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    const startSha = (
+      await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    await writeFile(join(dir, 'later.txt'), 'later\n', 'utf8');
+    await execFileAsync('git', ['add', 'later.txt'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'later'], { cwd: dir });
+    const mainTip = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: dir })).stdout.trim();
+    expect(mainTip).not.toBe(startSha);
+    await execFileAsync('git', ['checkout', '--detach', startSha], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'commit') {
+        return { stdout: '', stderr: 'commit failed', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    await expect(
+      applyAssistedPatches({
+        health,
+        suggested: patch('#new', 'run_b'),
+        scenario: scn,
+        scenarioPath,
+        policy,
+        git
+      })
+    ).rejects.toThrow(/commit failed/);
+    const head = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: dir })).stdout.trim();
+    const named = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe(startSha);
+    expect(head).not.toBe(mainTip);
+    expect(named).toBe('HEAD');
   });
 
   it('returns git-error when checkout -b fails and restores starting branch (L7-025)', async () => {
@@ -1509,6 +1620,42 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates[0]?.descriptorHash).toBe(
       descriptorHash({ type: 'fill', selector: '#password-new' })
     );
+  });
+
+  it('resolves recorded steps by index when the array is reordered (L7-123)', async () => {
+    const secret = 'dataset-secret';
+    const click = clickStep(0, '#go');
+    const fill = fillStep(2, '#password', 'recorded-secret', 'password');
+    fill.verification.expected = '#welcome';
+    fill.verification.timeoutMs = 50;
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#password', visible: false },
+        { selector: '#password-new', visible: true, value: '' },
+        { selector: '#welcome', visible: true },
+        { selector: '#go', visible: true }
+      ]
+    });
+    driver.failSelectors.add('#password');
+    const recoverer = new StaticRecoverer(
+      { type: 'fill', selector: '#password-new', arguments: [secret] },
+      'recovered fill'
+    );
+    const result = await runScenario(scenario([fill, click]), {
+      driver,
+      aiRecovery: true,
+      recoverer,
+      env: {}
+    });
+    expect(result.exitCode).toBe(0);
+    const recovered = result.suggestedPatch?.patches.find((entry) => entry.stepIndex === 2);
+    expect(recovered).toBeDefined();
+    expect(recovered?.suggested.selector).toBe('#password-new');
+    expect(recovered?.suggested.arguments).toBeUndefined();
+    expect(recovered?.original.arguments).toBeUndefined();
+    expect(JSON.stringify(result.suggestedPatch ?? {})).not.toMatch(secret);
+    expect(JSON.stringify(result.suggestedPatch ?? {})).not.toMatch('recorded-secret');
   });
 });
 

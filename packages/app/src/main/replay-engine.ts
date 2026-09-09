@@ -96,7 +96,8 @@ export class ReplayEngine {
     this.running = true;
     let beganReplay = false;
     try {
-      const scenario = await loadFinalizedScenario(sessionDir);
+      const loaded = await loadFinalizedScenarioWithPath(sessionDir);
+      const scenario = loaded.scenario;
       session.beginReplay();
       beganReplay = true;
       const env = this.deps.env ?? process.env;
@@ -121,7 +122,7 @@ export class ReplayEngine {
         runId,
         closeDriver: false,
         sessionDir,
-        scenarioPath: generatedScenarioJsonPath(sessionDir),
+        scenarioPath: loaded.scenarioPath,
         ...(request.datasetPath !== undefined ? { datasetPath: request.datasetPath } : {}),
         ...(recoverer !== undefined ? { recoverer } : {}),
         onProgress: this.deps.onProgress,
@@ -165,7 +166,19 @@ export class ReplayEngine {
   }
 }
 
+export type FinalizedScenarioLoad = {
+  scenario: Scenario;
+  scenarioPath: string;
+};
+
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
+  return (await loadFinalizedScenarioWithPath(sessionDir)).scenario;
+}
+
+/** L7-118: path is the file actually loaded (generated scenario or rev-N fallback). */
+export async function loadFinalizedScenarioWithPath(
+  sessionDir: string
+): Promise<FinalizedScenarioLoad> {
   const refinedDir = join(sessionDir, 'refined');
   const files = await listRefinedRevisionNames(refinedDir);
   const latestName = files.at(-1);
@@ -174,8 +187,12 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   // G56a: leftover generated/ from generate-first is not authoritative unless
   // the latest rev-N is already finalized.
   if (latest?.status === 'finalized' && latest.steps.length > 0) {
+    const generatedPath = generatedScenarioJsonPath(sessionDir);
     try {
-      return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+      return {
+        scenario: await loadScenarioFile(generatedPath),
+        scenarioPath: generatedPath
+      };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT') {
@@ -193,7 +210,10 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
     }
     const revision = name === latestName ? latest : await readRevisionFile(refinedDir, name);
     if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
-      return scenarioFromRevision(revision, startUrl);
+      return {
+        scenario: scenarioFromRevision(revision, startUrl),
+        scenarioPath: join(refinedDir, name)
+      };
     }
   }
   throw new Error('no finalized revision');

@@ -5,7 +5,11 @@ import type { RefinedStep } from '@spyglass/contracts';
 import { createMockTransport, LlmGateway } from '@spyglass/llm';
 import { MemoryPageDriver } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
-import { loadFinalizedScenario, ReplayEngine } from './replay-engine.ts';
+import {
+  loadFinalizedScenario,
+  loadFinalizedScenarioWithPath,
+  ReplayEngine
+} from './replay-engine.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
 
 function clickStep(selector: string): RefinedStep {
@@ -101,6 +105,51 @@ describe('ReplayEngine', () => {
     });
     const refused = await engine.start();
     expect(refused.ok).toBe(false);
+  });
+
+  it('exposes the generated or revision path actually loaded (L7-118)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-l7118-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    const fromRev = await loadFinalizedScenarioWithPath(dir);
+    expect(fromRev.scenarioPath).toBe(join(dir, 'refined', 'rev-1.json'));
+    expect(fromRev.scenario.steps[0]?.action.descriptor.selector).toBe('#go');
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/generated',
+        steps: [clickStep('#from-generated')]
+      }),
+      'utf8'
+    );
+    const fromGenerated = await loadFinalizedScenarioWithPath(dir);
+    expect(fromGenerated.scenarioPath).toBe(join(dir, 'generated', 'scenario.json'));
+    expect(fromGenerated.scenario.steps[0]?.action.descriptor.selector).toBe('#from-generated');
   });
 
   it('does not beginReplay when scenario load fails (B10b)', async () => {

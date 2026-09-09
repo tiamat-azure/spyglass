@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **569 passed**, 1 skipped (60 files) |
+| `pnpm test` | **575 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (47), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (49), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -154,6 +154,7 @@ Pass-15 (L7-103 … L7-108) is in `CHANGELOG.md`.
 Windows CI: L7-108 backoff starts after the second failed first-use persist
 so L7-097 can still sample a later non-overlapping finalize.
 Pass-16 (L7-109 … L7-116) is in `CHANGELOG.md`.
+Pass-17 (L7-117 … L7-125) is in `CHANGELOG.md`.
 
 ## Residuals
 

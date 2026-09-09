@@ -21,6 +21,7 @@ import { pcm16ToWav } from './wav.ts';
 import {
   createWhisperEngine,
   isCancelledTranscription,
+  resolveWhisperPaths,
   runWhisperCli,
   whisperAvailable
 } from './whisper-engine.ts';
@@ -42,6 +43,25 @@ describe('@spyglass/stt', () => {
     expect(resolveSttEngineName({ SPYGLASS_STT_ENGINE: 'mock' })).toBe('mock');
     expect(whisperAvailable({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe(false);
     expect(resolveSttEngineName({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe('mock');
+  });
+
+  it('prefers large weights when small and large both exist under STT resources (L7-125)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7125-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    const paths = resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir });
+    expect(paths?.bin).toBe(bin);
+    expect(paths?.model).toBe(large);
+    const explicit = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_PATH: small
+    });
+    expect(explicit?.model).toBe(small);
   });
 
   it('correlates dictation before and after a DOM step', () => {

@@ -2,9 +2,10 @@ import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process'
 import { closeSync, existsSync, openSync, readSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
+import { STT_LARGE_MODEL_FILE } from './upgrade.ts';
 import { pcm16ToWav } from './wav.ts';
 
 export type WhisperPaths = {
@@ -57,21 +58,21 @@ export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): st
   if (dir !== undefined && dir.length > 0) {
     candidates.push(
       join(dir, file),
-      join(dir, 'ggml-small-q5_1.bin'),
-      join(dir, 'ggml-large-v3-turbo-q5_0.bin')
+      join(dir, 'ggml-large-v3-turbo-q5_0.bin'),
+      join(dir, 'ggml-small-q5_1.bin')
     );
   }
   if (resources !== undefined && resources.length > 0) {
     candidates.push(
       join(resources, file),
-      join(resources, 'ggml-small-q5_1.bin'),
-      join(resources, 'ggml-large-v3-turbo-q5_0.bin')
+      join(resources, 'ggml-large-v3-turbo-q5_0.bin'),
+      join(resources, 'ggml-small-q5_1.bin')
     );
   }
   candidates.push(
     join(process.cwd(), 'vendor/whisper', file),
-    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin'),
-    join(process.cwd(), 'vendor/whisper/ggml-large-v3-turbo-q5_0.bin')
+    join(process.cwd(), 'vendor/whisper/ggml-large-v3-turbo-q5_0.bin'),
+    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin')
   );
   return candidates;
 }
@@ -80,11 +81,35 @@ export function resolveWhisperPaths(
   env: NodeJS.ProcessEnv = process.env
 ): WhisperPaths | undefined {
   const bin = whisperCandidateBins(env).find((path) => existsSync(path));
-  const model = whisperCandidateModels(env).find((path) => existsSync(path));
+  const existing = whisperCandidateModels(env).filter((path) => existsSync(path));
+  const model = pickPreferredWhisperModel(existing, env);
   if (bin === undefined || model === undefined) {
     return undefined;
   }
   return { bin, model };
+}
+
+/**
+ * L7-125: when small and large both exist under resources/vendor, prefer large.
+ * Explicit STT_MODEL_PATH still wins (M4a / P6a). F-39 fallback stays in
+ * createEngineFromEnv via chooseWhisperModel + large-fallback.json.
+ */
+function pickPreferredWhisperModel(existing: string[], env: NodeJS.ProcessEnv): string | undefined {
+  if (existing.length === 0) {
+    return undefined;
+  }
+  const explicit = env.STT_MODEL_PATH;
+  if (explicit !== undefined && explicit.length > 0) {
+    const hit = existing.find((path) => path === explicit);
+    if (hit !== undefined) {
+      return hit;
+    }
+  }
+  const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
+  if (large !== undefined) {
+    return large;
+  }
+  return existing[0];
 }
 
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {

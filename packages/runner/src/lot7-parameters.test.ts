@@ -447,7 +447,7 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
-  it('does not over-strip 1-2 character parameter values from recovery DOM text (L7-113)', async () => {
+  it('does not over-strip short PIN/OTP tokens from unrelated DOM words (L7-124)', async () => {
     const secret = 'ab';
     const step = fillStep(0, '#code', secret, 'code');
     step.verification.expected = '#gone';
@@ -490,6 +490,7 @@ describe('Lot 7 F-48 parameterization', () => {
       expect(snap.values['#code']).toBe('');
       expect(snap.text).toContain('about');
       expect(snap.text).toContain('table');
+      expect(snap.text).not.toMatch(/(^|[^A-Za-z0-9])ab([^A-Za-z0-9]|$)/u);
     }
   });
 

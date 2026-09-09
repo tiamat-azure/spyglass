@@ -289,5 +289,6 @@ describe('packaged Observe', () => {
     expect(closeElectron).toContain("kill('SIGKILL')");
     expect(closeElectron).toContain("once('exit'");
     expect(closeElectron).toContain('KILL_EXIT_GRACE_MS');
+    expect(closeElectron).not.toContain('child.killed === true');
   });
 });

@@ -478,6 +478,34 @@ Ask-user still held: **B16** (stay on patch branch vs checkout back),
 **F16** (fail-loud corrupt `large-fallback.json` always vs only when
 large is in play).
 
+## Pass-17 adversarial fixes (L7-117 … L7-125)
+
+- **L7-117:** After SIGKILL, `waitForProcessExit` only short-circuits on
+  a non-null `exitCode`. `ChildProcess.killed` is ignored (it means kill
+  was *called*). Otherwise wait for `exit` or the 2s grace.
+- **L7-118:** In-app replay `scenarioPath` is the file
+  `loadFinalizedScenarioWithPath` actually loaded (generated scenario or
+  finalized rev-N fallback), not always `generated/scenario.json`.
+- **L7-119:** Assisted apply captures the starting commit SHA. Detached
+  HEAD (`rev-parse --abbrev-ref` is `HEAD`) restores that SHA on failure
+  instead of `git checkout -f HEAD` after switching to the default branch.
+- **L7-120 … L7-122:** Lot 7 patch tests assert git timeout/stderr, `gh`
+  fail-closed logging via a stderr sink, and the generated patch-branch
+  name for a multi-step `toApply` set — no source greps of git-repo /
+  assisted-apply.
+- **L7-123:** Recovery / original descriptor / patch redaction look up
+  the recorded step with `findStepByIndex` (`step.index` only).
+- **L7-124:** Recovery DOM text redacts every materialized parameter
+  value, including 1–2 character PIN/OTP, using token boundaries so
+  `ab` does not strip `about`. Overrides L7-113 min-length skip.
+- **L7-125:** Whisper model discovery prefers `ggml-large-v3-turbo-q5_0.bin`
+  when small and large both exist under `SPYGLASS_STT_RESOURCES` / vendor.
+  Explicit `STT_MODEL_PATH` still wins. F-39 small fallback stays in
+  `createEngineFromEnv` / `chooseWhisperModel`.
+
+Ask-user still held: **B16**, **F16**, **A17** (`createEngineFromEnv`
+sync vs async API).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
