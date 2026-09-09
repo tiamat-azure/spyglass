@@ -292,6 +292,7 @@ const spyglass = {
         largeAvailable: boolean;
         propose: boolean;
         fallback: boolean;
+        error?: string;
       }>,
     decide: async (action: 'accept' | 'refuse') =>
       ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<{

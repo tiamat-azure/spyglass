@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rename, symlink, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -397,7 +397,25 @@ describe('Lot 7 F-47 session export/import', () => {
     await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
   });
 
-  it('recovers an orphaned replace backup before the next replace (L7-040)', async () => {
+  it('refuses a symlink meta.json before reading it (L7-064)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-meta-symlink-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const leaked = join(root, 'secret.json');
+    await writeFile(leaked, '{"sessionId":"leaked"}\n', 'utf8');
+    await rm(join(dest, 'meta.json'));
+    await symlink(leaked, join(dest, 'meta.json'));
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+  });
+
+  it('recovers an orphaned backup then refuses to overwrite it (L7-040 / L7-063)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-orphan-'));
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
@@ -411,7 +429,8 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest);
     const orphan = `${dest}.spyglass-prev-deadbeef`;
     await rename(dest, orphan);
-    await exportSessionFolder(sessionDir, dest);
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1,"fresh":true}\n', 'utf8');
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/destination is not empty/);
     expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
     await expect(readFile(join(orphan, 'raw.jsonl'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -445,8 +464,8 @@ describe('Lot 7 F-47 session export/import', () => {
     await utimes(older, past, past);
     await utimes(newer, recent, recent);
     await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1,"fresh":true}\n', 'utf8');
-    await exportSessionFolder(sessionDir, dest);
-    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toContain('fresh');
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/destination is not empty/);
+    expect(await readFile(join(dest, 'which.txt'), 'utf8')).toBe('new\n');
     await expect(readFile(join(older, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(join(newer, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
   });

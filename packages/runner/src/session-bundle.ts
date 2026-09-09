@@ -44,6 +44,7 @@ export async function exportSessionFolder(
   const source = resolve(sessionDir);
   const dest = resolve(destDir);
   await assertNoCopyOverlap(source, dest);
+  await recoverOrphanedBackup(dest);
   if (!overwrite) {
     await assertExportDestAvailable(dest);
   }
@@ -73,6 +74,7 @@ export async function importSessionFolder(
   sessionsRoot: string
 ): Promise<{ sessionDir: string; sessionId: string }> {
   const source = resolve(bundleDir);
+  await assertNoSymlinks(source);
   const meta = await readSessionMeta(source);
   const sessionId = meta.sessionId;
   if (!isSafeSessionId(sessionId)) {
@@ -84,10 +86,10 @@ export async function importSessionFolder(
     throw new Error('import refused: invalid sessionId');
   }
   await assertNoCopyOverlap(source, dest);
+  await recoverOrphanedBackup(dest);
   if (await pathExists(dest)) {
     throw new Error('import refused: session already exists');
   }
-  await assertNoSymlinks(source);
   await mkdir(root, { recursive: true });
   const staging = await mkdtemp(join(root, '.spyglass-import-'));
   try {
@@ -254,9 +256,9 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
   }
 }
 
-/** L7-030 / L7-040 / L7-051: unique backup per replace; restore dest if publish fails. */
+/** L7-030 / L7-040 / L7-051: unique backup per replace; restore dest if publish fails.
+ * L7-063: orphan recovery runs in export/import *before* O7a/I7a dest checks. */
 async function replaceDirectory(dest: string, staging: string): Promise<void> {
-  await recoverOrphanedBackup(dest);
   const backup = `${dest}.spyglass-prev-${randomBytes(8).toString('hex')}`;
   let backedUp = false;
   let published = false;

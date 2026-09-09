@@ -449,6 +449,7 @@ export type SttUpgradeStatus = {
   largeAvailable: boolean;
   propose: boolean;
   fallback: boolean;
+  error?: string;
 };
 
 export type SttUpgradeDecideRequest = {

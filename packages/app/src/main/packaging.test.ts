@@ -227,6 +227,20 @@ describe('packaged Observe', () => {
     expect(sessionBundle).toContain('destination is not empty');
     expect(sessionBundle).toContain('session already exists');
     expect(sessionBundle).toContain('mtimeMs');
+    const importFn = sessionBundle.slice(
+      sessionBundle.indexOf('export async function importSessionFolder')
+    );
+    expect(importFn.indexOf('assertNoSymlinks(source)')).toBeGreaterThan(-1);
+    expect(importFn.indexOf('assertNoSymlinks(source)')).toBeLessThan(
+      importFn.indexOf('readSessionMeta(source)')
+    );
+    const replaceFn = sessionBundle.slice(sessionBundle.indexOf('async function replaceDirectory'));
+    expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
+    expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
+    expect(main).toContain("error: 'fallback-unreadable'");
+    const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');
+    expect(upgradeStore).toContain('writeFileAtomic');
+    expect(upgradeStore).toContain('persistQueue');
     const ipcValidate = readFileSync(join(appRoot, 'src/main/ipc-validate.ts'), 'utf8');
     expect(ipcValidate).not.toContain('parsePathPayload');
     expect(inProcess).toContain('export function createInProcessStt(');

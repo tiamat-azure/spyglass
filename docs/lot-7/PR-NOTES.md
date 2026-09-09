@@ -127,9 +127,12 @@ are illustrative fixtures) are in `CHANGELOG.md`.
 Pass-7 (L7-053 … L7-059) plus Captain locks **O7a** (export refuses
 non-empty dest) and **I7a** (import refuses existing same `sessionId`)
 are in `CHANGELOG.md`.
+Pass-8 (L7-060 … L7-064) is in `CHANGELOG.md`.
 
 ## Residuals
 
 - Live `gh pr create` against GitHub is optional; tests stub `preparePr`.
 - Live whisper `large-v3-turbo` first-use latency is not measured here (no
   575 Mo weights in CI).
+- Whisper `transcribe()` catch still records first-use latency on abort /
+  cancellation until Firstmate locks that ask-user.

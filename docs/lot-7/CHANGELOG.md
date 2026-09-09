@@ -210,3 +210,24 @@
 - **L7-059:** Whisper first-use latency hook is gated by an in-flight
   promise so concurrent finals cannot double-record.
 
+## Pass-8 adversarial fixes (L7-060 … L7-064)
+
+- **L7-060:** `stt-upgrade.json` persist is serialized and published via
+  atomic temp+rename (`writeFileAtomic`) so concurrent voice-edits cannot
+  lose writes or crash-corrupt JSON.
+- **L7-061:** `sttUpgradeStatus` does not convert a `readLargeFallback`
+  failure into a successful `fallback: false`. The snapshot is returned
+  with `error: 'fallback-unreadable'`. Store-load failure still uses the
+  L7-023 safe default.
+- **L7-062:** Empty `--repo` / `--dataset` / `--session-dir` do not
+  overwrite env fallbacks (e.g. `PATCH_TARGET_REPO`) after
+  `resolveRunnerOptions`.
+- **L7-063:** Orphan `.spyglass-prev-*` recovery runs **before** O7a/I7a
+  dest checks, and no longer inside `replaceDirectory`. Recovered dest is
+  preserved; export/import then refuse rather than destroy it.
+- **L7-064:** Import scans for symlinks **before** reading `meta.json`,
+  so a symlink meta cannot leak arbitrary local files.
+
+AbortError / cancellation vs first-use latency remains unchanged
+(ask-user).
+

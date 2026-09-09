@@ -1,10 +1,11 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   largeModelPresent,
   parseUpgradePromptAfter,
   type SttUpgradeDecision,
-  shouldProposeUpgrade
+  shouldProposeUpgrade,
+  writeFileAtomic
 } from '@spyglass/stt';
 
 export type SttUpgradeDisk = {
@@ -19,6 +20,7 @@ export class SttUpgradeStore {
     correctionCount: 0,
     refusedPermanently: false
   };
+  private persistQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly path: string,
@@ -72,18 +74,33 @@ export class SttUpgradeStore {
   }
 
   async recordCorrection(): Promise<void> {
-    this.disk.correctionCount += 1;
-    await this.persist();
+    return this.enqueuePersist(() => {
+      this.disk.correctionCount += 1;
+    });
   }
 
   async refusePermanently(): Promise<void> {
-    this.disk.refusedPermanently = true;
-    await this.persist();
+    return this.enqueuePersist(() => {
+      this.disk.refusedPermanently = true;
+    });
   }
 
-  private async persist(): Promise<void> {
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${JSON.stringify(this.disk, null, 2)}\n`, 'utf8');
+  /** L7-060: serialize mutations and publish via atomic temp+rename. */
+  private enqueuePersist(mutate: () => void): Promise<void> {
+    const run = this.persistQueue.then(async () => {
+      mutate();
+      await this.writeDisk();
+    });
+    this.persistQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
+
+  private async writeDisk(): Promise<void> {
+    const payload = `${JSON.stringify(this.disk, null, 2)}\n`;
+    await writeFileAtomic(this.path, Buffer.from(payload));
   }
 }
 

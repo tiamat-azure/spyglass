@@ -146,6 +146,15 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
     expect(resolveMaxAiRetries(undefined, { MAX_AI_RETRIES: '5' })).toBe(5);
     expect(resolveMaxAiRetries(1, { MAX_AI_RETRIES: '5' })).toBe(1);
   });
+
+  it('does not let empty --repo/--dataset/--session-dir overwrite env fallback (L7-062)', () => {
+    const parsed = parseRunnerArgv(['s.json', '--repo', '', '--dataset', '', '--session-dir', ''], {
+      PATCH_TARGET_REPO: '/env/repo'
+    });
+    expect(parsed.repo).toBe('/env/repo');
+    expect(parsed.datasetPath).toBeUndefined();
+    expect(parsed.sessionDir).toBeUndefined();
+  });
 });
 
 describe('F-50 deterministic replay without LLM', () => {

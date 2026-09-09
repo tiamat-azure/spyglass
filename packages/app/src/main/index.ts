@@ -1022,19 +1022,25 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       const store = await ensureSttUpgradeStore();
       const modelDir = resolveSttModelDir();
       const snap = store.snapshot(modelDir);
-      let fallback = false;
       try {
-        fallback = await readLargeFallback(modelDir);
+        const fallback = await readLargeFallback(modelDir);
+        return {
+          correctionCount: snap.correctionCount,
+          refusedPermanently: snap.refusedPermanently,
+          largeAvailable: snap.largeAvailable,
+          propose: snap.decision === 'propose',
+          fallback
+        };
       } catch {
-        fallback = false;
+        return {
+          correctionCount: snap.correctionCount,
+          refusedPermanently: snap.refusedPermanently,
+          largeAvailable: snap.largeAvailable,
+          propose: snap.decision === 'propose',
+          fallback: false,
+          error: 'fallback-unreadable'
+        };
       }
-      return {
-        correctionCount: snap.correctionCount,
-        refusedPermanently: snap.refusedPermanently,
-        largeAvailable: snap.largeAvailable,
-        propose: snap.decision === 'propose',
-        fallback
-      };
     } catch {
       return {
         correctionCount: 0,

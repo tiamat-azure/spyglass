@@ -127,6 +127,7 @@ export type SpyglassPreloadApi = {
       largeAvailable: boolean;
       propose: boolean;
       fallback: boolean;
+      error?: string;
     }>;
     decide: (action: 'accept' | 'refuse') => Promise<{ ok: boolean; error?: string }>;
     onOffer: (callback: (payload: { propose: boolean }) => void) => () => void;

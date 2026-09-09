@@ -54,4 +54,19 @@ describe('SttUpgradeStore (F-38)', () => {
       correctionCount: 9
     });
   });
+
+  it('serializes concurrent persists so correction counts are not lost (L7-060)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-store-race-'));
+    const path = join(dir, 'stt-upgrade.json');
+    const store = new SttUpgradeStore(path, { STT_UPGRADE_PROMPT_AFTER: '99' });
+    await store.load();
+    await Promise.all([
+      store.recordCorrection(),
+      store.recordCorrection(),
+      store.recordCorrection()
+    ]);
+    expect(store.snapshot(dir).correctionCount).toBe(3);
+    const disk = JSON.parse(await readFile(path, 'utf8')) as { correctionCount: number };
+    expect(disk.correctionCount).toBe(3);
+  });
 });

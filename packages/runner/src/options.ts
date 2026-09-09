@@ -249,13 +249,13 @@ export function parseRunnerArgv(
   if (scenarioPath !== undefined) {
     parsed.scenarioPath = scenarioPath;
   }
-  if (repo !== undefined) {
+  if (repo !== undefined && repo.length > 0) {
     parsed.repo = repo;
   }
-  if (datasetPath !== undefined) {
+  if (datasetPath !== undefined && datasetPath.length > 0) {
     parsed.datasetPath = datasetPath;
   }
-  if (sessionDir !== undefined) {
+  if (sessionDir !== undefined && sessionDir.length > 0) {
     parsed.sessionDir = sessionDir;
   }
   return parsed;
