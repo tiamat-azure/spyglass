@@ -80,10 +80,15 @@ export function chooseWhisperModel(input: {
   return { file: smallModelPath(modelDir), kind: 'small', fallback: input.largeFallback };
 }
 
+/** F-39: first-use latency over budget permanently prefers small. */
 export function shouldFallbackToSmall(latencyMs: number, budgetMs: number): boolean {
   return latencyMs > budgetMs;
 }
 
+/**
+ * L7-042: missing file is `false`; corrupt/unreadable throws.
+ * F16b: `createEngineFromEnv` calls this only when large could be selected.
+ */
 export async function readLargeFallback(modelDir: string): Promise<boolean> {
   let rawText: string;
   try {

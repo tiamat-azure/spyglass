@@ -133,6 +133,38 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await expect(readLargeFallback(dir)).rejects.toThrow(/corrupt large-fallback.json/);
   });
 
+  it('ignores a corrupt large-fallback.json on a small-only setup (F16b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-f16b-small-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
+    const engine = await createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
+    });
+    expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
+  });
+
+  it('fails loud on corrupt large-fallback.json when large would be selected (F16b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-f16b-large-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
+    await expect(
+      createEngineFromEnv({
+        SPYGLASS_STT_ENGINE: 'whisper',
+        STT_MODEL_DIR: dir,
+        STT_BIN: join(dir, 'whisper-cli'),
+        STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
+      })
+    ).rejects.toThrow(/corrupt large-fallback.json/);
+  });
+
   it('honours an explicit custom STT_MODEL_PATH filename (M4a)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-custom-'));
     await mkdir(dir, { recursive: true });

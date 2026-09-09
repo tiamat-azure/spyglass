@@ -52,12 +52,20 @@ export async function createEngineFromEnv(
       const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
       const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
       const smallOk = existsSync(smallPath);
-      const fallback = env.STT_LARGE_FALLBACK === '1' || (await readLargeFallback(modelDir));
       const explicit = env.STT_MODEL_PATH?.trim();
       const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
       const largeOk = existsSync(largePath);
       const explicitIsConventional =
         (smallOk && explicit === smallPath) || (largeOk && explicit === largePath);
+      const envForcedSmall = env.STT_LARGE_FALLBACK === '1';
+      const explicitCustomPath = explicitOk && !explicitIsConventional;
+      // F16b: fail-loud on corrupt/unreadable large-fallback.json only when
+      // large could actually be selected. Small-only and custom STT_MODEL_PATH
+      // setups skip the marker (env STT_LARGE_FALLBACK=1 already short-circuits).
+      let fallback = envForcedSmall;
+      if (largeOk && !envForcedSmall && !explicitCustomPath) {
+        fallback = await readLargeFallback(modelDir);
+      }
       if (explicitOk && !fallback && !explicitIsConventional) {
         // P6a / M4a: honor STT_MODEL_PATH over STT_MODEL_DIR conventional
         // small/large discovery. F3a still prefers large when fallback is

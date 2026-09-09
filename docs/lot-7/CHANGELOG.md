@@ -531,9 +531,20 @@ sync vs async API).
   persist drains that sample (L7-097 overlap retry). `FIRST_USE_RETRY_LIMIT`
   and L7-108 backoff stay.
 
-Ask-user still held: **F16**, **A17**, **E18** (FAKE/SHA256 packaged
+Ask-user still held: **A17**, **E18** (FAKE/SHA256 packaged
 guard), **M18** (`STT_MODEL_FILE` vs large preference), **W18** (`--large`
 ensure small vs incremental).
+
+## Captain lock F16b (corrupt large-fallback only when large selected)
+
+- **F16b:** Fail-loud on corrupt/unreadable `large-fallback.json` only when
+  large could actually be selected (large weights present, not
+  `STT_LARGE_FALLBACK=1`, not a custom `STT_MODEL_PATH`). Small-only
+  engine creation ignores a stray corrupt marker. `readLargeFallback`
+  itself still throws (L7-042). `sttUpgradeStatus` still surfaces
+  `fallback-unreadable` (L7-061).
+
+Ask-user still held: **A17**, **E18**, **M18**, **W18**.
 
 ## CI — macOS Electron e2e close hang
 

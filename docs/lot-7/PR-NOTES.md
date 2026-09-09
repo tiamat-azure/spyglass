@@ -63,12 +63,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (271 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **578 passed**, 1 skipped (61 files) |
+| `pnpm test` | **580 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
 Lot 7-focused unit tests: `lot7-patch.test.ts` (51), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
-`upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
+`upgrade.test.ts` (16), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -158,6 +158,8 @@ Pass-17 (L7-117 … L7-125) is in `CHANGELOG.md`.
 Captain lock **B16a** (checkout starting branch after assisted-apply
 success; leave `spyglass/patch-*` for review) is in `CHANGELOG.md`.
 Pass-18 (L7-126 … L7-127) is in `CHANGELOG.md`.
+Captain lock **F16b** (corrupt `large-fallback.json` fail-loud only when
+large is in play) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -191,3 +193,7 @@ Pass-18 (L7-126 … L7-127) is in `CHANGELOG.md`.
   `currentBranch()` after success (HEAD is the patch branch).
   `spyglass/patch-*` stays local and pushed for review. P12a/P14a
   **failures** stay on the patch branch for L7-084 resume.
+- **F16b:** Corrupt/unreadable `large-fallback.json` fails engine creation
+  only when large could be selected. Small-only setups ignore the marker.
+  Direct `readLargeFallback` still throws (L7-042). Status IPC still
+  reports `fallback-unreadable` (L7-061).
