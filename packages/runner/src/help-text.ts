@@ -20,6 +20,9 @@ const LOT7_FLAGS = `  --dataset <file>
 const REPORT_ABSOLUTE_AND_DEFAULT =
   'Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.\n';
 
+const DATASET_RELATIVE =
+  'Relative --dataset is resolved from dirname(<scenario.json> / this script), not process.cwd() (D27a). Absolute --dataset is used as-is.\n';
+
 const LOT7_HELP = `Lot 7: --dataset applies parameterized fill/select values (F-48). --repo is the
 target project git root for assisted apply (F-64). PATCH_ASSISTED_APPLY defaults
 false; only action.descriptor after 2 consecutive matching runs may open a
@@ -32,7 +35,7 @@ ${F58_FLAGS}
 ${LOT7_FLAGS}
 
 Relative --report is resolved from dirname(<scenario.json>), not process.cwd() (A19a).
-${REPORT_ABSOLUTE_AND_DEFAULT}${LOT7_HELP}`;
+${REPORT_ABSOLUTE_AND_DEFAULT}${DATASET_RELATIVE}${LOT7_HELP}`;
 }
 
 export function generatedHelpText(): string {
@@ -41,5 +44,5 @@ ${F58_FLAGS}
 ${LOT7_FLAGS}
 
 Relative --report is resolved from the scenario directory (this script's folder), not process.cwd() (A19a).
-${REPORT_ABSOLUTE_AND_DEFAULT}${LOT7_HELP}`;
+${REPORT_ABSOLUTE_AND_DEFAULT}${DATASET_RELATIVE}${LOT7_HELP}`;
 }

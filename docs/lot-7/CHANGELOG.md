@@ -895,6 +895,17 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: D27, A27, L27 (not assumed).
 
+## Captain lock D27a (relative --dataset from scenario dir)
+
+- **D27a:** Relative `--dataset` resolves from `dirname(scenarioPath)`
+  (generated `scriptDir` only when the scenario file path is absent),
+  **not** `process.cwd()`. Absolute `--dataset` is unchanged. This is a
+  **breaking change** for callers that passed a cwd-relative dataset
+  path while the scenario file lived in another directory. Use an
+  absolute path or a path relative to the scenario / generated script.
+
+Ask-user still held: A27, L27.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

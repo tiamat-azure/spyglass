@@ -418,6 +418,84 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
   });
 
+  it('prefers dirname(scenarioPath) over cwd and over a conflicting scriptDir (D27a)', async () => {
+    const scenarioDir = await tempDir('spyglass-lot7-d27a-scn-');
+    const cwdDir = await tempDir('spyglass-lot7-d27a-cwd-');
+    const otherDir = await tempDir('spyglass-lot7-d27a-other-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
+    await writeFile(
+      join(scenarioDir, 'scenario.json'),
+      `${JSON.stringify(extracted.scenario, null, 2)}\n`
+    );
+    await writeFile(
+      join(scenarioDir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'bob', values: { user: 'bob', password: 'two' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(
+      join(cwdDir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'cwd', values: { user: 'cwd-user', password: 'cwd-pass' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(
+      join(otherDir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'other', values: { user: 'other-user', password: 'other-pass' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const previous = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const result = await runScenario(extracted.scenario, {
+        driver,
+        aiRecovery: false,
+        datasetPath: 'bob.json',
+        scenarioPath: join(scenarioDir, 'scenario.json'),
+        scriptDir: otherDir
+      });
+      expect(result.exitCode).toBe(0);
+      expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
+    } finally {
+      process.chdir(previous);
+    }
+  });
+
+  it('does not resolve a relative dataset from process.cwd() when scenarioPath is absent (D27a)', async () => {
+    const cwdDir = await tempDir('spyglass-lot7-d27a-nocwd-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
+    await writeFile(
+      join(cwdDir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'cwd', values: { user: 'cwd-user', password: 'cwd-pass' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const previous = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const result = await runScenario(extracted.scenario, {
+        driver,
+        aiRecovery: false,
+        datasetPath: 'bob.json'
+      });
+      expect(result.exitCode).toBe(1);
+      expect(result.report.steps).toEqual([]);
+    } finally {
+      process.chdir(previous);
+    }
+  });
+
   it('redacts parameter values from recovery snapshot text (L7-079)', async () => {
     const secret = 's3cret-password';
     const step = fillStep(0, '#password', secret, 'password');

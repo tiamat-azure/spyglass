@@ -35,6 +35,7 @@ export async function runCli(
     parsed.sessionDir = resolve(parsed.sessionDir);
   }
   if (parsed.datasetPath !== undefined && parsed.datasetPath.length > 0) {
+    // D27a: relative --dataset from dirname(scenario.json), not process.cwd().
     parsed.datasetPath = isAbsolute(parsed.datasetPath)
       ? parsed.datasetPath
       : resolve(dirname(scenarioPath), parsed.datasetPath);

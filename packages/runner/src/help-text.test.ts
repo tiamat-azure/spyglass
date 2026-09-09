@@ -20,6 +20,9 @@ describe('shared F-58 help text (H29a / L6-029)', () => {
     expect(spyglassRunHelpText()).toContain('--repo <git-root>');
     expect(generatedHelpText()).toContain('--dataset <file>');
     expect(generatedHelpText()).toContain('PATCH_ASSISTED_APPLY');
+    expect(spyglassRunHelpText()).toContain('Relative --dataset is resolved from dirname');
+    expect(spyglassRunHelpText()).toContain('not process.cwd() (D27a)');
+    expect(generatedHelpText()).toContain('not process.cwd() (D27a)');
   });
 
   it('cli, generated-run, and run import help-text.ts instead of duplicating flags', async () => {
@@ -33,6 +36,17 @@ describe('shared F-58 help text (H29a / L6-029)', () => {
     expect(cli).not.toContain('--max-ai-retries <n>');
     expect(generated).not.toContain('--max-ai-retries <n>');
     expect(run).not.toContain('--max-ai-retries <n>');
+  });
+
+  it('resolves relative --dataset from dirname(scenario.json), not cwd (D27a)', async () => {
+    const run = await readFile(join(repoRoot(), 'packages/runner/src/run.ts'), 'utf8');
+    const start = run.indexOf('function resolveDatasetPath');
+    expect(start).toBeGreaterThan(-1);
+    const body = run.slice(start);
+    expect(body).toContain('dirname(resolve(scenarioPath))');
+    expect(body).not.toMatch(/\bresolve\(datasetPath\)/);
+    const cli = await readFile(join(repoRoot(), 'packages/runner/src/cli.ts'), 'utf8');
+    expect(cli).toContain('resolve(dirname(scenarioPath), parsed.datasetPath)');
   });
 
   it('resolves --session-dir to an absolute path after parse (L7-104)', async () => {

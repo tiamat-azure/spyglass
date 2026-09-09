@@ -243,6 +243,11 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   as no marker so `resolveWhisperPaths` can return paths/`undefined`
   instead of throwing. F16b factory fail-loud on unreadable/corrupt when
   large is selected is unchanged.
+- **D27a:** Relative `--dataset` is resolved from `dirname(scenarioPath)`
+  (generated script directory when the scenario path is absent), not
+  `process.cwd()`. Breaking for cwd-relative `--dataset` when the
+  scenario lives elsewhere; pass an absolute path or a scenario-relative
+  one.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
@@ -268,4 +273,5 @@ Pass-27 (L7-202 … L7-209): narrow non-ff push detection, explicit
 descriptor identity allow-list, halt keeps next disabled, STT decide
 response type, `GH_PROMPT_DISABLED`, dest-lock same-promise cleanup,
 export staging symlink re-check, aligned large-fallback marker dirs.
-Held: D27, A27, L27.
+**D27a:** relative `--dataset` from `dirname(scenarioPath)`, not cwd
+(breaking for cwd-relative paths). Held: A27, L27.

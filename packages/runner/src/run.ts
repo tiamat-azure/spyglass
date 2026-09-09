@@ -188,7 +188,8 @@ async function runScenarioStandalone(
     ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
     ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {}),
     ...(options.stepGate !== undefined ? { stepGate: options.stepGate } : {}),
-    scriptDir
+    // D27a: do not pass cwd as scriptDir or relative --dataset would follow cwd.
+    ...(options.scriptDir !== undefined ? { scriptDir: options.scriptDir } : {})
   });
 }
 
@@ -838,17 +839,32 @@ async function scenarioWithDataset(
     assertParameterRefsResolved(scenario);
     return scenario;
   }
-  const scriptDir = options.scriptDir;
-  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
-  const fromScenario =
-    scenarioPath !== undefined && scenarioPath.length > 0
-      ? dirname(resolve(scenarioPath))
-      : undefined;
-  const baseDir = scriptDir ?? fromScenario;
-  const absolute =
-    isAbsolute(datasetPath) || baseDir === undefined
-      ? resolve(datasetPath)
-      : resolve(baseDir, datasetPath);
+  const absolute = resolveDatasetPath(datasetPath, resolved, options);
   const raw = await loadDatasetFile(absolute);
   return applyDataset(scenario, parseDataset(raw));
+}
+
+/**
+ * D27a: relative `--dataset` is resolved from `dirname(scenarioPath)` (generated
+ * `scriptDir` when the scenario file path is absent), never `process.cwd()`.
+ */
+function resolveDatasetPath(
+  datasetPath: string,
+  resolved: ReturnType<typeof resolveRunnerOptions>,
+  options: RunScenarioHooks
+): string {
+  if (isAbsolute(datasetPath)) {
+    return resolve(datasetPath);
+  }
+  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+  if (scenarioPath !== undefined && scenarioPath.length > 0) {
+    return resolve(dirname(resolve(scenarioPath)), datasetPath);
+  }
+  const scriptDir = options.scriptDir;
+  if (scriptDir !== undefined && scriptDir.length > 0) {
+    return resolve(scriptDir, datasetPath);
+  }
+  throw new Error(
+    'relative --dataset is resolved from dirname(scenario.json), not process.cwd() (D27a)'
+  );
 }

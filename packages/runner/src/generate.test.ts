@@ -88,6 +88,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(readme).toContain('--ai');
     expect(readme).toContain('--report');
     expect(readme).toMatch(/pas.*process\.cwd\(\)|A19a/i);
+    expect(readme).toContain('--dataset');
+    expect(readme).toContain('D27a');
     expect(readme).toContain('--trace');
     expect(readme).toContain(RUNNER_PACKAGE);
     const manifest = JSON.parse(await readFile(paths.packageJson, 'utf8')) as {

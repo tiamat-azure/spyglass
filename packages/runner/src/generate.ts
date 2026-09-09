@@ -367,7 +367,7 @@ absolu — or les scénarios capturés le sont. Avec \`--base-url\` :
 | \`--ai\` | force le rattrapage (même en CI) |
 | \`--report <dir>\` | dossier du rapport (\`report.json\`). Chemin **relatif** : répertoire de \`scenario.json\` / \`scenario.ts\`, **pas** \`process.cwd()\` (A19a). Chemin absolu inchangé. |
 | \`--trace\` | écrit \`trace.zip\` (chemin Windows-safe) |
-| \`--dataset <file>\` | jeu de données JSON (F-48). Relatif au répertoire du script. Distinct datasets replay the same parameterized scenario. |
+| \`--dataset <file>\` | jeu de données JSON (F-48). Chemin **relatif** : répertoire de \`scenario.json\` / \`scenario.ts\`, **pas** \`process.cwd()\` (D27a). Chemin absolu inchangé. Distinct datasets replay the same parameterized scenario. |
 | \`--repo <git-root>\` | dépôt **cible** pour l'application assistée (F-64). Arbre sale refusé. |
 | \`--session-dir <dir>\` | session Spyglass (\`health.json\`) si le rapport n'est pas sous \`runs/<runId>\` |
 
