@@ -503,6 +503,7 @@ const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
 const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
 const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
 const sttUpgradeCopy = requireEl<HTMLElement>('stt-upgrade-copy');
+const sttUpgradeAccept = requireEl<HTMLButtonElement>('stt-upgrade-accept');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -875,20 +876,27 @@ sessionImportBtn.addEventListener('click', () => {
   });
 });
 
-requireEl<HTMLButtonElement>('stt-upgrade-accept').addEventListener('click', () => {
-  if (api === undefined) {
+sttUpgradeAccept.addEventListener('click', () => {
+  if (api === undefined || sttUpgradeAccept.disabled) {
     return;
   }
-  void api.sttUpgrade.decide('accept').then((result) => {
-    if (result.ok) {
-      sttUpgrade.hidden = true;
-      return;
-    }
-    sttUpgradeCopy.textContent =
-      result.error === 'timeout'
-        ? 'Téléchargement trop long. Réessayez ou refusez définitivement.'
-        : 'Téléchargement impossible. Réessayez ou refusez définitivement.';
-  });
+  sttUpgradeAccept.disabled = true;
+  sttUpgradeCopy.textContent = 'Téléchargement en cours…';
+  void api.sttUpgrade
+    .decide('accept')
+    .finally(() => {
+      sttUpgradeAccept.disabled = false;
+    })
+    .then((result) => {
+      if (result.ok) {
+        sttUpgrade.hidden = true;
+        return;
+      }
+      sttUpgradeCopy.textContent =
+        result.error === 'timeout'
+          ? 'Téléchargement trop long. Réessayez ou refusez définitivement.'
+          : 'Téléchargement impossible. Réessayez ou refusez définitivement.';
+    });
 });
 
 requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () => {

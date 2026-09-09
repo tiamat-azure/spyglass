@@ -11,7 +11,6 @@ import type {
 import { descriptorHash } from './descriptor-hash.ts';
 import {
   currentBranch,
-  DEFAULT_BRANCH_NAMES,
   defaultGitExec,
   detectDefaultBranch,
   type GitExec,
@@ -229,15 +228,25 @@ export async function applyAssistedPatches(input: {
   const branch = patchBranchName(input.suggested.sessionId, hash);
 
   if (startingBranch !== defaultBranch) {
-    await gitOkOrThrow(git, repoRoot, ['checkout', defaultBranch]);
+    const switched = await checkoutOrGitError(git, repoRoot, startingBranch, [
+      'checkout',
+      defaultBranch
+    ]);
+    if (switched !== undefined) {
+      return switched;
+    }
   }
-  await gitOkOrThrow(git, repoRoot, ['checkout', '-b', branch]);
+  const created = await checkoutOrGitError(git, repoRoot, startingBranch, [
+    'checkout',
+    '-b',
+    branch
+  ]);
+  if (created !== undefined) {
+    return created;
+  }
   const onBranch = await currentBranch(git, repoRoot);
-  if (
-    isDefaultBranchName(onBranch, defaultBranch) ||
-    DEFAULT_BRANCH_NAMES.includes(onBranch as 'main')
-  ) {
-    await git(['checkout', startingBranch], repoRoot).catch(() => undefined);
+  if (isDefaultBranchName(onBranch, defaultBranch)) {
+    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
     return { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' };
   }
 
@@ -384,6 +393,27 @@ async function gitOkOrThrow(git: GitExec, cwd: string, args: readonly string[]):
   return result.stdout;
 }
 
+async function checkoutOrGitError(
+  git: GitExec,
+  cwd: string,
+  startingBranch: string,
+  args: readonly string[]
+): Promise<AssistedApplyRefusal | undefined> {
+  try {
+    await gitOkOrThrow(git, cwd, args);
+    return undefined;
+  } catch (error) {
+    await git(['checkout', '-f', startingBranch], cwd).catch(() => undefined);
+    return {
+      ok: false,
+      code: 'git-error',
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+const GH_PR_CREATE_TIMEOUT_MS = 120_000;
+
 async function tryGhPrCreate(input: {
   repo: string;
   branch: string;
@@ -410,7 +440,12 @@ async function tryGhPrCreate(input: {
         '--body',
         input.body
       ],
-      { cwd: input.repo, encoding: 'utf8' }
+      {
+        cwd: input.repo,
+        encoding: 'utf8',
+        timeout: GH_PR_CREATE_TIMEOUT_MS,
+        killSignal: 'SIGKILL'
+      }
     );
     const url = result.stdout
       .split('\n')

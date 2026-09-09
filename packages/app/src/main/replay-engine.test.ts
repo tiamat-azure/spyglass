@@ -606,4 +606,90 @@ describe('ReplayEngine', () => {
       expect(halted.error).toMatch(/stopped by user/);
     }
   });
+
+  it('ignores idle stop/next so the next stepwise run is not aborted at step 0 (L7-021)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-idle-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    const second: RefinedStep = {
+      ...clickStep('#b'),
+      index: 1,
+      sourceEvents: ['evt_000002'],
+      verification: {
+        type: 'elementVisible',
+        expected: '#b',
+        strength: 'strong',
+        confirmedByUser: true
+      }
+    };
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#a'), second]
+      }),
+      'utf8'
+    );
+    let state = 'finalized';
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () =>
+        new MemoryPageDriver({
+          elements: [
+            { selector: '#a', visible: true },
+            { selector: '#b', visible: true }
+          ]
+        }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    engine.stop();
+    engine.next();
+    engine.next();
+    const started = engine.start({ noAi: true, stepByStep: true });
+    engine.next();
+    engine.next();
+    const result = await started;
+    expect(result.ok).toBe(true);
+  });
 });

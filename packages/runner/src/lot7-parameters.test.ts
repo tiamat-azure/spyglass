@@ -314,6 +314,34 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest);
     await expect(readFile(join(dest, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+    await expect(readFile(join(root, 'bundle.spyglass-prev', 'stale.txt'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+  });
+
+  it('replaces an existing import dest and does not leave a spyglass-prev backup (L7-030)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-import-replace-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const sessionsRoot = join(root, 'imported');
+    const existing = join(sessionsRoot, 'ses_export');
+    await mkdir(existing, { recursive: true });
+    await writeFile(join(existing, 'stale.txt'), 'old\n', 'utf8');
+    const imported = await importSessionFolder(dest, sessionsRoot);
+    expect(imported.sessionDir).toBe(existing);
+    await expect(readFile(join(existing, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(join(existing, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+    await expect(
+      readFile(join(sessionsRoot, 'ses_export.spyglass-prev', 'stale.txt'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

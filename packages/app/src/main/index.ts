@@ -96,6 +96,7 @@ let activeRefine: RefineEngine | undefined;
 let activeReplay: ReplayEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
 let sttUpgradeStore: SttUpgradeStore | undefined;
+let sttUpgradeStoreLoading: Promise<SttUpgradeStore> | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -275,10 +276,20 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
   if (sttUpgradeStore !== undefined) {
     return sttUpgradeStore;
   }
-  const store = new SttUpgradeStore(sttUpgradeStorePath(app.getPath('userData')), process.env);
-  await store.load();
-  sttUpgradeStore = store;
-  return store;
+  if (sttUpgradeStoreLoading === undefined) {
+    sttUpgradeStoreLoading = (async () => {
+      const store = new SttUpgradeStore(sttUpgradeStorePath(app.getPath('userData')), process.env);
+      await store.load();
+      sttUpgradeStore = store;
+      return store;
+    })();
+  }
+  try {
+    return await sttUpgradeStoreLoading;
+  } catch (error) {
+    sttUpgradeStoreLoading = undefined;
+    throw error;
+  }
 }
 
 function emitToChrome(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -788,13 +799,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     const edited = await requireSession().recordVoiceEdited(payload.eventId, payload.text);
     if (edited !== undefined) {
-      const store = await ensureSttUpgradeStore();
-      await store.recordCorrection();
-      const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
-      const snap = store.snapshot(modelDir);
-      const win = winRef.current;
-      if (win !== undefined && snap.decision === 'propose') {
-        emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
+      try {
+        const store = await ensureSttUpgradeStore();
+        await store.recordCorrection();
+        const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+        const snap = store.snapshot(modelDir);
+        const win = winRef.current;
+        if (win !== undefined && snap.decision === 'propose') {
+          emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
+        }
+      } catch {
+        /* L7-022: upgrade bookkeeping must not fail voice-edit */
       }
     }
     return { ok: edited !== undefined };
@@ -967,16 +982,26 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         fallback: false
       };
     }
-    const store = await ensureSttUpgradeStore();
-    const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
-    const snap = store.snapshot(modelDir);
-    return {
-      correctionCount: snap.correctionCount,
-      refusedPermanently: snap.refusedPermanently,
-      largeAvailable: snap.largeAvailable,
-      propose: snap.decision === 'propose',
-      fallback: false
-    };
+    try {
+      const store = await ensureSttUpgradeStore();
+      const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+      const snap = store.snapshot(modelDir);
+      return {
+        correctionCount: snap.correctionCount,
+        refusedPermanently: snap.refusedPermanently,
+        largeAvailable: snap.largeAvailable,
+        propose: snap.decision === 'propose',
+        fallback: false
+      };
+    } catch {
+      return {
+        correctionCount: 0,
+        refusedPermanently: false,
+        largeAvailable: false,
+        propose: false,
+        fallback: false
+      };
+    }
   });
 
   ipcMain.handle(IPC.sttUpgradeDecide, async (event, raw: unknown) => {

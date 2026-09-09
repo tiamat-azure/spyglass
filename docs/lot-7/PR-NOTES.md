@@ -101,6 +101,10 @@ Pass-2 (L7-009 … L7-016) and Captain lock **P2a** (dataset missing
 Pass-3 (L7-017 … L7-020), **W3a** (`--large` atomic download), and
 **F3a** (`readLargeFallback` honours `fallback: false`) are in
 `CHANGELOG.md`.
+Pass-4 (L7-021 … L7-031) is in `CHANGELOG.md`. Ask-user items (F-47
+`window.prompt`, default `STT_LARGE_SHA256`, duplicate `parameterRef`,
+custom `STT_MODEL_PATH` names, `sttUpgradeStatus` `fallback: false`) are
+unchanged.
 
 ## Residuals
 

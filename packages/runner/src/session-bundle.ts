@@ -38,8 +38,7 @@ export async function exportSessionFolder(
     };
     const manifestPath = join(staging, SESSION_BUNDLE_MANIFEST);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-    await rm(dest, { recursive: true, force: true });
-    await rename(staging, dest);
+    await replaceDirectory(dest, staging);
     return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
   } catch (error) {
     await rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -64,8 +63,14 @@ export async function importSessionFolder(
   }
   await assertNoCopyOverlap(source, dest);
   await mkdir(root, { recursive: true });
-  await rm(dest, { recursive: true, force: true });
-  await cp(source, dest, { recursive: true, dereference: false });
+  const staging = await mkdtemp(join(root, '.spyglass-import-'));
+  try {
+    await cp(source, staging, { recursive: true, dereference: false });
+    await replaceDirectory(dest, staging);
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
   return { sessionDir: dest, sessionId };
 }
 
@@ -119,5 +124,33 @@ async function realpathExisting(path: string): Promise<string> {
     } catch {
       return resolve(path);
     }
+  }
+}
+
+/** L7-030: move dest aside, then publish staging; restore dest if publish fails. */
+async function replaceDirectory(dest: string, staging: string): Promise<void> {
+  const backup = `${dest}.spyglass-prev`;
+  let backedUp = false;
+  try {
+    await rm(backup, { recursive: true, force: true });
+    try {
+      await rename(dest, backup);
+      backedUp = true;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw err;
+      }
+    }
+    await rename(staging, dest);
+    if (backedUp) {
+      await rm(backup, { recursive: true, force: true });
+    }
+  } catch (error) {
+    if (backedUp) {
+      await rm(dest, { recursive: true, force: true }).catch(() => undefined);
+      await rename(backup, dest).catch(() => undefined);
+    }
+    throw error;
   }
 }

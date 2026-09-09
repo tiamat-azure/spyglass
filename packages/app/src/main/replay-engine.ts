@@ -54,7 +54,7 @@ export class ReplayEngine {
   constructor(private readonly deps: ReplayEngineDeps) {}
 
   next(): void {
-    if (this.pendingStop) {
+    if (!this.running || this.pendingStop) {
       return;
     }
     const waiting = this.waiting;
@@ -67,6 +67,9 @@ export class ReplayEngine {
   }
 
   stop(): void {
+    if (!this.running) {
+      return;
+    }
     this.pendingStop = true;
     this.pendingContinues = 0;
     const waiting = this.waiting;
@@ -88,28 +91,28 @@ export class ReplayEngine {
     if (sessionDir === undefined || sessionId === undefined) {
       return { ok: false, error: 'no session directory' };
     }
-    let scenario: Scenario;
-    try {
-      scenario = await loadFinalizedScenario(sessionDir);
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-    const env = this.deps.env ?? process.env;
-    const aiRecovery = aiRecoveryEnabled({
-      noAi: request.noAi === true,
-      forceAi: request.forceAi === true,
-      env
-    });
-    const runId = newRunId();
-    const runDir = join(sessionDir, 'runs', runId);
-    await mkdir(runDir, { recursive: true });
-    const skipObserve = env.SPYGLASS_LLM_TRANSPORT === 'mock' || isLlmOffline(env);
-    const recoverer = aiRecovery
-      ? new LlmRecoverer(this.deps.gateway(), skipObserve ? undefined : this.deps.observe)
-      : undefined;
     this.running = true;
     session.beginReplay();
     try {
+      let scenario: Scenario;
+      try {
+        scenario = await loadFinalizedScenario(sessionDir);
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      const env = this.deps.env ?? process.env;
+      const aiRecovery = aiRecoveryEnabled({
+        noAi: request.noAi === true,
+        forceAi: request.forceAi === true,
+        env
+      });
+      const runId = newRunId();
+      const runDir = join(sessionDir, 'runs', runId);
+      await mkdir(runDir, { recursive: true });
+      const skipObserve = env.SPYGLASS_LLM_TRANSPORT === 'mock' || isLlmOffline(env);
+      const recoverer = aiRecovery
+        ? new LlmRecoverer(this.deps.gateway(), skipObserve ? undefined : this.deps.observe)
+        : undefined;
       const result: RunScenarioResult = await runScenario(scenario, {
         driver: this.deps.driver(),
         aiRecovery,

@@ -12,7 +12,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 import { applyAssistedPatches, assertAssistedApplyAllowed } from './assisted-apply.ts';
 import { descriptorHash } from './descriptor-hash.ts';
-import { defaultGitExec } from './git-repo.ts';
+import { defaultGitExec, isDefaultBranchName } from './git-repo.ts';
 import {
   emptyHealth,
   healthStatus,
@@ -512,6 +512,53 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
     expect(branch.stdout.trim()).toBe('main');
   });
+
+  it('returns git-error when checkout -b fails and restores starting branch (L7-025)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-checkout-b-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'checkout' && args[1] === '-b') {
+        return {
+          stdout: '',
+          stderr: 'fatal: a branch named spyglass/patch already exists',
+          code: 128
+        };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('git-error');
+    }
+    const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
+    expect(branch.stdout.trim()).toBe('main');
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+  });
+
+  it('folds DEFAULT_BRANCH_NAMES into isDefaultBranchName (L7-031)', () => {
+    expect(isDefaultBranchName('main')).toBe(true);
+    expect(isDefaultBranchName('master')).toBe(true);
+    expect(isDefaultBranchName('develop')).toBe(false);
+    expect(isDefaultBranchName('develop', 'develop')).toBe(true);
+  });
 });
 
 describe('Lot 7 health.json wiring after recovery', () => {
@@ -543,6 +590,63 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates).toHaveLength(1);
     expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
     expect(health.status).toBe('healthy');
+  });
+
+  it('resets candidates after a clean success so a later recovery does not promote (L7-028)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-clean-run-'));
+    const broken = clickStep(0, '#target');
+    broken.verification.expected = '#alive';
+    broken.verification.timeoutMs = 50;
+    const scn = scenario([broken]);
+    const recover = async (runId: string) => {
+      const driver = new MemoryPageDriver({
+        url: 'https://exemple.test/start',
+        elements: [
+          { selector: '#target', visible: false },
+          { selector: '#alt', visible: true },
+          { selector: '#alive', visible: true }
+        ]
+      });
+      driver.failSelectors.add('#target');
+      return await runScenario(scn, {
+        driver,
+        aiRecovery: true,
+        recoverer: new StaticRecoverer({ type: 'click', selector: '#alt' }, 'recovered'),
+        reportDir: join(sessionDir, 'runs', runId),
+        sessionDir,
+        runId,
+        env: { PATCH_ASSISTED_APPLY: 'false' }
+      });
+    };
+    await recover('run_a');
+    let health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
+
+    const cleanDriver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [
+        { selector: '#target', visible: true },
+        { selector: '#alive', visible: true }
+      ]
+    });
+    const clean = await runScenario(scn, {
+      driver: cleanDriver,
+      aiRecovery: false,
+      reportDir: join(sessionDir, 'runs', 'run_b'),
+      sessionDir,
+      runId: 'run_b',
+      env: { PATCH_ASSISTED_APPLY: 'false' }
+    });
+    expect(clean.exitCode).toBe(0);
+    expect(clean.suggestedPatch).toBeUndefined();
+    health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates).toEqual([]);
+
+    await recover('run_c');
+    health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates).toHaveLength(1);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_c']);
   });
 
   it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', async () => {
@@ -641,5 +745,28 @@ describe('saveHealth schema', () => {
       /corrupt health.json: schema validation failed/
     );
     expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ schemaVersion: 1 });
+  });
+
+  it('resets when loaded health.json sessionId does not match (L7-029)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-session-mismatch-'));
+    const foreign = {
+      schemaVersion: 1,
+      sessionId: 'ses_other',
+      status: 'stale',
+      appliedPatches: 4,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:deadbeef',
+          consecutiveRuns: 2,
+          lastRunId: 'run_x',
+          runIds: ['run_w', 'run_x']
+        }
+      ]
+    };
+    await writeFile(join(dir, 'health.json'), `${JSON.stringify(foreign, null, 2)}\n`, 'utf8');
+    const health = await loadHealth(dir, 'ses_lot7');
+    expect(health).toEqual(emptyHealth('ses_lot7'));
+    expect(JSON.parse(await readFile(join(dir, 'health.json'), 'utf8'))).toEqual(foreign);
   });
 });

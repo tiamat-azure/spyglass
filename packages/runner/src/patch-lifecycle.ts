@@ -43,6 +43,7 @@ export async function processSuggestedPatch(input: {
     return {};
   }
   let health = await loadHealth(sessionDir, input.suggested.sessionId);
+  // L7-028: empty patches still record — a clean run resets F-63 candidates.
   health = recordSuggestedPatches(health, input.suggested, policy);
   const healthPath = await saveHealth(sessionDir, health);
   const result: PatchLifecycleResult = { health, healthPath };

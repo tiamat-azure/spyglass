@@ -73,3 +73,35 @@
 - **F3a:** Engine resolution uses `readLargeFallback` and honours
   `fallback: false` in `large-fallback.json`; marker file presence alone
   does not force small forever.
+
+## Pass-4 adversarial fixes (L7-021 … L7-031)
+
+- **L7-021:** Idle `ReplayEngine.stop()` / `next()` are no-ops when no
+  run is in progress, so leftover `pendingStop` cannot abort the next
+  pas-à-pas replay at step 0. `running` is set before the first await so
+  L7-004 queued next/stop still works.
+- **L7-022:** Voice-edit still records the transcript; STT upgrade
+  `recordCorrection` is wrapped so store failures cannot fail the IPC.
+- **L7-023:** `sttUpgradeStatus` returns a safe default object when the
+  store cannot load (`fallback: false` unchanged).
+- **L7-024:** `ensureSttUpgradeStore` caches the in-flight load promise
+  so concurrent IPC cannot discard `correctionCount`.
+- **L7-025:** Checkout / `checkout -b` failures (including branch already
+  exists) return `code: 'git-error'` and restore `startingBranch`. Commit
+  failures still throw (L7-012).
+- **L7-026:** `gh pr create` uses a 120s `execFile` timeout and
+  `SIGKILL` so a hung `gh` cannot block after commit.
+- **L7-027:** The STT upgrade accept button is disabled and shows
+  “Téléchargement en cours…” while the large download runs.
+- **L7-028:** A successful run with no suggested patch still records
+  through `processSuggestedPatch`, which invalidates F-63 candidates so
+  two matching recoveries separated by a clean run cannot promote.
+- **L7-029:** `loadHealth` returns empty counters when `health.json`
+  `sessionId` does not match the current session (no cross-session
+  `appliedPatches` / candidates).
+- **L7-030:** Session export and import replace dest by renaming it
+  aside, then publishing the staging directory; dest is restored if
+  publish fails.
+- **L7-031:** `isDefaultBranchName` folds `DEFAULT_BRANCH_NAMES` (optional
+  detected default included); assisted apply no longer casts the branch
+  name.

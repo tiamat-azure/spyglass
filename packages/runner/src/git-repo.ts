@@ -72,8 +72,11 @@ export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<s
   return (await currentBranch(exec, cwd)) || 'main';
 }
 
-export function isDefaultBranchName(branch: string, defaultBranch: string): boolean {
-  return branch === defaultBranch || DEFAULT_BRANCH_NAMES.includes(branch as 'main' | 'master');
+export function isDefaultBranchName(branch: string, defaultBranch?: string): boolean {
+  if (defaultBranch !== undefined && branch === defaultBranch) {
+    return true;
+  }
+  return DEFAULT_BRANCH_NAMES.some((name) => name === branch);
 }
 
 export function patchBranchName(sessionId: string, hash: string): string {
