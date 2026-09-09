@@ -1114,6 +1114,11 @@ Ask-user still held: D29, O29, A30, I30.
   value wins on `dataset.values`. No unique-ify logic, conflict
   warn/error, or second name for the explicit step.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**709 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 67.
+
+Ask-user still held: O29, A30, I30.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
