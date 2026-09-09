@@ -1134,6 +1134,11 @@ Ask-user still held: O29, A30, I30.
   `existingLargeOk` (size ≥ `STT_LARGE_MIN_BYTES`), same as
   `existingCliOk` / `existingSmallOk`.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**713 passed**, 1 skipped (62 files).
+
+Ask-user still held: O29, A30, I30, C31, W31.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
