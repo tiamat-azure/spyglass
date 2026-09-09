@@ -21,8 +21,9 @@ function send(connection: LocalWsConnection, message: ServerMessage): void {
 
 export async function startSidecarServer(
   env: NodeJS.ProcessEnv = process.env,
-  engine: SttEngine = createEngineFromEnv(env)
+  provided?: SttEngine
 ): Promise<SidecarHandle> {
+  const engine = provided ?? (await createEngineFromEnv(env));
   const sessions = new Map<string, Session>();
   let current: Session | undefined;
 

@@ -46,6 +46,25 @@ function clickStep(index: number, selector: string): RefinedStep {
   };
 }
 
+function fillStep(index: number, selector: string, value: string, ref: string): RefinedStep {
+  return {
+    index,
+    intent: 'Je saisis',
+    action: {
+      type: 'fill',
+      parameterRef: ref,
+      descriptor: { type: 'fill', selector, arguments: [value] }
+    },
+    verification: {
+      type: 'elementVisible',
+      expected: selector,
+      strength: 'strong',
+      confirmedByUser: true
+    },
+    sourceEvents: [`evt_${String(index + 1).padStart(6, '0')}`]
+  };
+}
+
 function scenario(steps: RefinedStep[]): Scenario {
   return {
     schemaVersion: 1,
@@ -524,6 +543,59 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates).toHaveLength(1);
     expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
     expect(health.status).toBe('healthy');
+  });
+
+  it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-dataset-persist-'));
+    const repo = join(root, 'repo');
+    const sessionDir = join(root, 'session');
+    await mkdir(repo, { recursive: true });
+    await mkdir(sessionDir, { recursive: true });
+    await initGitRepo(repo);
+    const click = clickStep(1, '#old');
+    click.verification.expected = '#new';
+    click.verification.timeoutMs = 50;
+    const scn = scenario([fillStep(0, '#password', 'recorded-secret', 'password'), click]);
+    const scenarioPath = join(repo, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
+    const datasetPath = join(root, 'dataset.json');
+    await writeFile(
+      datasetPath,
+      `${JSON.stringify({ schemaVersion: 1, name: 'live', values: { password: 'dataset-secret' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    for (const runId of ['run_a', 'run_b'] as const) {
+      const driver = new MemoryPageDriver({
+        url: 'https://exemple.test/start',
+        elements: [
+          { selector: '#password', visible: true, value: '' },
+          { selector: '#old', visible: false },
+          { selector: '#new', visible: true }
+        ]
+      });
+      driver.failSelectors.add('#old');
+      const result = await runScenario(scn, {
+        driver,
+        aiRecovery: true,
+        recoverer: new StaticRecoverer({ type: 'click', selector: '#new' }, 'recovered'),
+        reportDir: join(sessionDir, 'runs', runId),
+        sessionDir,
+        scenarioPath,
+        repo,
+        datasetPath,
+        runId,
+        env: { PATCH_ASSISTED_APPLY: 'true' }
+      });
+      expect(driver.fills.map((row) => row.value)).toEqual(['dataset-secret']);
+      if (runId === 'run_b') {
+        expect(result.assistedApply?.ok).toBe(true);
+      }
+    }
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
+    expect(onDisk.steps[1]?.action.descriptor.selector).toBe('#new');
   });
 });
 

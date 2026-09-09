@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -23,5 +23,35 @@ describe('SttUpgradeStore (F-38)', () => {
     };
     expect(disk.refusedPermanently).toBe(true);
     expect(disk.correctionCount).toBe(2);
+  });
+
+  it('treats a missing file as empty defaults (L7-017)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-store-miss-'));
+    const store = new SttUpgradeStore(join(dir, 'stt-upgrade.json'));
+    await store.load();
+    expect(store.snapshot(dir).refusedPermanently).toBe(false);
+    expect(store.snapshot(dir).correctionCount).toBe(0);
+  });
+
+  it('throws on corrupt JSON and does not reset a permanent refusal on disk (L7-017)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-store-bad-'));
+    const path = join(dir, 'stt-upgrade.json');
+    const corrupt = '{not json';
+    await writeFile(path, corrupt, 'utf8');
+    const store = new SttUpgradeStore(path, { STT_UPGRADE_PROMPT_AFTER: '2' });
+    await expect(store.load()).rejects.toThrow(/corrupt stt-upgrade.json: invalid JSON/);
+    expect(await readFile(path, 'utf8')).toBe(corrupt);
+  });
+
+  it('throws when refusedPermanently is missing rather than defaulting to false (L7-017)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-store-partial-'));
+    const path = join(dir, 'stt-upgrade.json');
+    await writeFile(path, `${JSON.stringify({ schemaVersion: 1, correctionCount: 9 })}\n`, 'utf8');
+    const store = new SttUpgradeStore(path);
+    await expect(store.load()).rejects.toThrow(/refusedPermanently/);
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({
+      schemaVersion: 1,
+      correctionCount: 9
+    });
   });
 });

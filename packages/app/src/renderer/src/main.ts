@@ -884,7 +884,10 @@ requireEl<HTMLButtonElement>('stt-upgrade-accept').addEventListener('click', () 
       sttUpgrade.hidden = true;
       return;
     }
-    sttUpgradeCopy.textContent = 'Téléchargement impossible. Réessayez ou refusez définitivement.';
+    sttUpgradeCopy.textContent =
+      result.error === 'timeout'
+        ? 'Téléchargement trop long. Réessayez ou refusez définitivement.'
+        : 'Téléchargement impossible. Réessayez ou refusez définitivement.';
   });
 });
 

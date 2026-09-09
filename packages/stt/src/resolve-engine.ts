@@ -10,9 +10,9 @@ import {
 import {
   chooseWhisperModel,
   parseMaxLatencyMs,
+  readLargeFallback,
   recordFirstUseLatency,
   resolveSttModelDir,
-  STT_FALLBACK_MARKER,
   STT_LARGE_MODEL_FILE,
   STT_SMALL_MODEL_FILE
 } from './upgrade.ts';
@@ -28,7 +28,9 @@ export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttE
   return whisperAvailable(env) ? 'whisper' : 'mock';
 }
 
-export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEngine {
+export async function createEngineFromEnv(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<SttEngine> {
   const name = resolveSttEngineName(env);
   if (name === 'whisper') {
     const paths = resolveWhisperPaths(env);
@@ -50,8 +52,7 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
       const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
       const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
       const smallOk = existsSync(smallPath);
-      const fallback =
-        env.STT_LARGE_FALLBACK === '1' || existsSync(join(modelDir, STT_FALLBACK_MARKER));
+      const fallback = env.STT_LARGE_FALLBACK === '1' || (await readLargeFallback(modelDir));
       const choice = chooseWhisperModel({
         ...(existsSync(largePath) ? { largePath } : {}),
         ...(smallOk ? { smallPath } : {}),

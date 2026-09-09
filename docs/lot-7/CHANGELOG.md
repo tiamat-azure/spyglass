@@ -56,3 +56,20 @@
   streaming.
 - **L7-016:** Large→small fallback requires a real `ggml-small-q5_1.bin`;
   large weights are never used as the small engine.
+
+## Pass-3 adversarial fixes (L7-017 … L7-020) + W3a + F3a
+
+- **L7-017:** `stt-upgrade.json` load treats ENOENT as empty defaults.
+  Corrupt JSON, unreadable files, or missing `refusedPermanently` throw;
+  a permanent refuse is not reset.
+- **L7-018:** Large STT download uses a bounded `AbortSignal` timeout and
+  surfaces `ok: false` (`error: timeout` when aborted) to the renderer.
+- **L7-019:** Assisted apply persists the recorded scenario object, not
+  the dataset-materialized copy (secrets stay out of `scenario.json` / PR).
+- **L7-020:** Session export refuses dest-inside-source overlap and copies
+  via a temp directory so re-export does not keep stale files.
+- **W3a:** `scripts/fetch-whisper.mjs --large` downloads through
+  `downloadResponseToFileAtomic` (size floor + atomic rename).
+- **F3a:** Engine resolution uses `readLargeFallback` and honours
+  `fallback: false` in `large-fallback.json`; marker file presence alone
+  does not force small forever.

@@ -11,6 +11,11 @@ import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  downloadResponseToFileAtomic,
+  STT_LARGE_DOWNLOAD_TIMEOUT_MS
+} from '../packages/stt/src/download-model.ts';
+import { STT_LARGE_MODEL_FILE, STT_LARGE_MODEL_URL } from '../packages/stt/src/upgrade.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'vendor/whisper');
@@ -53,12 +58,13 @@ async function main() {
   const large = process.argv.includes('--large');
   await mkdir(outDir, { recursive: true });
   if (large) {
-    const largeName = 'ggml-large-v3-turbo-q5_0.bin';
-    const largeUrl =
-      'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
-    const largePath = join(outDir, largeName);
-    process.stdout.write(`Downloading ${largeName} (optional STT upgrade, ~575MB)…\n`);
-    await download(largeUrl, largePath);
+    const largePath = join(outDir, STT_LARGE_MODEL_FILE);
+    process.stdout.write(`Downloading ${STT_LARGE_MODEL_FILE} (optional STT upgrade, ~575MB)…\n`);
+    const response = await fetch(STT_LARGE_MODEL_URL, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(STT_LARGE_DOWNLOAD_TIMEOUT_MS)
+    });
+    await downloadResponseToFileAtomic({ dest: largePath, response });
     process.stdout.write(`Wrote ${largePath}\nKeep ggml-small-q5_1.bin as fallback (F-39).\n`);
     return;
   }

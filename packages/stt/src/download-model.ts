@@ -7,6 +7,8 @@ import { pipeline } from 'node:stream/promises';
 
 /** Reject HTML/error bodies when downloading the ~575 Mo large model. */
 export const STT_LARGE_MIN_BYTES = 1_000_000;
+/** Bound hung Hugging Face fetches so upgrade IPC cannot stall forever (L7-018). */
+export const STT_LARGE_DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
 export type StreamToFileAtomicInput = {
   dest: string;
@@ -101,6 +103,38 @@ export async function downloadResponseToFileAtomic(input: {
     opts.expectedSha256 = input.expectedSha256;
   }
   return await streamToFileAtomic(opts);
+}
+
+export function sttLargeDownloadTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.STT_LARGE_DOWNLOAD_TIMEOUT_MS;
+  if (raw === undefined || raw.trim().length === 0) {
+    return STT_LARGE_DOWNLOAD_TIMEOUT_MS;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : STT_LARGE_DOWNLOAD_TIMEOUT_MS;
+}
+
+export async function downloadUrlToFileAtomic(input: {
+  dest: string;
+  url: string;
+  timeoutMs?: number;
+  expectedSha256?: string;
+  minBytes?: number;
+}): Promise<{ bytes: number; sha256: string }> {
+  const timeoutMs = input.timeoutMs ?? STT_LARGE_DOWNLOAD_TIMEOUT_MS;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const response = await fetch(input.url, { redirect: 'follow', signal });
+  const opts: Parameters<typeof downloadResponseToFileAtomic>[0] = {
+    dest: input.dest,
+    response
+  };
+  if (input.minBytes !== undefined) {
+    opts.minBytes = input.minBytes;
+  }
+  if (input.expectedSha256 !== undefined && input.expectedSha256.length > 0) {
+    opts.expectedSha256 = input.expectedSha256;
+  }
+  return await downloadResponseToFileAtomic(opts);
 }
 
 export async function fileSize(path: string): Promise<number> {

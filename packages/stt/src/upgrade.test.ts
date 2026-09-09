@@ -7,6 +7,7 @@ import {
   chooseWhisperModel,
   parseUpgradePromptAfter,
   recordFirstUseLatency,
+  STT_FALLBACK_MARKER,
   STT_LARGE_MODEL_FILE,
   STT_SMALL_MODEL_FILE,
   shouldProposeUpgrade
@@ -78,7 +79,7 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
     await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
-    expect(() =>
+    await expect(
       createEngineFromEnv({
         SPYGLASS_STT_ENGINE: 'whisper',
         STT_MODEL_DIR: dir,
@@ -86,6 +87,26 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
         STT_MODEL_PATH: join(dir, STT_LARGE_MODEL_FILE),
         STT_LARGE_FALLBACK: '1'
       })
-    ).toThrow(/ggml-small-q5_1\.bin/);
+    ).rejects.toThrow(/ggml-small-q5_1\.bin/);
+  });
+
+  it('honours fallback: false in large-fallback.json (F3a)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-f3a-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(
+      join(dir, STT_FALLBACK_MARKER),
+      `${JSON.stringify({ fallback: false })}\n`,
+      'utf8'
+    );
+    const engine = await createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
+    });
+    expect(engine.model).toBe(join(dir, STT_LARGE_MODEL_FILE));
   });
 });

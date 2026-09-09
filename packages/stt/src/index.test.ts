@@ -169,7 +169,7 @@ describe('@spyglass/stt', () => {
   });
 
   it('in-process session streams a final without opening a socket', async () => {
-    const session = createInProcessStt(
+    const session = await createInProcessStt(
       { SPYGLASS_STT_ENGINE: 'mock' },
       createMockEngine(['hors ligne'])
     );
@@ -213,7 +213,7 @@ describe('@spyglass/stt', () => {
         disposed = true;
       }
     };
-    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    const session = await createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
     session.begin('u1', 1);
     session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
     const ending = session.end(2);
@@ -248,7 +248,7 @@ describe('@spyglass/stt', () => {
         return id;
       }
     };
-    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    const session = await createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
     session.begin('u1', 1);
     session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
     const ending = session.end(2);

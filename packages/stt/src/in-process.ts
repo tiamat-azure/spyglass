@@ -28,12 +28,24 @@ export type InProcessStt = {
  * (CI / e2e / missing binary). Transport is still main-owned; the renderer
  * never opens a socket (ADR-0005).
  */
-export function createInProcessStt(
+export async function createInProcessStt(
   env: NodeJS.ProcessEnv = process.env,
-  engine: SttEngine = createEngineFromEnv(env)
-): InProcessStt {
+  provided?: SttEngine
+): Promise<InProcessStt> {
+  const engine = provided ?? (await createEngineFromEnv(env));
   let live: LiveUtterance | undefined;
   let pendingFinalizeId: string | undefined;
+  const abort = (): void => {
+    if (live !== undefined) {
+      engine.abort(live.utteranceId);
+      live = undefined;
+      return;
+    }
+    if (pendingFinalizeId !== undefined) {
+      engine.abort(pendingFinalizeId);
+      pendingFinalizeId = undefined;
+    }
+  };
   return {
     engine: engine.name,
     model: engine.model,
@@ -68,19 +80,9 @@ export function createInProcessStt(
         }
       }
     },
-    abort(): void {
-      if (live !== undefined) {
-        engine.abort(live.utteranceId);
-        live = undefined;
-        return;
-      }
-      if (pendingFinalizeId !== undefined) {
-        engine.abort(pendingFinalizeId);
-        pendingFinalizeId = undefined;
-      }
-    },
+    abort,
     dispose(): void {
-      this.abort();
+      abort();
       engine.dispose?.();
     }
   };

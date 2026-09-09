@@ -98,6 +98,9 @@ Pass-1 adversarial (L7-001 … L7-008) is recorded in `CHANGELOG.md`.
 Pass-2 (L7-009 … L7-016) and Captain lock **P2a** (dataset missing
 `parameterRef` fails fast, no silent descriptor fallback) are in
 `CHANGELOG.md`.
+Pass-3 (L7-017 … L7-020), **W3a** (`--large` atomic download), and
+**F3a** (`readLargeFallback` honours `fallback: false`) are in
+`CHANGELOG.md`.
 
 ## Residuals
 

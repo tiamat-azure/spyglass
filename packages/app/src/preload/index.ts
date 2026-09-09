@@ -294,7 +294,10 @@ const spyglass = {
         fallback: boolean;
       }>,
     decide: async (action: 'accept' | 'refuse') =>
-      ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<{ ok: boolean }>,
+      ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<{
+        ok: boolean;
+        error?: string;
+      }>,
     onOffer: (callback: (payload: { propose: boolean }) => void): (() => void) => {
       const listener = (_event: unknown, payload: { propose: boolean }): void => {
         callback(payload);

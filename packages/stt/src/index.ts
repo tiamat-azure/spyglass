@@ -7,8 +7,11 @@ export const STT_PACKAGE = '@spyglass/stt' as const;
 export { correlateVoiceSegment } from './correlate.ts';
 export {
   downloadResponseToFileAtomic,
+  downloadUrlToFileAtomic,
+  STT_LARGE_DOWNLOAD_TIMEOUT_MS,
   STT_LARGE_MIN_BYTES,
   streamToFileAtomic,
+  sttLargeDownloadTimeoutMs,
   writeFileAtomic
 } from './download-model.ts';
 export type { SttEngine } from './engine.ts';
@@ -49,6 +52,7 @@ export {
   largeModelPresent,
   parseMaxLatencyMs,
   parseUpgradePromptAfter,
+  readLargeFallback,
   recordFirstUseLatency,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,

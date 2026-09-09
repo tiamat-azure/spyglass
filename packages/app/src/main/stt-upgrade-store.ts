@@ -26,19 +26,28 @@ export class SttUpgradeStore {
   ) {}
 
   async load(): Promise<void> {
+    let rawText: string;
     try {
-      const parsed = JSON.parse(await readFile(this.path, 'utf8')) as Partial<SttUpgradeDisk>;
-      this.disk = {
-        schemaVersion: 1,
-        correctionCount:
-          typeof parsed.correctionCount === 'number' && parsed.correctionCount >= 0
-            ? Math.floor(parsed.correctionCount)
-            : 0,
-        refusedPermanently: parsed.refusedPermanently === true
-      };
-    } catch {
-      this.disk = { schemaVersion: 1, correctionCount: 0, refusedPermanently: false };
+      rawText = await readFile(this.path, 'utf8');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        this.disk = {
+          schemaVersion: 1,
+          correctionCount: 0,
+          refusedPermanently: false
+        };
+        return;
+      }
+      throw new Error(`unreadable stt-upgrade.json: ${(err as Error).message}`);
     }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error('corrupt stt-upgrade.json: invalid JSON');
+    }
+    this.disk = parseSttUpgradeDisk(parsed);
   }
 
   snapshot(modelDir: string): {
@@ -80,4 +89,30 @@ export class SttUpgradeStore {
 
 export function sttUpgradeStorePath(userData: string): string {
   return join(userData, 'stt-upgrade.json');
+}
+
+/** L7-017: incomplete JSON must not reset a permanent refusal. */
+export function parseSttUpgradeDisk(raw: unknown): SttUpgradeDisk {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('corrupt stt-upgrade.json: not an object');
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.schemaVersion !== 1) {
+    throw new Error('corrupt stt-upgrade.json: schemaVersion must be 1');
+  }
+  if (
+    typeof record.correctionCount !== 'number' ||
+    !Number.isFinite(record.correctionCount) ||
+    record.correctionCount < 0
+  ) {
+    throw new Error('corrupt stt-upgrade.json: correctionCount');
+  }
+  if (typeof record.refusedPermanently !== 'boolean') {
+    throw new Error('corrupt stt-upgrade.json: refusedPermanently');
+  }
+  return {
+    schemaVersion: 1,
+    correctionCount: Math.floor(record.correctionCount),
+    refusedPermanently: record.refusedPermanently
+  };
 }

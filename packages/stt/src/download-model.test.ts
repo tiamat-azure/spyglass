@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import {
   downloadResponseToFileAtomic,
+  downloadUrlToFileAtomic,
   streamToFileAtomic,
   writeFileAtomic
 } from './download-model.ts';
@@ -62,6 +64,47 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
       /HTTP 404/
     );
     await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('aborts a hung URL download (L7-018)', async () => {
+    const server = createServer(() => undefined);
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr !== null ? addr.port : 0;
+      const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-hang-')), 'model.bin');
+      await expect(
+        downloadUrlToFileAtomic({
+          dest,
+          url: `http://127.0.0.1:${String(port)}/`,
+          timeoutMs: 50,
+          minBytes: 1
+        })
+      ).rejects.toMatchObject({ name: 'TimeoutError' });
+      await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err) => (err !== undefined ? reject(err) : resolve()));
+      });
+    }
+  });
+});
+
+describe('W3a fetch-whisper --large', () => {
+  it('routes --large through downloadResponseToFileAtomic, not download()', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const largeStart = src.indexOf('if (large)');
+    const largeEnd = src.indexOf('const modelPath');
+    expect(largeStart).toBeGreaterThan(-1);
+    expect(largeEnd).toBeGreaterThan(largeStart);
+    const largeBlock = src.slice(largeStart, largeEnd);
+    expect(largeBlock).toMatch(/downloadResponseToFileAtomic/);
+    expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 });
 

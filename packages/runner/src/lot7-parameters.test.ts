@@ -280,6 +280,41 @@ describe('Lot 7 F-47 session export/import', () => {
     );
     expect(await readFile(keep, 'utf8')).toBe('alive\n');
   });
+
+  it('refuses export when dest is inside the source session (L7-020)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-export-in-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const keep = join(sessionDir, 'keep.txt');
+    await writeFile(keep, 'alive\n', 'utf8');
+    await expect(exportSessionFolder(sessionDir, join(sessionDir, 'nested'))).rejects.toThrow(
+      /must not overlap/
+    );
+    expect(await readFile(keep, 'utf8')).toBe('alive\n');
+  });
+
+  it('replaces an existing dest so stale files are not kept (L7-020)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-reexport-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    await writeFile(join(dest, 'stale.txt'), 'old\n', 'utf8');
+    await exportSessionFolder(sessionDir, dest);
+    await expect(readFile(join(dest, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+  });
 });
 
 describe('Lot 7 F-59 step gate', () => {

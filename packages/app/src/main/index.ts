@@ -3,10 +3,11 @@ import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
 import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
 import {
-  downloadResponseToFileAtomic,
+  downloadUrlToFileAtomic,
   largeModelPath,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,
+  sttLargeDownloadTimeoutMs,
   writeFileAtomic
 } from '@spyglass/stt';
 import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
@@ -999,19 +1000,18 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: true };
     }
     try {
-      const response = await fetch(STT_LARGE_MODEL_URL, { redirect: 'follow' });
-      if (!response.ok || response.body === null) {
-        return { ok: false };
-      }
       const digest = process.env.STT_LARGE_SHA256;
-      await downloadResponseToFileAtomic({
+      await downloadUrlToFileAtomic({
         dest,
-        response,
+        url: STT_LARGE_MODEL_URL,
+        timeoutMs: sttLargeDownloadTimeoutMs(process.env),
         ...(digest !== undefined && digest.length > 0 ? { expectedSha256: digest } : {})
       });
       return { ok: true };
-    } catch {
-      return { ok: false };
+    } catch (error) {
+      const timedOut =
+        error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      return { ok: false, error: timedOut ? 'timeout' : 'download-failed' };
     }
   });
 }

@@ -419,7 +419,8 @@ async function runScenarioOnDriver(
   }
   const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
     suggested,
-    scenario: executable,
+    // L7-019: persist the recorded scenario, not dataset-materialized secrets.
+    scenario,
     policy: resolvePatchPolicy(options.env ?? process.env, {
       ...(resolved.repo !== undefined ? { repo: resolved.repo } : {})
     })

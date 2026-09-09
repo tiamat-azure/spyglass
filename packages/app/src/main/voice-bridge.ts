@@ -223,7 +223,7 @@ export class VoiceBridge {
   private async connect(): Promise<VoiceBridgeStatus> {
     await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
-      this.inProcess = createInProcessStt(this.env);
+      this.inProcess = await createInProcessStt(this.env);
       this.status = {
         engine: this.inProcess.engine === 'whisper' ? 'whisper' : 'mock',
         model: this.inProcess.model,

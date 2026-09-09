@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export const SESSION_BUNDLE_MANIFEST = 'spyglass-session.json';
@@ -22,18 +22,29 @@ export async function exportSessionFolder(
   now = new Date()
 ): Promise<SessionExportResult> {
   const meta = await readSessionMeta(sessionDir);
+  const source = resolve(sessionDir);
   const dest = resolve(destDir);
-  await mkdir(dest, { recursive: true });
-  await cp(sessionDir, dest, { recursive: true, dereference: false });
-  const manifest: SessionBundleManifest = {
-    schemaVersion: 1,
-    kind: 'spyglass-session',
-    sessionId: meta.sessionId,
-    exportedAt: now.toISOString()
-  };
-  const manifestPath = join(dest, SESSION_BUNDLE_MANIFEST);
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  return { dest, sessionId: meta.sessionId, manifestPath };
+  await assertNoCopyOverlap(source, dest);
+  const parent = dirname(dest);
+  await mkdir(parent, { recursive: true });
+  const staging = await mkdtemp(join(parent, '.spyglass-export-'));
+  try {
+    await cp(source, staging, { recursive: true, dereference: false });
+    const manifest: SessionBundleManifest = {
+      schemaVersion: 1,
+      kind: 'spyglass-session',
+      sessionId: meta.sessionId,
+      exportedAt: now.toISOString()
+    };
+    const manifestPath = join(staging, SESSION_BUNDLE_MANIFEST);
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await rm(dest, { recursive: true, force: true });
+    await rename(staging, dest);
+    return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
+  } catch (error) {
+    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function importSessionFolder(
@@ -51,7 +62,7 @@ export async function importSessionFolder(
   if (!isInsideSessionsRoot(root, dest)) {
     throw new Error('import refused: invalid sessionId');
   }
-  await assertSafeImportCopy(source, dest);
+  await assertNoCopyOverlap(source, dest);
   await mkdir(root, { recursive: true });
   await rm(dest, { recursive: true, force: true });
   await cp(source, dest, { recursive: true, dereference: false });
@@ -86,16 +97,16 @@ function isInsideSessionsRoot(sessionsRoot: string, dest: string): boolean {
 /**
  * L7-013: never `rm(dest)` when dest is the source (or either contains the other).
  */
-async function assertSafeImportCopy(source: string, dest: string): Promise<void> {
+async function assertNoCopyOverlap(source: string, dest: string): Promise<void> {
   const sourceReal = await realpathExisting(source);
   const destReal = await realpathExisting(dest);
   if (sourceReal === destReal) {
-    throw new Error('import refused: destination must not be the source session');
+    throw new Error('session copy refused: destination must not be the source session');
   }
   const destInsideSource = isInsideSessionsRoot(sourceReal, destReal);
   const sourceInsideDest = isInsideSessionsRoot(destReal, sourceReal);
   if (destInsideSource || sourceInsideDest) {
-    throw new Error('import refused: destination must not overlap the source session');
+    throw new Error('session copy refused: destination must not overlap the source session');
   }
 }
 
