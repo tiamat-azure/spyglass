@@ -862,6 +862,9 @@ Ask-user still held: I26.
   fail-louds on unreadable/corrupt when the engine factory would select
   large.
 
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**661 passed**, 1 skipped (62 files). `upgrade.test.ts` 28.
+
 Ask-user still held: none.
 
 ## CI — macOS Electron e2e close hang
