@@ -15,17 +15,17 @@
     "node": "24.20.0"
   },
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/run-electron.mjs dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "start": "electron-vite preview",
+    "start": "node scripts/run-electron.mjs preview",
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
     "package": "electron-vite build && electron-builder --publish never",
     "package:linux": "electron-vite build && electron-builder --linux AppImage deb dir --publish never",
     "package:mac": "electron-vite build && electron-builder --mac dmg --x64 --arm64 --publish never",
     "package:win": "electron-vite build && electron-builder --win nsis --publish never",
-    "capture:shell": "electron-vite build && electron .",
+    "capture:shell": "electron-vite build && node scripts/run-electron.mjs app",
     "observe": "node scripts/stagehand-observe.mjs",
     "act": "node scripts/stagehand-act.mjs",
     "test:packaged-observe": "node scripts/packaged-observe-smoke.mjs"

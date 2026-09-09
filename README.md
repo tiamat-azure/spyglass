@@ -72,7 +72,12 @@ pnpm start             # preview the built Electron app
 pnpm test:e2e          # Playwright smoke against the built Electron app
 pnpm package           # electron-builder for the current OS (unsigned)
 pnpm observe           # Stagehand observe() against the running app's CDP port
+pnpm doctor            # preflight: workspace links + Linux Electron sandbox
+pnpm fix:sandbox       # one-time sudo fix for the Electron SUID sandbox (Linux)
 ```
+
+`pnpm dev`, `pnpm start`, and `pnpm build` run `pnpm doctor` first, so a broken
+environment fails with the actual cause instead of a Rollup or Chromium error.
 
 Platform-specific packagers:
 
@@ -84,6 +89,39 @@ pnpm --filter @spyglass/app package:win     # NSIS
 
 Installers are **unsigned** and **not notarized** for internal v1. See
 [`docs/UNSIGNED-DISTRIBUTION.md`](docs/UNSIGNED-DISTRIBUTION.md).
+
+## Troubleshooting
+
+### `Rollup failed to resolve import "@spyglass/llm"`
+
+The `pnpm install` that produced `node_modules` is incomplete: the workspace
+symlink is missing from `packages/app/node_modules/@spyglass/`. `pnpm install
+--frozen-lockfile` can still report *Already up to date* because the workspace
+state cache in `node_modules/.pnpm-workspace-state-v1.json` looks current.
+
+```bash
+pnpm install        # re-links the workspace packages
+pnpm doctor         # confirms every workspace: dependency resolves
+```
+
+### `The SUID sandbox helper binary was found, but is not configured correctly`
+
+`pnpm dev` / `pnpm start` abort on Linux distributions that ship
+`kernel.apparmor_restrict_unprivileged_userns=1` (Ubuntu 24.04 and later).
+Chromium cannot open an unprivileged user namespace, falls back to the setuid
+helper, and pnpm installs `chrome-sandbox` as a normal user.
+
+```bash
+pnpm fix:sandbox    # sudo chown root:root + chmod 4755 on chrome-sandbox
+```
+
+Re-run it after every `pnpm install` that replaces the Electron binary. Do not
+weaken the app's sandbox to work around this. If root is unavailable, the
+existing development-only escape hatch stays explicit and opt-in:
+
+```bash
+SPYGLASS_NO_SANDBOX=1 pnpm dev
+```
 
 ## Lot 0 — verify Stagehand `observe`
 

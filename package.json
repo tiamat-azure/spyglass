@@ -10,8 +10,13 @@
     "pnpm": "10.33.3"
   },
   "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "fix:sandbox": "node scripts/doctor.mjs --fix-sandbox",
+    "predev": "node scripts/doctor.mjs",
     "dev": "pnpm --filter @spyglass/app dev",
+    "prebuild": "node scripts/doctor.mjs --deps",
     "build": "pnpm -r --if-present build",
+    "prestart": "node scripts/doctor.mjs",
     "start": "pnpm --filter @spyglass/app start",
     "lint": "biome check .",
     "format": "biome check --write .",
