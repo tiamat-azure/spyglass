@@ -934,6 +934,9 @@ Ask-user still held: L27.
   first-use setups keep working; process timeout uses 8000 unless
   `STT_WHISPER_TIMEOUT_MS` is set.
 
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**678 passed**, 1 skipped (62 files). `upgrade.test.ts` 31.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
