@@ -171,11 +171,29 @@ function preferSmallAfterLargeFallback(largePath: string, env: NodeJS.ProcessEnv
     dirs.push(largeDir);
   }
   for (const dir of dirs) {
-    if (readLargeFallbackSync(dir)) {
+    if (readFallbackMarkerForPathPick(dir)) {
       return true;
     }
   }
   return false;
+}
+
+/**
+ * I26a: path picking treats non-corrupt marker I/O (EACCES/EISDIR/…) as no
+ * marker so {@link resolveWhisperPaths} can return undefined/paths instead of
+ * throwing. Corrupt JSON still throws; F16b fail-loud on unreadable stays in
+ * the engine factory when large is actually selected.
+ */
+function readFallbackMarkerForPathPick(dir: string): boolean {
+  try {
+    return readLargeFallbackSync(dir);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith('unreadable large-fallback.json')) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {

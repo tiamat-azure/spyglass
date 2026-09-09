@@ -161,6 +161,42 @@ describe('@spyglass/stt', () => {
     expect(explicit?.model).toBe(small);
   });
 
+  it('treats unreadable large-fallback.json as no marker when picking paths (I26a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-i26a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await mkdir(join(dir, 'large-fallback.json'));
+    expect(() => resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })).not.toThrow();
+    expect(resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })?.model).toBe(large);
+    expect(pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })).toBe(large);
+    const empty = join(tmpdir(), `spyglass-whisper-i26a-empty-${String(Date.now())}`);
+    await mkdir(empty, { recursive: true });
+    await mkdir(join(empty, 'large-fallback.json'));
+    expect(resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: empty })).toBeUndefined();
+  });
+
+  it('still fail-louds on corrupt large-fallback.json during path pick when large exists (F16b)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-i26a-corrupt-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(join(dir, 'whisper-cli'), 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await writeFile(join(dir, 'large-fallback.json'), '{not json');
+    expect(() => resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })).toThrow(
+      /corrupt large-fallback.json/
+    );
+    expect(() =>
+      pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })
+    ).toThrow(/corrupt large-fallback.json/);
+  });
+
   it('does not fall back onto large when fallback is set and small is missing (L7-178)', () => {
     const large = '/models/ggml-large-v3-turbo-q5_0.bin';
     expect(pickPreferredWhisperModel([large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();

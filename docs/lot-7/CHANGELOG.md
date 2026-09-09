@@ -853,6 +853,17 @@ Ask-user still held: C26, I26.
 
 Ask-user still held: I26.
 
+## Captain lock I26a (unreadable marker is no-marker on path pick)
+
+- **I26a:** `preferSmallAfterLargeFallback` / `resolveWhisperPaths` treat
+  non-corrupt marker I/O (`EACCES` / `EISDIR` / …) as no
+  `large-fallback.json`, so path pick can return paths or `undefined`
+  instead of throwing. Corrupt JSON still fail-louds. F16b still
+  fail-louds on unreadable/corrupt when the engine factory would select
+  large.
+
+Ask-user still held: none.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

@@ -239,6 +239,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
+- **I26a:** Path pick treats non-corrupt marker I/O (`EACCES` / `EISDIR`)
+  as no marker so `resolveWhisperPaths` can return paths/`undefined`
+  instead of throwing. F16b factory fail-loud on unreadable/corrupt when
+  large is selected is unchanged.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
@@ -258,4 +262,6 @@ already-exists, skip Content-Length with `content-encoding`, in-process
 warn, reuse `largeOk`, trim `STT_MODEL_PATH`. **W26a:** overwrite-false
 export vacates an empty dest before rename (Windows folder picker).
 **C26a:** `--large` also ensures whisper-cli (same as a plain fetch).
-Held: I26.
+**I26a:** unreadable marker I/O is no-marker on Whisper path pick;
+corrupt still fail-louds; F16b factory fail-loud when large is selected.
+Held: none.

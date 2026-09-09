@@ -192,6 +192,8 @@ describe('packaged Observe', () => {
       pickBody.indexOf('basename(path) === STT_LARGE_MODEL_FILE')
     );
     expect(pickBody).toContain('preferSmallAfterLargeFallback');
+    expect(pickBody).toContain('readFallbackMarkerForPathPick');
+    expect(pickBody).toContain('unreadable large-fallback.json');
     expect(pickBody).toContain('readLargeFallbackSync');
     expect(pickBody).toContain('skipLarge');
     expect(main).toContain("error: 'inactive'");

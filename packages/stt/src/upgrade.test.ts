@@ -226,6 +226,44 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(() => createEngineFromEnv(resourcesOnly)).toThrow(/corrupt large-fallback.json/);
   });
 
+  it('fails loud on unreadable large-fallback.json when large would be selected (F16b / I26a)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-i26a-unreadable-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await mkdir(join(dir, STT_FALLBACK_MARKER));
+    expect(() =>
+      createEngineFromEnv({
+        SPYGLASS_STT_ENGINE: 'whisper',
+        STT_MODEL_DIR: dir,
+        STT_BIN: join(dir, 'whisper-cli')
+      })
+    ).toThrow(/unreadable large-fallback.json/);
+    await expect(
+      createEngineFromEnvAsync({
+        SPYGLASS_STT_ENGINE: 'whisper',
+        STT_MODEL_DIR: dir,
+        STT_BIN: join(dir, 'whisper-cli')
+      })
+    ).rejects.toThrow(/unreadable large-fallback.json/);
+  });
+
+  it('ignores an unreadable large-fallback.json on a small-only setup (F16b / I26a)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-i26a-small-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await mkdir(join(dir, STT_FALLBACK_MARKER));
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
+    });
+    expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
+  });
+
   it('honours an explicit custom STT_MODEL_PATH filename (M4a)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-custom-'));
     await mkdir(dir, { recursive: true });
