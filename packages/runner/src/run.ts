@@ -141,7 +141,8 @@ async function runScenarioStandalone(
     env,
     reportDir,
     runId,
-    ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {})
+    ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
+    ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {})
   });
 }
 

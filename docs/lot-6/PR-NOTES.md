@@ -473,6 +473,21 @@ Applied on tip `b5098c5497a31aa906eafc1a041aa3666f1b01da`. Product decisions
 Unit tests after this pass: **401 passed, 1 skipped**, 53 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 17 (Copilot auto-fix)
+
+Applied on tip `bbafff9c73e09280dc5446f5ec3ca3d41615f16d`. Product decisions
+1–12 and prior locks (incl. N52b) are unchanged.
+
+- **L6-053** `launchPlaywrightRun` constructs the recoverer / `createCliGateway()`
+  **before** `createPlaywrightDriver`, so a gateway throw cannot leave
+  Chromium open. Driver close on the run failure path is unchanged.
+- **L6-054** Fixture HTTP handler rejects `%2e` / `%2e%2e` in the raw path
+  before `new URL()` can normalize them into a served pathname. L6-025
+  jail (`resolveFixtureHtmlPath`) still rejects `.` / `..` after decode.
+- **L6-055** Caller-supplied `options.recoverer` is passed through
+  driver-less `runScenario` → `launchPlaywrightRun` and wins over
+  `createCliGateway()` / `LlmRecoverer`.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

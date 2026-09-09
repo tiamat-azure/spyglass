@@ -46,7 +46,12 @@ async function handle(
   response: ServerResponse,
   lot6Html: string
 ): Promise<void> {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const rawUrl = request.url ?? '/';
+  if (rawPathHasEncodedDots(rawUrl)) {
+    send(response, 404, 'text/plain; charset=utf-8', 'not found');
+    return;
+  }
+  const url = new URL(rawUrl, 'http://127.0.0.1');
   if (url.pathname === '/' || url.pathname === '/lot6-fixture.html') {
     send(response, 200, 'text/html; charset=utf-8', lot6Html);
     return;
@@ -79,8 +84,18 @@ async function handle(
   send(response, 404, 'text/plain; charset=utf-8', 'not found');
 }
 
+/** True when the raw path (not query) contains percent-encoded `.` / `..` (L6-054). */
+export function rawPathHasEncodedDots(rawUrl: string): boolean {
+  const cut = rawUrl.indexOf('?');
+  const path = cut === -1 ? rawUrl : rawUrl.slice(0, cut);
+  return /%2e/i.test(path);
+}
+
 /** Absolute path under the fixtures dir, or undefined for traversal / escape (L6-025). */
 export function resolveFixtureHtmlPath(pathname: string): string | undefined {
+  if (rawPathHasEncodedDots(pathname)) {
+    return undefined;
+  }
   let decoded: string;
   try {
     decoded = decodeURIComponent(pathname);

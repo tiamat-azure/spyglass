@@ -6,7 +6,7 @@ import { createCliGateway } from './cli-gateway.ts';
 import type { ParsedRunnerArgv, RunScenarioResult } from './options.ts';
 import { runPath, traceFileName } from './paths.ts';
 import { createPlaywrightDriver } from './playwright-driver.ts';
-import { LlmRecoverer } from './recover.ts';
+import { LlmRecoverer, type Recoverer } from './recover.ts';
 import { newRunId, runScenario } from './run.ts';
 
 export type LaunchPlaywrightRunInput = {
@@ -16,6 +16,8 @@ export type LaunchPlaywrightRunInput = {
   reportDir: string;
   runId?: string;
   proofScreenshot?: string;
+  /** L6-055: caller-supplied recoverer wins over createCliGateway(). */
+  recoverer?: Recoverer;
 };
 
 /**
@@ -34,14 +36,17 @@ export async function launchPlaywrightRun(
       'warn: smart model is not multimodal; recovery will use the text DOM only (F-61).\n'
     );
   }
+  // L6-053: build recoverer before Chromium so a gateway throw cannot leak a browser.
+  let recoverer = input.recoverer;
+  if (recoverer === undefined && parsed.aiRecovery) {
+    recoverer = new LlmRecoverer(createCliGateway(env));
+  }
   const driver = await createPlaywrightDriver({
     headless: parsed.headless,
     trace: parsed.trace,
     env,
     ...(parsed.trace ? { tracePath: runPath(reportDir, traceFileName()) } : {})
   });
-  const gateway = parsed.aiRecovery ? createCliGateway(env) : undefined;
-  const recoverer = gateway === undefined ? undefined : new LlmRecoverer(gateway);
   try {
     const result = await runScenario(scenario, {
       driver,
