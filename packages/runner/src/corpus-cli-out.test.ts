@@ -5,7 +5,7 @@ import { repoRoot } from '@spyglass/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { onMeasure } = vi.hoisted(() => ({
-  onMeasure: vi.fn(async () => undefined as void)
+  onMeasure: vi.fn(async () => undefined)
 }));
 
 vi.mock('./http-fixture.ts', () => ({
