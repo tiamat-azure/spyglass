@@ -152,7 +152,7 @@ export async function recordFirstUseLatency(input: {
 export function resolveSttModelDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const dir = env.STT_MODEL_DIR;
   if (dir !== undefined && dir.trim().length > 0) {
-    return dir;
+    return dir.trim();
   }
   const explicit = env.STT_MODEL_PATH;
   if (explicit !== undefined && explicit.trim().length > 0) {

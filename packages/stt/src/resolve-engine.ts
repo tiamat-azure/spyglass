@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
@@ -56,7 +56,8 @@ export async function createEngineFromEnv(
       const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
       const largeOk = existsSync(largePath);
       const explicitIsConventional =
-        (smallOk && explicit === smallPath) || (largeOk && explicit === largePath);
+        (smallOk && explicit !== undefined && sameResolvedPath(explicit, smallPath)) ||
+        (largeOk && explicit !== undefined && sameResolvedPath(explicit, largePath));
       const envForcedSmall = env.STT_LARGE_FALLBACK === '1';
       const explicitCustomPath = explicitOk && !explicitIsConventional;
       // F16b: fail-loud on corrupt/unreadable large-fallback.json only when
@@ -95,7 +96,7 @@ export async function createEngineFromEnv(
         timeoutMs:
           Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
       };
-      if (existsSync(largePath) && model === largePath) {
+      if (existsSync(largePath) && sameResolvedPath(model, largePath)) {
         const budgetMs = parseMaxLatencyMs(env);
         engineOpts.onFirstUseLatency = async (latencyMs) => {
           await recordFirstUseLatency({ modelDir, latencyMs, budgetMs });
@@ -112,6 +113,11 @@ export async function createEngineFromEnv(
     });
   }
   return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));
+}
+
+/** L7-132: treat `dir/./file` and `dir/file` as the same model path. */
+function sameResolvedPath(left: string, right: string): boolean {
+  return resolve(left) === resolve(right);
 }
 
 /**

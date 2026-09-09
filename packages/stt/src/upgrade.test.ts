@@ -8,6 +8,7 @@ import {
   parseUpgradePromptAfter,
   readLargeFallback,
   recordFirstUseLatency,
+  resolveSttModelDir,
   STT_FALLBACK_MARKER,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_SHA256,
@@ -215,6 +216,26 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     });
     expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
     expect(engine.model).not.toBe(custom);
+  });
+
+  it('treats syntactic path variants as the conventional large/small files (L7-132)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7132-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    const dottedSmall = join(dir, '.', STT_SMALL_MODEL_FILE);
+    const engine = await createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: dottedSmall
+    });
+    expect(engine.model).toBe(join(dir, STT_LARGE_MODEL_FILE));
+  });
+
+  it('trims STT_MODEL_DIR (L7-133)', () => {
+    expect(resolveSttModelDir({ STT_MODEL_DIR: ' /opt/whisper ' })).toBe('/opt/whisper');
   });
 
   it('pins the known large-model SHA-256 (S4a)', () => {

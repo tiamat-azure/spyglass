@@ -47,7 +47,8 @@ export type AssistedApplyRefusal = {
     | 'type-mismatch'
     | 'pr-prep-failed'
     | 'open-pr'
-    | 'unresolved-default';
+    | 'unresolved-default'
+    | 'restore-failed';
   /** P12a / P14a: set when the local patch commit succeeded but PR prep / remote recreate failed. */
   branch?: string;
   commit?: string;
@@ -482,10 +483,20 @@ export async function applyAssistedPatches(input: {
     policy
   );
 
-  // B16a: after success, return to the pre-apply starting ref. Do not use
-  // currentBranch() here — HEAD is the patch branch. Leave spyglass/patch-*
+  // B16a / L7-129: after success, return to the pre-apply starting ref. Do not
+  // use currentBranch() here — HEAD is the patch branch. Leave spyglass/patch-*
   // in place for human review (do not pass it as danglingPatchBranch).
-  await restoreStartingBranch(git, repoRoot, starting);
+  const restoreError = await restoreStartingBranch(git, repoRoot, starting);
+  if (restoreError !== undefined) {
+    return {
+      ok: false,
+      code: 'restore-failed',
+      reason: restoreError,
+      branch,
+      commit,
+      health: input.health
+    };
+  }
 
   const result: AssistedApplySuccess = {
     ok: true,
@@ -757,6 +768,14 @@ async function pushPatchBranch(
   return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(retried.stderr, pushArgs) };
 }
 
+/** P14a / L7-130: non-array `gh pr list --json` is unknown → treat as open. */
+export function openPrListMeansOpen(parsed: unknown): boolean {
+  if (!Array.isArray(parsed)) {
+    return true;
+  }
+  return parsed.length > 0;
+}
+
 /** P14a fail-closed: if `gh` cannot prove there is no open PR, do not delete remote. */
 export async function defaultHasOpenPr(input: { repo: string; branch: string }): Promise<boolean> {
   const { execFile } = await import('node:child_process');
@@ -775,7 +794,7 @@ export async function defaultHasOpenPr(input: { repo: string; branch: string }):
       }
     );
     const parsed = JSON.parse(result.stdout) as unknown;
-    return Array.isArray(parsed) && parsed.length > 0;
+    return openPrListMeansOpen(parsed);
   } catch (error) {
     logGhError('gh pr list', error);
     return true;

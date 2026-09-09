@@ -397,6 +397,48 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('fails parameterized recovery when recorded step indexes are ambiguous (L7-131)', async () => {
+    const live = fillStep(0, '#password', 'dataset-secret', 'password');
+    live.verification.expected = '#gone';
+    live.verification.timeoutMs = 40;
+    const duplicate = fillStep(0, '#other', 'other-secret', 'password');
+    duplicate.verification.expected = '#gone';
+    duplicate.verification.timeoutMs = 40;
+    const recoverer: Recoverer = {
+      recover: async () => ({
+        descriptor: { type: 'fill', selector: '#password', arguments: ['llm-guess'] },
+        diagnosis: 'retry fill',
+        confidence: 0.9
+      })
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#password', visible: true, value: '' },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [live, duplicate]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.report.steps[0]?.error).toMatch(/ambiguous or missing recorded step/);
+    expect(driver.fills.map((row) => row.value)).toEqual(['dataset-secret']);
+    expect(driver.fills.map((row) => row.value)).not.toContain('llm-guess');
+  });
+
   it('redacts remaining recorded arguments when live values are empty (L7-085)', async () => {
     const secret = 's3cret-password';
     const step = fillStep(0, '#password', secret, 'password');

@@ -16,7 +16,7 @@
       "description": "État de confirmation des patchs (F-63). Une entrée est supprimée dès qu'une exécution produit un descripteur différent, ou n'en produit aucun, pour la même étape. consecutiveRuns ne compte que des runId distincts.",
       "items": {
         "type": "object",
-        "required": ["stepIndex", "descriptorHash", "consecutiveRuns", "lastRunId"],
+        "required": ["stepIndex", "descriptorHash", "consecutiveRuns", "lastRunId", "runIds"],
         "additionalProperties": false,
         "properties": {
           "stepIndex": { "type": "integer" },

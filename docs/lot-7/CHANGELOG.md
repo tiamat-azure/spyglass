@@ -546,6 +546,27 @@ ensure small vs incremental).
 
 Ask-user still held: **A17**, **E18**, **M18**, **W18**.
 
+## Pass-19 adversarial fixes (L7-128 … L7-133)
+
+- **L7-128:** `health.schema.json` `patchCandidates[]` items require `runIds`
+  (F-63 / L7-001). Valid fixtures include it; a missing-`runIds` fixture is
+  invalid.
+- **L7-129:** After assisted-apply PR prep, a failed `restoreStartingBranch`
+  is `ok: false` / `code: 'restore-failed'` (B16a). Health is not
+  incremented. The patch branch stays checked out.
+- **L7-130:** `gh pr list --json` that is not an array (object, string,
+  null) is treated as unknown/open so P14a will not delete the remote.
+- **L7-131:** Parameterized recovery fails closed when `findStepByIndex` is
+  undefined (duplicate/missing index) instead of acting with empty
+  redacted args. Unique live dataset args are still overlaid.
+- **L7-132:** `createEngineFromEnv` compares `STT_MODEL_PATH` / selected
+  model to conventional small/large via `path.resolve` so `dir/./file`
+  still engages large-fallback and first-use latency.
+- **L7-133:** `resolveSttModelDir` returns trimmed `STT_MODEL_DIR`.
+
+Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**
+(values-map scrub strategy).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

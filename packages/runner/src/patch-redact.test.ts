@@ -7,7 +7,11 @@ import { descriptorHash } from './descriptor-hash.ts';
 import { emptyHealth, loadHealth, recordSuggestedPatches } from './health.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
 import { processSuggestedPatch } from './patch-lifecycle.ts';
-import { originalDescriptorForPatch, redactSuggestedPatchForPersistence } from './patch-redact.ts';
+import {
+  originalDescriptorForPatch,
+  overlayLiveArgumentsForRecovery,
+  redactSuggestedPatchForPersistence
+} from './patch-redact.ts';
 import { writeRunArtifacts } from './report.ts';
 
 const tmpDirs: string[] = [];
@@ -140,6 +144,14 @@ describe('P13a patch secret redaction', () => {
     });
     expect(JSON.stringify(redacted)).not.toMatch(secret);
     expect(redacted.patches[0]?.suggested.arguments).toBeUndefined();
+  });
+
+  it('overlays unique live fill args for recovery (L7-131)', () => {
+    const live = fillStep('#password', 'dataset-secret', 'password');
+    const recorded = originalDescriptorForPatch(live);
+    expect(recorded.arguments).toBeUndefined();
+    const overlaid = overlayLiveArgumentsForRecovery(recorded, live);
+    expect(overlaid.arguments).toEqual(['dataset-secret']);
   });
 
   it('keeps navigate URL args', () => {

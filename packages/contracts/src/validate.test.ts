@@ -88,6 +88,24 @@ describe('validateHealth', () => {
     });
     expect(result.valid).toBe(true);
   });
+
+  it('rejects a patch candidate missing runIds (L7-128)', () => {
+    const result = validateHealth({
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: 'run_a'
+        }
+      ]
+    });
+    expect(result.valid).toBe(false);
+  });
 });
 
 describe('validateUnknown', () => {

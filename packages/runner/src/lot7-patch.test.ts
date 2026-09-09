@@ -15,6 +15,7 @@ import {
   assertAssistedApplyAllowed,
   confirmedDescriptor,
   defaultHasOpenPr,
+  openPrListMeansOpen,
   tryGhPrCreate
 } from './assisted-apply.ts';
 import { descriptorHash, patchSetHash } from './descriptor-hash.ts';
@@ -442,6 +443,54 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(working.steps[0]?.action.descriptor.selector).toBe('#old');
     const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
     expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
+  });
+
+  it('returns restore-failed when checkout-back after success fails (L7-129)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7129-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'checkout' && args[1] === '-f') {
+        const head = (
+          await defaultGitExec(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+        ).stdout.trim();
+        if (head.startsWith('spyglass/patch-')) {
+          return { stdout: '', stderr: 'fatal: cannot checkout starting branch', code: 128 };
+        }
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({ url: 'https://github.com/example/target/pull/129' })
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('restore-failed');
+    expect(result.reason).toMatch(/cannot checkout starting branch/);
+    expect(result.health?.appliedPatches).toBe(0);
+    expect(result.branch?.startsWith('spyglass/patch-')).toBe(true);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe(result.branch);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
   it('returns ok:false pr-prep-failed when git push fails (L7-002 / P12a)', async () => {
@@ -944,6 +993,15 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     } finally {
       process.stderr.write = origWrite;
     }
+  });
+
+  it('treats non-array gh pr list JSON as open (L7-130)', () => {
+    expect(openPrListMeansOpen([])).toBe(false);
+    expect(openPrListMeansOpen([{ number: 1 }])).toBe(true);
+    expect(openPrListMeansOpen({})).toBe(true);
+    expect(openPrListMeansOpen(null)).toBe(true);
+    expect(openPrListMeansOpen('nope')).toBe(true);
+    expect(openPrListMeansOpen(1)).toBe(true);
   });
 
   it('refuses remote delete/recreate when an open PR exists (P14a)', async () => {

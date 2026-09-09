@@ -61,14 +61,14 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (271 files) |
+| `pnpm lint` | pass (272 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **580 passed**, 1 skipped (61 files) |
+| `pnpm test` | **587 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (51), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
-`upgrade.test.ts` (16), `stt-upgrade-store.test.ts` (6).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (53), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (38),
+`upgrade.test.ts` (18), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -160,6 +160,7 @@ success; leave `spyglass/patch-*` for review) is in `CHANGELOG.md`.
 Pass-18 (L7-126 … L7-127) is in `CHANGELOG.md`.
 Captain lock **F16b** (corrupt `large-fallback.json` fail-loud only when
 large is in play) is in `CHANGELOG.md`.
+Pass-19 (L7-128 … L7-133) is in `CHANGELOG.md`.
 
 ## Residuals
 

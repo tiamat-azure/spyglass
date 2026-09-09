@@ -569,6 +569,18 @@ async function recoverStep(input: {
       continue;
     }
     const liveStep = findStepByIndex(input.argumentScenario, input.step.index);
+    if (
+      input.argumentScenario !== undefined &&
+      hasParameterRef(input.step) &&
+      liveStep === undefined
+    ) {
+      return {
+        ok: false,
+        error: `ambiguous or missing recorded step ${String(input.step.index)} for parameterized recovery`,
+        attempts: attempt,
+        ...(screenshotRef !== undefined ? { screenshotRef } : {})
+      };
+    }
     const descriptor = sanitizeRecoveredDescriptor(
       overlayLiveArgumentsForRecovery(input.step.action.descriptor, liveStep),
       recovered.descriptor
