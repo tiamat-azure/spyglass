@@ -174,6 +174,15 @@ describe('packaged Observe', () => {
     expect(whisper).toContain('process.kill(-job.child.pid');
     expect(whisper).toContain('dispose(): void');
     expect(whisper).toContain('WHISPER_TIMEOUT_MS_DEFAULT');
+    const pickStart = whisper.indexOf('export function pickPreferredWhisperModel');
+    const pickEnd = whisper.indexOf('export function whisperAvailable');
+    expect(pickStart).toBeGreaterThan(-1);
+    expect(pickEnd).toBeGreaterThan(pickStart);
+    const pickBody = whisper.slice(pickStart, pickEnd);
+    expect(pickBody.indexOf('configuredSttModelFile')).toBeGreaterThan(-1);
+    expect(pickBody.indexOf('configuredSttModelFile')).toBeLessThan(
+      pickBody.indexOf('basename(path) === STT_LARGE_MODEL_FILE')
+    );
     expect(preload).toContain('IPC.voiceSetMode');
     expect(bridge).toContain('VOICE_FLUSH_MS');
     expect(bridge).not.toContain('sleep(4_000)');

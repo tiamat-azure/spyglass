@@ -83,6 +83,7 @@ export {
   createWhisperEngine,
   isCancelledTranscription,
   notifyFirstUseLatency,
+  pickPreferredWhisperModel,
   resolveWhisperPaths,
   runWhisperCli,
   whisperAvailable,

@@ -673,6 +673,16 @@ Ask-user still held: **E18**, **M18**, **W18**, **R19**, **D20**, **H21**.
 
 Ask-user still held: **M18**, **W18**, **R19**, **D20**, **H21**.
 
+## Captain lock M18a (STT_MODEL_FILE before large basename)
+
+- **M18a:** When `STT_MODEL_FILE` (or `STT_MODEL`) names a file that exists,
+  that match is chosen before L7-125 large-basename discovery. A missing
+  configured file still falls through to large. Explicit `STT_MODEL_PATH`
+  remains first (M4a / P6a). Unset configured file keeps L7-125 large
+  preference.
+
+Ask-user still held: **W18**, **R19**, **D20**, **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

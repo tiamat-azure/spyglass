@@ -25,6 +25,7 @@ import { pcm16ToWav } from './wav.ts';
 import {
   createWhisperEngine,
   isCancelledTranscription,
+  pickPreferredWhisperModel,
   resolveWhisperPaths,
   runWhisperCli,
   whisperAvailable
@@ -66,6 +67,50 @@ describe('@spyglass/stt', () => {
       STT_MODEL_PATH: small
     });
     expect(explicit?.model).toBe(small);
+  });
+
+  it('keeps STT_MODEL_FILE when that file exists even if large is present (M18a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-m18a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    const viaFile = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_FILE: 'ggml-small-q5_1.bin'
+    });
+    expect(viaFile?.model).toBe(small);
+    const viaModel = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL: 'ggml-small-q5_1.bin'
+    });
+    expect(viaModel?.model).toBe(small);
+    const missing = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_FILE: 'does-not-exist.bin'
+    });
+    expect(missing?.model).toBe(large);
+  });
+
+  it('does not let large basename override an existing STT_MODEL_FILE (M18a)', () => {
+    const small = '/res/ggml-small-q5_1.bin';
+    const large = '/res/ggml-large-v3-turbo-q5_0.bin';
+    expect(
+      pickPreferredWhisperModel([small, large], { STT_MODEL_FILE: 'ggml-small-q5_1.bin' })
+    ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([large, small], { STT_MODEL_FILE: 'ggml-small-q5_1.bin' })
+    ).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], {})).toBe(large);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_PATH: small,
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin'
+      })
+    ).toBe(small);
   });
 
   it('correlates dictation before and after a DOM step', () => {

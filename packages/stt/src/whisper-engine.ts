@@ -45,12 +45,20 @@ export function whisperCandidateBins(env: NodeJS.ProcessEnv = process.env): stri
   return candidates;
 }
 
+function configuredSttModelFile(env: NodeJS.ProcessEnv): string | undefined {
+  const raw = env.STT_MODEL_FILE ?? env.STT_MODEL;
+  if (raw === undefined || raw.trim().length === 0) {
+    return undefined;
+  }
+  const name = raw.trim();
+  return name.endsWith('.bin') ? name : `${name}.bin`;
+}
+
 export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): string[] {
   const explicit = env.STT_MODEL_PATH;
   const dir = env.STT_MODEL_DIR;
   const resources = env.SPYGLASS_STT_RESOURCES;
-  const name = env.STT_MODEL ?? 'ggml-small-q5_1.bin';
-  const file = name.endsWith('.bin') ? name : `${name}.bin`;
+  const file = configuredSttModelFile(env) ?? 'ggml-small-q5_1.bin';
   const candidates: string[] = [];
   if (explicit !== undefined && explicit.length > 0) {
     candidates.push(explicit);
@@ -91,16 +99,28 @@ export function resolveWhisperPaths(
 
 /**
  * L7-125: when small and large both exist under resources/vendor, prefer large.
- * Explicit STT_MODEL_PATH still wins (M4a / P6a). F-39 fallback stays in
- * createEngineFromEnv via chooseWhisperModel + large-fallback.json.
+ * Explicit STT_MODEL_PATH still wins (M4a / P6a). M18a: an existing
+ * STT_MODEL_FILE / STT_MODEL match is chosen before that large basename
+ * search. F-39 fallback stays in createEngineFromEnv via chooseWhisperModel.
  */
-function pickPreferredWhisperModel(existing: string[], env: NodeJS.ProcessEnv): string | undefined {
+export function pickPreferredWhisperModel(
+  existing: string[],
+  env: NodeJS.ProcessEnv
+): string | undefined {
   if (existing.length === 0) {
     return undefined;
   }
   const explicit = env.STT_MODEL_PATH;
   if (explicit !== undefined && explicit.length > 0) {
     const hit = existing.find((path) => path === explicit);
+    if (hit !== undefined) {
+      return hit;
+    }
+  }
+  const configured = configuredSttModelFile(env);
+  if (configured !== undefined) {
+    const configuredBase = basename(configured);
+    const hit = existing.find((path) => path === configured || basename(path) === configuredBase);
     if (hit !== undefined) {
       return hit;
     }

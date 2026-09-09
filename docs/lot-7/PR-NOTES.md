@@ -169,6 +169,8 @@ Captain lock **A17b** (sync `createEngineFromEnv` + named
 `createEngineFromEnvAsync`) is in `CHANGELOG.md`.
 Captain lock **E18a** (packaged production ignores FAKE / env
 `STT_LARGE_SHA256`) is in `CHANGELOG.md`.
+Captain lock **M18a** (`STT_MODEL_FILE` wins over large basename when
+the configured file exists) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -212,3 +214,6 @@ Captain lock **E18a** (packaged production ignores FAKE / env
 - **E18a:** Packaged production ignores `SPYGLASS_STT_UPGRADE_FAKE` and
   env `STT_LARGE_SHA256`. Unpackaged or `NODE_ENV=test` may still use
   those escapes (no ~575 Mo fetch in tests).
+- **M18a:** An existing `STT_MODEL_FILE` / `STT_MODEL` match is chosen
+  before L7-125 large-basename discovery. Unset or missing configured
+  files still prefer large. `STT_MODEL_PATH` stays first.
