@@ -67,8 +67,8 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (33), `lot7-parameters.test.ts` (22),
-`upgrade.test.ts` (12), `stt-upgrade-store.test.ts` (4).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (33), `lot7-parameters.test.ts` (23),
+`upgrade.test.ts` (12), `stt-upgrade-store.test.ts` (5).
 
 ### Screenshots (illustrative fixtures)
 
