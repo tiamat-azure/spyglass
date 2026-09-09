@@ -30,10 +30,15 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
 }
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  if (raw === undefined || raw.trim().length === 0) {
+  if (raw === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(raw, 10);
+  const trimmed = raw.trim();
+  // L7-162: complete decimal digits only — reject 1e9, 2junk, empty.
+  if (!/^[0-9]+$/u.test(trimmed)) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
     return fallback;
   }

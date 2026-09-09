@@ -489,7 +489,7 @@ export function createWhisperEngine(options: {
     const controller = new AbortController();
     controllers.set(utteranceId, controller);
     const wav = pcm16ToWav(pcm, STT_SAMPLE_RATE);
-    const started = Date.now();
+    const started = performance.now();
     try {
       const text = await runWhisperCli({
         bin: options.bin,
@@ -508,12 +508,12 @@ export function createWhisperEngine(options: {
       });
       if (!controller.signal.aborted) {
         // L7-081: do not block transcribe() on a hanging onFirstUseLatency hook.
-        void noteFirstUse(Date.now() - started);
+        void noteFirstUse(performance.now() - started);
       }
       return text;
     } catch (error) {
       if (!isCancelledTranscription(error, controller.signal)) {
-        void noteFirstUse(Date.now() - started);
+        void noteFirstUse(performance.now() - started);
       }
       throw error;
     } finally {

@@ -755,6 +755,22 @@ function redactSnapshotForRecovery(
     url = redactSecretFromText(url, secret);
     title = redactSecretFromText(title, secret);
   }
+  // L7-161: secrets may appear under keys other than the recorded selector.
+  for (const key of Object.keys(values)) {
+    const current = values[key];
+    if (current === undefined || current.length === 0) {
+      continue;
+    }
+    let next = current;
+    for (const secret of ordered) {
+      if (next === secret) {
+        next = '';
+        break;
+      }
+      next = redactSecretFromText(next, secret);
+    }
+    values[key] = next;
+  }
   return { ...snapshot, values, text, url, title };
 }
 

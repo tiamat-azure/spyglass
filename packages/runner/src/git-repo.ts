@@ -61,15 +61,17 @@ export function isUsableDefaultBranch(name: string): boolean {
 }
 
 export async function defaultGitExec(args: readonly string[], cwd: string): Promise<GitExecResult> {
+  return execGitTimed(args, cwd, GIT_EXEC_TIMEOUT_MS);
+}
+
+/** Same spawn options as `defaultGitExec`, with a caller-chosen timeout (L7-093 / L7-160). */
+export async function execGitTimed(
+  args: readonly string[],
+  cwd: string,
+  timeoutMs: number
+): Promise<GitExecResult> {
   try {
-    const result = await execFileAsync('git', [...args], {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 2_000_000,
-      timeout: GIT_EXEC_TIMEOUT_MS,
-      killSignal: 'SIGKILL',
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-    });
+    const result = await execFileAsync('git', [...args], gitChildExecOptions(cwd, timeoutMs));
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   } catch (error) {
     const err = error as { stdout?: string; stderr?: string; code?: number; message?: string };
@@ -79,6 +81,27 @@ export async function defaultGitExec(args: readonly string[], cwd: string): Prom
       code: typeof err.code === 'number' ? err.code : 1
     };
   }
+}
+
+export function gitChildExecOptions(
+  cwd: string,
+  timeoutMs: number
+): {
+  cwd: string;
+  encoding: 'utf8';
+  maxBuffer: number;
+  timeout: number;
+  killSignal: NodeJS.Signals;
+  env: NodeJS.ProcessEnv;
+} {
+  return {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 2_000_000,
+    timeout: timeoutMs,
+    killSignal: 'SIGKILL',
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+  };
 }
 
 export async function gitOk(exec: GitExec, cwd: string, args: readonly string[]): Promise<string> {

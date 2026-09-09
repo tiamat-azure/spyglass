@@ -631,6 +631,26 @@ the second STT first-use persist before asserting L7-108 backoff; stub
 Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
 **H21**.
 
+## Pass-22 adversarial fixes (L7-158 … L7-164)
+
+- **L7-158:** `waitForProcessExit` still waits the SIGKILL grace timeout when
+  `child.once` is missing (does not resolve immediately).
+- **L7-159:** After restore, write/stage/commit failures in
+  `applyAssistedPatches` return structured `git-error` / `internal-error`
+  instead of rethrowing.
+- **L7-160:** L7-093 exercises a controllably blocking child with the same
+  timeout/`SIGKILL` spawn options and asserts it terminates.
+- **L7-161:** `redactSnapshotForRecovery` redacts parameterized secrets from
+  every `snapshot.values` entry, not only the recorded selector key.
+- **L7-162:** `PATCH_*` thresholds parse as complete trimmed positive
+  integers only (`1e9`, `2junk` fall back).
+- **L7-163:** Session-bundle rollback does not `rm(dest)` after a failed
+  publish rename (avoids deleting a concurrent dest).
+- **L7-164:** First-use STT latency uses `performance.now()`.
+
+Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
+**H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

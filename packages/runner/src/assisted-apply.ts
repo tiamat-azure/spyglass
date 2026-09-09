@@ -404,13 +404,16 @@ export async function applyAssistedPatches(input: {
       commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
     } catch (error) {
       const revertError = await restoreStartingBranch(git, repoRoot, starting, branch);
-      if (revertError === undefined) {
-        throw error;
-      }
-      const target = startingCheckoutRef(starting);
-      const base = error instanceof Error ? error.message : String(error);
-      const thrown = `${base}; also failed to restore ${target}: ${revertError}`;
-      throw isGitApplyError(error) ? new GitApplyError(thrown) : new Error(thrown);
+      const reason = error instanceof Error ? error.message : String(error);
+      return refusalWithRestore(
+        {
+          ok: false,
+          reason,
+          code: isGitApplyError(error) ? 'git-error' : 'internal-error'
+        },
+        revertError,
+        starting
+      );
     }
   }
 

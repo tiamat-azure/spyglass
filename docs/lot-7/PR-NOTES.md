@@ -63,12 +63,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (272 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **599 passed**, 1 skipped (61 files) |
+| `pnpm test` | **603 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (59), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (41),
-`upgrade.test.ts` (21), `stt-upgrade-store.test.ts` (6).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (60), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (42),
+`upgrade.test.ts` (22), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -163,6 +163,7 @@ large is in play) is in `CHANGELOG.md`.
 Pass-19 (L7-128 … L7-133) is in `CHANGELOG.md`.
 Pass-20 (L7-134 … L7-141) is in `CHANGELOG.md`.
 Pass-21 (L7-142 … L7-157) is in `CHANGELOG.md`.
+Pass-22 (L7-158 … L7-164) is in `CHANGELOG.md`.
 
 ## Residuals
 

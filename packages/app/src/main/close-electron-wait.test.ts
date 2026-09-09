@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { waitForProcessExit } from '../../e2e/close-electron.ts';
+import { KILL_EXIT_GRACE_MS, waitForProcessExit } from '../../e2e/close-electron.ts';
 
 describe('closeElectron waitForProcessExit (L7-117)', () => {
   it('does not short-circuit on killed when exitCode is still null', async () => {
@@ -30,5 +30,15 @@ describe('closeElectron waitForProcessExit (L7-117)', () => {
       }
     });
     expect(onceCalled).toBe(false);
+  });
+
+  it('honours the grace timeout when once is missing (L7-158)', async () => {
+    const started = Date.now();
+    await waitForProcessExit({
+      kill: () => true,
+      killed: true,
+      exitCode: null
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(KILL_EXIT_GRACE_MS - 100);
   });
 });

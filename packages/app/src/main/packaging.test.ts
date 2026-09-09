@@ -265,6 +265,9 @@ describe('packaged Observe', () => {
     const replaceFn = sessionBundle.slice(sessionBundle.indexOf('async function replaceDirectory'));
     expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
     expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
+    const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
+    expect(replaceCatch).not.toContain('await rm(dest');
+    expect(replaceCatch).toContain('await rename(backup, dest)');
     expect(main).toContain("error: 'fallback-unreadable'");
     expect(main).toContain("error: 'store-unavailable'");
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');

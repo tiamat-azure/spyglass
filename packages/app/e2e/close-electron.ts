@@ -1,7 +1,7 @@
 /** Playwright `electronApp.close()` waits for `app.quit()` / process exit. */
 const CLOSE_TIMEOUT_MS = 12_000;
 /** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
-const KILL_EXIT_GRACE_MS = 2_000;
+export const KILL_EXIT_GRACE_MS = 2_000;
 
 type ElectronChild = {
   kill: (signal?: NodeJS.Signals) => boolean;
@@ -63,9 +63,8 @@ export async function waitForProcessExit(child: ElectronChild | null | undefined
         child.once('exit', () => {
           resolve();
         });
-        return;
       }
-      resolve();
+      // L7-158: missing once — do not resolve; the grace timeout still applies.
     }),
     new Promise<void>((resolve) => {
       const grace = setTimeout(resolve, KILL_EXIT_GRACE_MS);

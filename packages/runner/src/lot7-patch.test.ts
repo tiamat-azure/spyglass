@@ -23,6 +23,7 @@ import {
   defaultGitExec,
   GIT_EXEC_TIMEOUT_MS,
   GitApplyError,
+  gitChildExecOptions,
   isDefaultBranchName,
   isGitApplyError,
   patchBranchName
@@ -245,6 +246,21 @@ describe('Lot 7 F-65 fragility counters', () => {
     });
     expect(healthStatus(1, policy)).toBe('fragile');
     expect(healthStatus(2, policy)).toBe('stale');
+  });
+
+  it('rejects incomplete PATCH_* integer strings (L7-162)', () => {
+    const fallback = resolvePatchPolicy({});
+    expect(
+      resolvePatchPolicy({
+        PATCH_CONFIRM_RUNS: '1e9',
+        PATCH_WARN_THRESHOLD: '2junk',
+        PATCH_STALE_THRESHOLD: ' 3 '
+      })
+    ).toMatchObject({
+      confirmRuns: fallback.confirmRuns,
+      warnThreshold: fallback.warnThreshold,
+      staleThreshold: 3
+    });
   });
 });
 
@@ -774,16 +790,28 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(head).not.toBe(second.branch);
   });
 
-  it('times out hung git exec instead of waiting forever (L7-093)', async () => {
+  it('times out hung git exec instead of waiting forever (L7-093 / L7-160)', async () => {
     expect(GIT_EXEC_TIMEOUT_MS).toBe(120_000);
-    const dir = await tempDir('spyglass-lot7-gitexec-');
-    await initGitRepo(dir);
-    const result = await defaultGitExec(
-      ['rev-parse', '--verify', 'refs/heads/spyglass-missing-branch'],
-      dir
+    const src = await readFile(new URL('./git-repo.ts', import.meta.url), 'utf8');
+    expect(src).toContain('execGitTimed(args, cwd, GIT_EXEC_TIMEOUT_MS)');
+    expect(src).toContain("killSignal: 'SIGKILL'");
+    const started = Date.now();
+    const hung = execFileAsync(
+      process.execPath,
+      ['-e', 'setInterval(() => {}, 1000)'],
+      gitChildExecOptions(process.cwd(), 400)
     );
-    expect(result.code).not.toBe(0);
-    expect(result.stderr.trim().length).toBeGreaterThan(0);
+    await expect(hung).rejects.toSatisfy((err: unknown) => {
+      const failure = err as { killed?: boolean; signal?: string; message?: string };
+      return (
+        failure.killed === true ||
+        failure.signal === 'SIGKILL' ||
+        /SIGKILL|ETIMEDOUT|timeout/iu.test(failure.message ?? '')
+      );
+    });
+    const elapsed = Date.now() - started;
+    expect(elapsed).toBeGreaterThanOrEqual(300);
+    expect(elapsed).toBeLessThan(15_000);
   });
 
   it('retries push after a non-fast-forward when origin already has the branch (L7-094)', async () => {
@@ -1208,16 +1236,20 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       }
       return await defaultGitExec(args, cwd);
     };
-    await expect(
-      applyAssistedPatches({
-        health,
-        suggested: patch('#new', 'run_b'),
-        scenario: scn,
-        scenarioPath,
-        policy,
-        git
-      })
-    ).rejects.toThrow(/commit failed/);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('git-error');
+      expect(result.reason).toMatch(/commit failed/);
+    }
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
     expect(branch.stdout.trim()).toBe('main');
   });
@@ -1249,16 +1281,20 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       }
       return await defaultGitExec(args, cwd);
     };
-    await expect(
-      applyAssistedPatches({
-        health,
-        suggested: patch('#new', 'run_b'),
-        scenario: scn,
-        scenarioPath,
-        policy,
-        git
-      })
-    ).rejects.toThrow(/commit failed/);
+    const detached = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(detached.ok).toBe(false);
+    if (!detached.ok) {
+      expect(detached.code).toBe('git-error');
+      expect(detached.reason).toMatch(/commit failed/);
+    }
     const head = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: dir })).stdout.trim();
     const named = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })

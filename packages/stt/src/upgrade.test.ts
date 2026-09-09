@@ -268,6 +268,17 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(body).not.toContain('return fallback === true');
   });
 
+  it('measures first-use latency with a monotonic clock (L7-164)', async () => {
+    const src = await readFile(new URL('./whisper-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('const transcribe = async');
+    const end = src.indexOf("return {\n    name: 'whisper'");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('performance.now()');
+    expect(body).not.toContain('Date.now()');
+  });
+
   it('pins the known large-model SHA-256 (S4a)', () => {
     expect(STT_LARGE_SHA256).toMatch(/^[0-9a-f]{64}$/u);
   });

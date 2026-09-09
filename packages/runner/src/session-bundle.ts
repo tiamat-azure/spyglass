@@ -300,7 +300,7 @@ async function replaceDirectory(dest: string, staging: string): Promise<void> {
     }
   } catch (error) {
     if (backedUp && !published) {
-      await rm(dest, { recursive: true, force: true }).catch(() => undefined);
+      // L7-163: dest is not our published staging; do not rm a concurrent dest.
       await rename(backup, dest).catch(() => undefined);
     }
     throw error;

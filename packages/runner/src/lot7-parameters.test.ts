@@ -577,6 +577,57 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('redacts parameterized secrets from every snapshot.values entry (L7-161)', async () => {
+    const secret = 's3cret-password';
+    const step = fillStep(0, '#password', secret, 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ values: Record<string, string> }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({ values: { ...context.afterDom.values } });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: 'visible page',
+      elements: [
+        { selector: '#password', visible: true, value: secret, text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const originalSnapshot = driver.snapshot.bind(driver);
+    driver.snapshot = async () => {
+      const snap = await originalSnapshot();
+      return { ...snap, values: { ...snap.values, '#mirror': secret, '#note': `user ${secret}` } };
+    };
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.values['#password']).toBe('');
+      expect(snap.values['#mirror']).toBe('');
+      expect(snap.values['#note']).not.toContain(secret);
+    }
+  });
+
   it('does not over-strip short PIN/OTP tokens from unrelated DOM words (L7-124)', async () => {
     const secret = 'ab';
     const step = fillStep(0, '#code', secret, 'code');
