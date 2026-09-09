@@ -332,6 +332,9 @@ export function sessionBundleIpcError(
   error: unknown,
   fallback: 'export-failed' | 'import-failed'
 ): string {
+  if (typeof error !== 'object' || error === null) {
+    return fallback;
+  }
   const code = (error as NodeJS.ErrnoException).code;
   if (code === 'ENOENT') {
     return 'not-found';

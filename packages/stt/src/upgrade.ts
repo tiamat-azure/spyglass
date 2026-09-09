@@ -7,7 +7,7 @@ export const STT_LARGE_MODEL_FILE = 'ggml-large-v3-turbo-q5_0.bin';
 export const STT_SMALL_MODEL_FILE = 'ggml-small-q5_1.bin';
 export const STT_LARGE_MODEL_URL =
   'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
-/** Hugging Face LFS oid for ggml-large-v3-turbo-q5_0.bin (S4a). Env may override. */
+/** Hugging Face LFS oid for ggml-large-v3-turbo-q5_0.bin (S4a). Pinned; not overridable via env. */
 export const STT_LARGE_SHA256 = '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2';
 
 export const STT_UPGRADE_PROMPT_AFTER_DEFAULT = 10;

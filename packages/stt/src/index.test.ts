@@ -529,6 +529,44 @@ describe('@spyglass/stt', () => {
     }
   });
 
+  it('retries first-use latency with the second call sample when the first hook fails (L7-097)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7097-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 80 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 40);
+          });
+          throw new Error('first-use persist failed');
+        }
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const first = engine.finalize('u1');
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      const second = engine.finalize('u2');
+      await Promise.all([first, second]);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 200);
+      });
+      expect(calls).toBe(2);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
   it('does not note first-use latency on abort or cancellation (F8a)', async () => {
     const dir = join(tmpdir(), `spyglass-whisper-f8a-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });

@@ -76,6 +76,18 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.scenario.steps[1]?.action.descriptor.arguments).toBeUndefined();
   });
 
+  it('rejects a missing or invalid secrets field (L7-095)', () => {
+    const base = { schemaVersion: 1, name: 'live', values: { user: 'a' } };
+    expect(() => parseDataset(base)).toThrow(/secrets must be an array of strings/);
+    expect(() => parseDataset({ ...base, secrets: 'password' })).toThrow(
+      /secrets must be an array of strings/
+    );
+    expect(() => parseDataset({ ...base, secrets: [1, 'password'] })).toThrow(
+      /secrets must be an array of strings/
+    );
+    expect(parseDataset({ ...base, secrets: ['password'] }).secrets).toEqual(['password']);
+  });
+
   it('preserves duplicate explicit parameterRef as a shared variable (R4a)', () => {
     const scn: Scenario = {
       schemaVersion: 1,

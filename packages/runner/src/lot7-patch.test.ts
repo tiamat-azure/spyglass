@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type {
   RefinedStep,
@@ -16,7 +17,13 @@ import {
   confirmedDescriptor
 } from './assisted-apply.ts';
 import { descriptorHash } from './descriptor-hash.ts';
-import { defaultGitExec, GitApplyError, isDefaultBranchName, isGitApplyError } from './git-repo.ts';
+import {
+  defaultGitExec,
+  GIT_EXEC_TIMEOUT_MS,
+  GitApplyError,
+  isDefaultBranchName,
+  isGitApplyError
+} from './git-repo.ts';
 import {
   emptyHealth,
   healthStatus,
@@ -619,6 +626,72 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(second.branch).toBe(first.branch);
     expect(second.commit).toBe(first.commit);
     expect(second.health.appliedPatches).toBe(1);
+  });
+
+  it('times out hung git exec instead of waiting forever (L7-093)', async () => {
+    expect(GIT_EXEC_TIMEOUT_MS).toBe(120_000);
+    const src = await readFile(fileURLToPath(new URL('./git-repo.ts', import.meta.url)), 'utf8');
+    expect(src).toContain('timeout: GIT_EXEC_TIMEOUT_MS');
+    expect(src).toContain("killSignal: 'SIGKILL'");
+  });
+
+  it('pushes after recreating a local branch that already exists on origin (L7-094)', async () => {
+    const root = await tempDir('spyglass-lot7-nff-');
+    const origin = join(root, 'origin.git');
+    const dir = join(root, 'repo');
+    await mkdir(origin, { recursive: true });
+    await mkdir(dir, { recursive: true });
+    await execFileAsync('git', ['init', '--bare', origin]);
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    await execFileAsync('git', ['remote', 'add', 'origin', origin], { cwd: dir });
+    await execFileAsync('git', ['push', '-u', 'origin', 'main'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const first = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(first.prPrepared).toBe(false);
+    const remoteBefore = (
+      await execFileAsync('git', ['ls-remote', 'origin', first.branch], { cwd: dir })
+    ).stdout.trim();
+    expect(remoteBefore.length).toBeGreaterThan(0);
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    await execFileAsync('git', ['branch', '-D', first.branch], { cwd: dir });
+    const second = await applyAssistedPatches({
+      health: first.health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) {
+      return;
+    }
+    expect(second.branch).toBe(first.branch);
+    expect(second.prPrepared).toBe(false);
+    const remoteAfter = (
+      await execFileAsync('git', ['ls-remote', 'origin', second.branch], { cwd: dir })
+    ).stdout.trim();
+    expect(remoteAfter).toContain(second.commit);
+    expect(remoteAfter).not.toContain(first.commit);
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {

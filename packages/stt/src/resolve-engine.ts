@@ -72,11 +72,10 @@ export async function createEngineFromEnv(
           modelDir
         });
         if (choice.kind === 'small') {
-          if (explicitOk && basename(explicit) !== STT_LARGE_MODEL_FILE) {
-            model = explicit;
-          } else {
-            model = requireSmallModelFile(smallPath, paths.model);
-          }
+          // L7-096: fallback must load the conventional small file, never a
+          // custom STT_MODEL_PATH that merely is not named like the large file.
+          // M4a/P6a still honour explicit path on the non-fallback branch above.
+          model = requireSmallModelFile(smallPath, explicitOk ? explicit : paths.model);
         } else {
           model = choice.file;
         }

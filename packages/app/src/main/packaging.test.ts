@@ -281,5 +281,8 @@ describe('packaged Observe', () => {
     expect(renderer.slice(importIdx, importIdx + 900)).toContain(
       'sessionImportBtn.disabled = true'
     );
+    const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
+    expect(closeElectron).toContain('clearTimeout(timer)');
+    expect(closeElectron).toContain('timer.unref()');
   });
 });

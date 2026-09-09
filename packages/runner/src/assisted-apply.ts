@@ -400,8 +400,8 @@ export async function applyAssistedPatches(input: {
       prPrepared = false;
     }
   } else {
-    const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
-    if (pushed.code === 0) {
+    const pushed = await pushPatchBranch(git, repoRoot, branch);
+    if (pushed) {
       const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
       if (gh.ok) {
         prPrepared = true;
@@ -595,6 +595,27 @@ async function checkoutOrGitError(
       startingBranch
     );
   }
+}
+
+/** L7-094: after local recreate, origin may already have this spyglass/patch-* name. */
+function isNonFastForwardPush(stderr: string): boolean {
+  return /non-fast-forward|\[rejected\]|fetch first/iu.test(stderr);
+}
+
+async function pushPatchBranch(git: GitExec, repoRoot: string, branch: string): Promise<boolean> {
+  const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
+  if (pushed.code === 0) {
+    return true;
+  }
+  if (!isNonFastForwardPush(pushed.stderr)) {
+    return false;
+  }
+  const deleted = await git(['push', 'origin', '--delete', branch], repoRoot);
+  if (deleted.code !== 0) {
+    return false;
+  }
+  const retried = await git(['push', '-u', 'origin', branch], repoRoot);
+  return retried.code === 0;
 }
 
 const GH_PR_CREATE_TIMEOUT_MS = 120_000;

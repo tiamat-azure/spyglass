@@ -166,6 +166,25 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(engine.model).toBe(explicit);
   });
 
+  it('does not load a custom STT_MODEL_PATH on large→small fallback (L7-096)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7096-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    const custom = join(dir, 'custom-weights.bin');
+    await writeFile(custom, 'not-small\n', 'utf8');
+    const engine = await createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: custom,
+      STT_LARGE_FALLBACK: '1'
+    });
+    expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
+    expect(engine.model).not.toBe(custom);
+  });
+
   it('pins the known large-model SHA-256 (S4a)', () => {
     expect(STT_LARGE_SHA256).toMatch(/^[0-9a-f]{64}$/u);
   });

@@ -143,9 +143,16 @@ export function parseDataset(value: unknown): ScenarioDataset {
     }
     values[key] = item;
   }
-  const secrets = Array.isArray(record.secrets)
-    ? record.secrets.filter((item): item is string => typeof item === 'string')
-    : [];
+  if (!Array.isArray(record.secrets)) {
+    throw new Error('dataset secrets must be an array of strings');
+  }
+  const secrets: string[] = [];
+  for (const item of record.secrets) {
+    if (typeof item !== 'string') {
+      throw new Error('dataset secrets must be an array of strings');
+    }
+    secrets.push(item);
+  }
   return {
     schemaVersion: 1,
     name: record.name.trim(),

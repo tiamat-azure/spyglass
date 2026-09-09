@@ -15,14 +15,22 @@ type LaunchedElectron = {
  * timeout. Lot 3 already used this pattern; CI macOS e2e needs it everywhere.
  */
 export async function closeElectron(electronApp: LaunchedElectron): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       electronApp.close(),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('electron close timeout')), CLOSE_TIMEOUT_MS);
+      new Promise<void>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error('electron close timeout'));
+        }, CLOSE_TIMEOUT_MS);
+        timer.unref();
       })
     ]);
   } catch {
     electronApp.process()?.kill('SIGKILL');
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   }
 }

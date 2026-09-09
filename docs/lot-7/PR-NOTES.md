@@ -63,12 +63,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (268 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **536 passed**, 1 skipped (59 files) |
+| `pnpm test` | **542 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (37), `lot7-parameters.test.ts` (32),
-`upgrade.test.ts` (13), `stt-upgrade-store.test.ts` (6).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (39), `lot7-parameters.test.ts` (33),
+`upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -140,6 +140,7 @@ in `CHANGELOG.md`.
 Pass-12 (L7-083 … L7-090) is in `CHANGELOG.md`.
 Captain lock **S11a** (skip fail/recover screenshots for `parameterRef`
 steps) is in `CHANGELOG.md`.
+Pass-13 (L7-091 … L7-098) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -154,4 +155,7 @@ steps) is in `CHANGELOG.md`.
 - **D11** ask-user: gitignore `datasets/recorded.json` vs document
   plaintext-on-disk risk (unchanged).
 - **P12** ask-user: PR-prep failure remains `ok: true` +
-  `prPrepared: false` (H5b). L7-084 only makes a retry recoverable.
+  `prPrepared: false` (H5b). L7-084 / L7-094 only make a retry
+  recoverable; they do not change the ok/prPrepared contract.
+- **P13** ask-user: strip proposed-side secret args in patches vs
+  document residual (unchanged).

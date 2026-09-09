@@ -3,6 +3,9 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+/** Matches `tryGhPrCreate` so hung `git push` / credential prompts fail closed. */
+export const GIT_EXEC_TIMEOUT_MS = 120_000;
+
 export type GitExecResult = {
   stdout: string;
   stderr: string;
@@ -37,7 +40,9 @@ export async function defaultGitExec(args: readonly string[], cwd: string): Prom
     const result = await execFileAsync('git', [...args], {
       cwd,
       encoding: 'utf8',
-      maxBuffer: 2_000_000
+      maxBuffer: 2_000_000,
+      timeout: GIT_EXEC_TIMEOUT_MS,
+      killSignal: 'SIGKILL'
     });
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   } catch (error) {

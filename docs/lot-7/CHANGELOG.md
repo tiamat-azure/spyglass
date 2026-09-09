@@ -342,6 +342,34 @@ Ask-user still held: **D11** (gitignore `recorded.json` vs document
 plaintext-on-disk risk), **P12** (PR-prep `ok: false` vs `ok: true` +
 `prPrepared: false`).
 
+## Pass-13 adversarial fixes (L7-091 … L7-098)
+
+- **L7-091:** `closeElectron` clears and `unref`s the 12s `Promise.race`
+  timer so a successful close does not keep the Playwright worker alive.
+- **L7-092:** `sessionBundleIpcError` returns the fallback code when the
+  rejection is null, undefined, or a non-object (does not throw inside
+  the sanitizer).
+- **L7-093:** `defaultGitExec` times out at 120s (same budget as
+  `gh pr create`) so hung `git push` / credential prompts fail as
+  `git-error` instead of hanging PATCH_ASSISTED_APPLY.
+- **L7-094:** After a local `spyglass/patch-*` recreate, a non-fast-forward
+  `git push -u` deletes the diverged remote branch and retries so PR prep
+  can run. Product contract unchanged: push/`gh` failure stays `ok: true`
+  + `prPrepared: false` (H5b / P12 held).
+- **L7-095:** `parseDataset` rejects a missing, non-array, or non-string
+  `secrets` field fail-closed (no silent filter).
+- **L7-096:** Large→small fallback always loads `ggml-small-q5_1.bin`
+  via `requireSmallModelFile`. Custom `STT_MODEL_PATH` is still honoured
+  for the intended engine (M4a / P6a), not on the fallback branch.
+- **L7-097:** Concurrent transcribe first-use: if the in-flight hook
+  fails, the second call persists its own `latencyMs` instead of
+  discarding the sample.
+- **L7-098:** `STT_LARGE_SHA256` comment no longer claims an env
+  override (S4a pinned constant).
+
+Ask-user still held: **D11**, **P12**, **P13** (strip proposed-side
+secret args in patches vs document residual).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

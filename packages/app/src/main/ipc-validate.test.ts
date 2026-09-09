@@ -235,4 +235,11 @@ describe('sessionBundleIpcError (L7-088)', () => {
       sessionBundleIpcError(new Error('import refused: symlinks are not allowed'), 'import-failed')
     ).toBe('symlink');
   });
+
+  it('returns the fallback when the rejection is null, undefined, or not an object (L7-092)', () => {
+    expect(sessionBundleIpcError(null, 'export-failed')).toBe('export-failed');
+    expect(sessionBundleIpcError(undefined, 'import-failed')).toBe('import-failed');
+    expect(sessionBundleIpcError('boom', 'export-failed')).toBe('export-failed');
+    expect(sessionBundleIpcError(42, 'import-failed')).toBe('import-failed');
+  });
 });

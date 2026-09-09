@@ -394,23 +394,31 @@ export function createWhisperEngine(options: {
 
   const noteFirstUse = async (latencyMs: number): Promise<void> => {
     const hook = options.onFirstUseLatency;
-    if (firstUseNoted || hook === undefined) {
+    if (hook === undefined) {
       return;
     }
-    if (firstUsePending !== undefined) {
-      await firstUsePending;
-      return;
-    }
-    firstUsePending = (async () => {
-      const noted = await notifyFirstUseLatency(hook, latencyMs);
-      if (noted) {
-        firstUseNoted = true;
+    while (!firstUseNoted) {
+      if (firstUsePending !== undefined) {
+        await firstUsePending;
+        continue;
       }
-    })();
-    try {
-      await firstUsePending;
-    } finally {
-      firstUsePending = undefined;
+      // L7-097: persist this call's sample; do not reuse the first latencyMs
+      // after joining a failed in-flight hook.
+      const pending = (async () => {
+        const noted = await notifyFirstUseLatency(hook, latencyMs);
+        if (noted) {
+          firstUseNoted = true;
+        }
+      })();
+      firstUsePending = pending;
+      try {
+        await pending;
+      } finally {
+        if (firstUsePending === pending) {
+          firstUsePending = undefined;
+        }
+      }
+      break;
     }
   };
 
