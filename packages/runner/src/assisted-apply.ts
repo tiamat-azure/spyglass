@@ -306,7 +306,14 @@ export async function applyAssistedPatches(input: {
       const onPatch = await loadScenarioJson(scenarioPath);
       if (
         scenarioHasAppliedPatches(onPatch, toApply) &&
-        (await leftoverPatchOnlyExpectedScenario(git, repoRoot, defaultBranch, scenarioRel))
+        (await leftoverPatchOnlyExpectedScenario(
+          git,
+          repoRoot,
+          defaultBranch,
+          scenarioRel,
+          onPatch,
+          toApply
+        ))
       ) {
         skipMutate = true;
       } else {
@@ -357,7 +364,22 @@ export async function applyAssistedPatches(input: {
   let scenario = input.scenario;
   let commit: string;
   if (skipMutate) {
-    commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
+    try {
+      commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
+    } catch (error) {
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+        scenarioRel
+      ]);
+      return refusalWithRestore(
+        {
+          ok: false,
+          code: isGitApplyError(error) ? 'git-error' : 'internal-error',
+          reason: error instanceof Error ? error.message : String(error)
+        },
+        revertError,
+        starting
+      );
+    }
   } else {
     if (starting.name !== defaultBranch || reloadScenarioFromDefault) {
       const headNow = await currentBranch(git, repoRoot);
@@ -485,38 +507,47 @@ export async function applyAssistedPatches(input: {
       });
     }
   } else {
-    const pushed = await pushPatchBranch(
-      git,
-      repoRoot,
-      branch,
-      input.hasOpenPr ?? defaultHasOpenPr
-    );
-    if (!pushed.ok) {
-      return afterLocalCommitRefusal({
+    try {
+      const pushed = await pushPatchBranch(
+        git,
+        repoRoot,
         branch,
-        commit,
-        health: input.health,
-        code: pushed.code,
-        reason: pushed.reason
+        input.hasOpenPr ?? defaultHasOpenPr
+      );
+      if (!pushed.ok) {
+        return afterLocalCommitRefusal({
+          branch,
+          commit,
+          health: input.health,
+          code: pushed.code,
+          reason: pushed.reason
+        });
+      }
+      const gh = await (input.createPr ?? tryGhPrCreate)({
+        repo: repoRoot,
+        branch,
+        defaultBranch,
+        title,
+        body
       });
-    }
-    const gh = await (input.createPr ?? tryGhPrCreate)({
-      repo: repoRoot,
-      branch,
-      defaultBranch,
-      title,
-      body
-    });
-    if (!gh.ok) {
+      if (!gh.ok) {
+        return prPrepFailed({
+          branch,
+          commit,
+          health: input.health,
+          reason: 'gh pr create failed'
+        });
+      }
+      if (gh.url !== undefined && gh.url.length > 0) {
+        prUrl = gh.url;
+      }
+    } catch (error) {
       return prPrepFailed({
         branch,
         commit,
         health: input.health,
-        reason: 'gh pr create failed'
+        reason: error instanceof Error ? error.message : String(error)
       });
-    }
-    if (gh.url !== undefined && gh.url.length > 0) {
-      prUrl = gh.url;
     }
   }
 
@@ -737,12 +768,14 @@ function trackedDirtyPaths(porcelain: string): string[] {
   return paths;
 }
 
-/** L7-168: leftover patch branch may be reused only if it forks default and only changes scenario.json. */
+/** L7-168 / L7-171: leftover may be reused only if it forks default, only changes scenario.json, and that file differs solely by action.descriptor (plus apply patchHistory). */
 async function leftoverPatchOnlyExpectedScenario(
   git: GitExec,
   cwd: string,
   defaultBranch: string,
-  scenarioRel: string
+  scenarioRel: string,
+  leftover: Scenario,
+  patches: ReadonlyArray<{ stepIndex: number; hash: string }>
 ): Promise<boolean> {
   const ancestor = await git(['merge-base', '--is-ancestor', defaultBranch, 'HEAD'], cwd);
   if (ancestor.code !== 0) {
@@ -756,7 +789,45 @@ async function leftoverPatchOnlyExpectedScenario(
     .split('\n')
     .map((line) => line.trim().replaceAll('\\', '/'))
     .filter((line) => line.length > 0);
-  return files.length > 0 && files.every((file) => file === scenarioRel);
+  if (files.length === 0 || files.some((file) => file !== scenarioRel)) {
+    return false;
+  }
+  const shown = await git(['show', `${defaultBranch}:${scenarioRel}`], cwd);
+  if (shown.code !== 0) {
+    return false;
+  }
+  let fromDefault: Scenario;
+  try {
+    fromDefault = asScenario(JSON.parse(shown.stdout) as unknown);
+  } catch {
+    return false;
+  }
+  return leftoverMatchesDescriptorOnlyApply(fromDefault, leftover, patches);
+}
+
+function leftoverMatchesDescriptorOnlyApply(
+  fromDefault: Scenario,
+  leftover: Scenario,
+  patches: ReadonlyArray<{ stepIndex: number }>
+): boolean {
+  const patched = new Set(patches.map((entry) => entry.stepIndex));
+  const expected = structuredClone(fromDefault) as Scenario;
+  for (const step of leftover.steps) {
+    const base = expected.steps.find((entry) => entry.index === step.index);
+    if (base === undefined) {
+      return false;
+    }
+    if (!patched.has(step.index)) {
+      continue;
+    }
+    base.action.descriptor = step.action.descriptor;
+    if (step.patchHistory !== undefined) {
+      base.patchHistory = step.patchHistory;
+    } else {
+      delete base.patchHistory;
+    }
+  }
+  return JSON.stringify(expected) === JSON.stringify(leftover);
 }
 
 /** P12a / P14a: local commit stays; PR prep / remote recreate failure does not increment health. */
@@ -855,7 +926,16 @@ async function pushPatchBranch(
   if (!isNonFastForwardPush(pushed.stderr)) {
     return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(pushed.stderr, pushArgs) };
   }
-  const openPr = await hasOpenPr({ repo: repoRoot, branch });
+  let openPr: boolean;
+  try {
+    openPr = await hasOpenPr({ repo: repoRoot, branch });
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'pr-prep-failed',
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
   if (openPr) {
     return {
       ok: false,

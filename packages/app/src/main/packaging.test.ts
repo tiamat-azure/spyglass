@@ -185,6 +185,16 @@ describe('packaged Observe', () => {
     );
     expect(pickBody).toContain('preferSmallAfterLargeFallback');
     expect(pickBody).toContain('readLargeFallbackSync');
+    expect(pickBody).toContain('skipLarge');
+    expect(main).toContain("error: 'inactive'");
+    expect(main).toContain('activeReplay === undefined');
+    const replayNextIdx = main.indexOf('IPC.replayNext');
+    const replayStopIdx = main.indexOf('IPC.replayStop');
+    expect(replayNextIdx).toBeGreaterThan(-1);
+    expect(replayStopIdx).toBeGreaterThan(replayNextIdx);
+    const replayNextHandler = main.slice(replayNextIdx, replayStopIdx);
+    expect(replayNextHandler).not.toContain('activeReplay?.next()');
+    expect(replayNextHandler).toContain('activeReplay.next()');
     expect(preload).toContain('IPC.voiceSetMode');
     expect(bridge).toContain('VOICE_FLUSH_MS');
     expect(bridge).not.toContain('sleep(4_000)');
@@ -328,6 +338,8 @@ describe('packaged Observe', () => {
     const nextHandler = renderer.slice(nextIdx, nextIdx + 900);
     expect(nextHandler).toContain('replayNextBtn.disabled = true');
     expect(nextHandler).toContain('api.replay');
+    expect(nextHandler).toContain('result.ok');
+    expect(nextHandler).toContain('result.error');
     const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');

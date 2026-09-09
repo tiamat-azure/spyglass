@@ -133,14 +133,20 @@ export function pickPreferredWhisperModel(
     }
   }
   const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
-  if (large !== undefined && !preferSmallAfterLargeFallback(large, env)) {
+  const skipLarge = large !== undefined && preferSmallAfterLargeFallback(large, env);
+  if (large !== undefined && !skipLarge) {
     return large;
   }
   const small = existing.find((path) => basename(path) === STT_SMALL_MODEL_FILE);
   if (small !== undefined) {
     return small;
   }
-  return existing.find((path) => basename(path) !== STT_LARGE_MODEL_FILE) ?? existing[0];
+  const nonLarge = existing.find((path) => basename(path) !== STT_LARGE_MODEL_FILE);
+  // L7-178 / F-39 / F23b: permanent fallback must not land back on large.
+  if (skipLarge) {
+    return nonLarge;
+  }
+  return nonLarge ?? existing[0];
 }
 
 /** F23b: skip L7-125 large preference when F-39 fallback-to-small is permanent. */
@@ -166,7 +172,12 @@ function preferSmallAfterLargeFallback(largePath: string, env: NodeJS.ProcessEnv
 }
 
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {
-  return resolveWhisperPaths(env) !== undefined;
+  // L7-176: existence only. Do not read large-fallback.json here — a corrupt
+  // marker must fail-loud in the engine factory (F16b), not flip auto-select to mock.
+  return (
+    whisperCandidateBins(env).some((path) => existsSync(path)) &&
+    whisperCandidateModels(env).some((path) => existsSync(path))
+  );
 }
 
 function parseWhisperText(stdout: string, txtFile?: string): string {

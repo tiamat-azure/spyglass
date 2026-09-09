@@ -147,6 +147,17 @@ describe('@spyglass/stt', () => {
     expect(explicit?.model).toBe(large);
   });
 
+  it('does not fall back onto large when fallback is set and small is missing (L7-178)', () => {
+    const large = '/models/ggml-large-v3-turbo-q5_0.bin';
+    expect(pickPreferredWhisperModel([large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(
+      pickPreferredWhisperModel([large], {
+        STT_MODEL_DIR: '/models',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBeUndefined();
+  });
+
   it('correlates dictation before and after a DOM step', () => {
     const before = correlateVoiceSegment(1000, 2000, undefined, 0, 8000);
     expect(before.relation).toBe('before');

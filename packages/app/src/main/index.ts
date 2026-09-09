@@ -968,17 +968,23 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
 
   ipcMain.handle(IPC.replayNext, (event) => {
     if (rejectForeignIpc(event, winRef, IPC.replayNext)) {
-      return { ok: false };
+      return { ok: false, error: 'forbidden' };
     }
-    activeReplay?.next();
+    if (activeReplay === undefined) {
+      return { ok: false, error: 'inactive' };
+    }
+    activeReplay.next();
     return { ok: true };
   });
 
   ipcMain.handle(IPC.replayStop, (event) => {
     if (rejectForeignIpc(event, winRef, IPC.replayStop)) {
-      return { ok: false };
+      return { ok: false, error: 'forbidden' };
     }
-    activeReplay?.stop();
+    if (activeReplay === undefined) {
+      return { ok: false, error: 'inactive' };
+    }
+    activeReplay.stop();
     return { ok: true };
   });
 

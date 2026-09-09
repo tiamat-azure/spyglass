@@ -15,6 +15,7 @@ import type {
   RefineRevisionView,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayControlResponse,
   ReplayProgressPayload,
   ReplayStartResponse,
   SessionStatePayload,
@@ -108,8 +109,8 @@ export type SpyglassPreloadApi = {
       noAi?: boolean,
       stepByStep?: boolean
     ) => Promise<ReplayStartResponse>;
-    next: () => Promise<{ ok: boolean }>;
-    stop: () => Promise<{ ok: boolean }>;
+    next: () => Promise<ReplayControlResponse>;
+    stop: () => Promise<ReplayControlResponse>;
     onProgress: (callback: (payload: ReplayProgressPayload) => void) => () => void;
   };
   sessionBundle: {

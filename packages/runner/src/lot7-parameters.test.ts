@@ -392,6 +392,32 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
   });
 
+  it('resolves a relative dataset from dirname(scenarioPath) when scriptDir is absent (L7-175)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7175-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
+    await writeFile(join(dir, 'scenario.json'), `${JSON.stringify(extracted.scenario, null, 2)}\n`);
+    await writeFile(
+      join(dir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'bob', values: { user: 'bob', password: 'two' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: 'bob.json',
+      scenarioPath: join(dir, 'scenario.json')
+    });
+    expect(result.exitCode).toBe(0);
+    expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
+  });
+
   it('redacts parameter values from recovery snapshot text (L7-079)', async () => {
     const secret = 's3cret-password';
     const step = fillStep(0, '#password', secret, 'password');
@@ -1068,6 +1094,18 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest);
     await symlink(join(root, 'outside'), join(dest, 'escape'));
     await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+  });
+
+  it('does not swallow permission errors in realpathExisting overlap guards (L7-177)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('async function realpathExisting');
+    const end = src.indexOf('async function recoverOrphanedBackup');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('isMissingPathError');
+    expect(body).toContain("code === 'ENOENT'");
+    expect(body).not.toMatch(/catch \{/);
   });
 
   it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {

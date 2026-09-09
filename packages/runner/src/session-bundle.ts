@@ -224,13 +224,24 @@ async function assertNoSymlinks(root: string): Promise<void> {
 async function realpathExisting(path: string): Promise<string> {
   try {
     return await realpath(path);
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      throw error;
+    }
     try {
       return join(await realpath(dirname(path)), basename(path));
-    } catch {
+    } catch (parentError) {
+      if (!isMissingPathError(parentError)) {
+        throw parentError;
+      }
       return resolve(path);
     }
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
 async function recoverOrphanedBackup(dest: string): Promise<void> {

@@ -242,4 +242,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
-diff check, log failed publish restore).
+diff check, log failed publish restore). Pass-24 (L7-170 … L7-179):
+inactive replay next/stop, leftover descriptor-only match, leftover
+rev-parse restore, createPr/hasOpenPr catch, Windows symlink skip,
+dataset dir from scenarioPath, F16b vs whisperAvailable, realpath
+ENOENT-only, no large `existing[0]` under fallback, atomic small
+fallback fetch.

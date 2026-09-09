@@ -852,6 +852,11 @@ replayNextBtn.addEventListener('click', () => {
   replayNextBtn.disabled = true;
   void api.replay
     .next()
+    .then((result) => {
+      if (!result.ok) {
+        replayStatus.textContent = result.error;
+      }
+    })
     .catch((error: unknown) => {
       replayStatus.textContent = error instanceof Error ? error.message : String(error);
     })

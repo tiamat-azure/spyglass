@@ -422,6 +422,9 @@ export type ReplayStartResponse =
   | { ok: true; runId: string }
   | { ok: false; error: string; runId?: string };
 
+/** L7-170: next/stop must not report ok when no ReplayEngine is bound. */
+export type ReplayControlResponse = { ok: true } | { ok: false; error: string };
+
 export type ReplayProgressPayload = {
   runId: string;
   stepIndex: number;

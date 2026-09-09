@@ -82,6 +82,11 @@ afterEach(async () => {
   await Promise.all(dirs.map((dir) => rmTempDir(dir)));
 });
 
+function isSymlinkPrivilegeError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === 'EPERM' || code === 'EACCES';
+}
+
 function clickStep(index: number, selector: string): RefinedStep {
   return {
     index,
@@ -633,7 +638,15 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const outsideFile = join(outside, 'scenario.json');
     await writeFile(outsideFile, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
     const scenarioPath = join(repo, 'scenario.json');
-    await symlink(outsideFile, scenarioPath);
+    try {
+      await symlink(outsideFile, scenarioPath);
+    } catch (error) {
+      // L7-174: Windows without Developer Mode cannot create symlinks (EPERM).
+      if (isSymlinkPrivilegeError(error)) {
+        return;
+      }
+      throw error;
+    }
     await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
     await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
     let health = emptyHealth('ses_lot7');
@@ -1536,6 +1549,161 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     await expect(
       execFileAsync('git', ['cat-file', '-e', `${result.branch}:extra.txt`], { cwd: dir })
     ).rejects.toThrow();
+  });
+
+  it('does not skipMutate a leftover scenario.json that also edits verification (L7-171)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7171-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const leftover = patchBranchName(
+      'ses_lot7',
+      patchSetHash([{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }])
+    );
+    await execFileAsync('git', ['checkout', '-b', leftover], { cwd: dir });
+    const applied = scenario([clickStep(0, '#new')]);
+    const tampered = applied.steps[0];
+    if (tampered === undefined) {
+      throw new Error('expected step 0');
+    }
+    tampered.verification.expected = '#tampered';
+    await writeFile(scenarioPath, `${JSON.stringify(applied, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'leftover with verification edit'], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({}),
+      createPr: async () => ({ ok: true })
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(patched.steps[0]?.verification.expected).toBe('#old');
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    expect(src).toContain('leftoverMatchesDescriptorOnlyApply');
+    expect(src).toContain('defaultBranch}:${scenarioRel}');
+  });
+
+  it('restores starting ref when leftover rev-parse fails (L7-172)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7172-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const first = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => {
+        throw new Error('gh down');
+      }
+    });
+    expect(first.ok).toBe(false);
+    if (first.ok) {
+      return;
+    }
+    expect(first.code).toBe('pr-prep-failed');
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'rev-parse' && args[1] === 'HEAD') {
+        const head = (
+          await defaultGitExec(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+        ).stdout.trim();
+        if (head.startsWith('spyglass/patch-')) {
+          return { stdout: '', stderr: 'fatal: rev-parse failed on patch branch', code: 128 };
+        }
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const second = await applyAssistedPatches({
+      health: first.health ?? health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({ url: 'https://github.com/example/target/pull/172' })
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) {
+      return;
+    }
+    expect(second.code).toBe('git-error');
+    expect(second.reason).toMatch(/rev-parse failed on patch branch/);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
+  });
+
+  it('returns pr-prep-failed when injected createPr throws (L7-173)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7173-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push') {
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      hasOpenPr: async () => false,
+      createPr: async () => {
+        throw new Error('gh create exploded');
+      }
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/gh create exploded/);
+    expect(result.branch?.startsWith('spyglass/patch-')).toBe(true);
+    expect(result.commit).toBeDefined();
+    expect(result.health?.appliedPatches).toBe(0);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
   });
 
   it('refuses restore that would discard tracked edits other than scenario.json (L7-167)', async () => {

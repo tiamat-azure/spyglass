@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
@@ -110,16 +110,7 @@ function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildCo
     timeoutRaw === undefined || timeoutRaw.length === 0
       ? WHISPER_TIMEOUT_MS_DEFAULT
       : Number.parseInt(timeoutRaw, 10);
-  const modelDir = resolveSttModelDir(env);
-  if (modelDir === undefined) {
-    return createWhisperEngine({
-      bin: paths.bin,
-      model: paths.model,
-      language,
-      timeoutMs:
-        Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
-    });
-  }
+  const modelDir = resolveSttModelDir(env) ?? dirname(paths.model);
   return {
     paths,
     language,

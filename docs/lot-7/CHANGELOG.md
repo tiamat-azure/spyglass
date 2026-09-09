@@ -753,6 +753,35 @@ Ask-user still held: **F23** (`pickPreferredWhisperModel` fallback-awareness).
 
 Ask-user still held: none for these captain locks.
 
+## Pass-24 adversarial fixes (L7-170 … L7-179)
+
+- **L7-170:** `replayNext` / `replayStop` return `{ ok: false, error:
+  'inactive' }` when no `ReplayEngine` is bound, not a silent `{ ok: true }`.
+- **L7-171:** Leftover `skipMutate` reconstructs `scenario.json` from
+  default and requires an action.descriptor-only diff (plus apply
+  `patchHistory`). Extra verification/structure edits force recreate.
+- **L7-172:** Resumed-branch `rev-parse HEAD` failures restore the
+  starting ref and return `git-error` instead of throwing on the patch
+  branch.
+- **L7-173:** Injected `createPr` / `hasOpenPr` rejections are caught like
+  `preparePr` and return `pr-prep-failed` with branch/commit metadata.
+- **L7-174:** Symlink escape tests skip on Windows `EPERM`/`EACCES` instead
+  of failing the suite.
+- **L7-175:** Relative `--dataset` resolves from `dirname(scenarioPath)`
+  when `scriptDir` is absent, then cwd.
+- **L7-176:** `whisperAvailable` is existence-only so auto-select cannot
+  swallow a corrupt `large-fallback.json` into mock. Engine factory still
+  fail-loud when large is in play (F16b), including resources-only dirs.
+- **L7-177:** Session-bundle `realpathExisting` only falls back to
+  `resolve(path)` on ENOENT/ENOTDIR; permission errors still throw.
+- **L7-178:** Permanent large-fallback with no small model returns
+  undefined from `pickPreferredWhisperModel` (no `existing[0]` onto large).
+- **L7-179:** `fetch-whisper.mjs` `ensureSmallFallback` validates size/file
+  (not truncated files or dirs) and downloads through
+  `downloadResponseToFileAtomic`.
+
+Ask-user still held: none for these captain locks.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

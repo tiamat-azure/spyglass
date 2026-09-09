@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createEngineFromEnv, createEngineFromEnvAsync } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 import {
   chooseWhisperModel,
   parseUpgradePromptAfter,
@@ -17,6 +21,7 @@ import {
   shouldProposeUpgrade,
   writeLargeFallback
 } from './upgrade.ts';
+import { whisperAvailable } from './whisper-engine.ts';
 
 describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
   it('proposes large-v3-turbo after N manual corrections', () => {
@@ -197,6 +202,28 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
         STT_MODEL_PATH: join(dir, STT_SMALL_MODEL_FILE)
       })
     ).rejects.toThrow(/corrupt large-fallback.json/);
+  });
+
+  it('does not let whisperAvailable auto-select mock past F16b fail-loud (L7-176)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7176-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
+    const env = {
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli')
+    };
+    expect(whisperAvailable(env)).toBe(true);
+    expect(resolveSttEngineName(env)).toBe('whisper');
+    expect(() => createEngineFromEnv(env)).toThrow(/corrupt large-fallback.json/);
+    const resourcesOnly = {
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_BIN: join(dir, 'whisper-cli')
+    };
+    expect(whisperAvailable(resourcesOnly)).toBe(true);
+    expect(() => createEngineFromEnv(resourcesOnly)).toThrow(/corrupt large-fallback.json/);
   });
 
   it('honours an explicit custom STT_MODEL_PATH filename (M4a)', async () => {

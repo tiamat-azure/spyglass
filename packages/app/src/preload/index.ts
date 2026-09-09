@@ -16,6 +16,7 @@ import type {
   RefineRevisionView,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayControlResponse,
   ReplayProgressPayload,
   ReplayStartResponse,
   SessionStatePayload,
@@ -262,8 +263,8 @@ const spyglass = {
       }
       return ipcRenderer.invoke(IPC.replayStart, payload) as Promise<ReplayStartResponse>;
     },
-    next: async () => ipcRenderer.invoke(IPC.replayNext, {}) as Promise<{ ok: boolean }>,
-    stop: async () => ipcRenderer.invoke(IPC.replayStop, {}) as Promise<{ ok: boolean }>,
+    next: async () => ipcRenderer.invoke(IPC.replayNext, {}) as Promise<ReplayControlResponse>,
+    stop: async () => ipcRenderer.invoke(IPC.replayStop, {}) as Promise<ReplayControlResponse>,
     onProgress: (callback: (payload: ReplayProgressPayload) => void): (() => void) => {
       const listener = (_event: unknown, payload: ReplayProgressPayload): void => {
         callback(payload);

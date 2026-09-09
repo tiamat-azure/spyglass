@@ -159,18 +159,23 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeStart).toBeGreaterThan(-1);
     expect(largeEnd).toBeGreaterThan(largeStart);
     const largeBlock = src.slice(largeStart, largeEnd);
-    expect(largeBlock).toContain('await ensureSmallFallback()');
-    expect(largeBlock.indexOf('await ensureSmallFallback()')).toBeLessThan(
+    expect(largeBlock).toContain('await ensureSmallFallback(');
+    expect(largeBlock.indexOf('await ensureSmallFallback(')).toBeLessThan(
       largeBlock.lastIndexOf('return')
     );
-    const fnStart = src.indexOf('async function ensureSmallFallback');
+    const fnStart = src.indexOf('function existingSmallOk');
     const fnEnd = src.indexOf('async function main');
     expect(fnStart).toBeGreaterThan(-1);
     expect(fnEnd).toBeGreaterThan(fnStart);
     const body = src.slice(fnStart, fnEnd);
     expect(body).toContain('MODEL_NAME');
-    expect(body).toContain('existsSync');
-    expect(body).toContain('await download(');
+    expect(body).toContain('existingSmallOk');
+    expect(body).toContain('statSync');
+    expect(body).toContain('isFile()');
+    expect(body).toContain('SMALL_MIN_BYTES');
+    expect(body).toContain('downloadAtomic');
+    expect(body).not.toMatch(/\bawait download\(/);
+    expect(body).not.toContain('existsSync');
     expect(src).toMatch(/const MODEL_NAME = 'ggml-small-q5_1\.bin'/);
   });
 

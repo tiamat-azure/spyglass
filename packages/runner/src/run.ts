@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { isAbsolute, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import type {
   ExecutionReport,
   ExecutionStepReport,
@@ -824,10 +824,16 @@ async function scenarioWithDataset(
     return scenario;
   }
   const scriptDir = options.scriptDir;
+  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+  const fromScenario =
+    scenarioPath !== undefined && scenarioPath.length > 0
+      ? dirname(resolve(scenarioPath))
+      : undefined;
+  const baseDir = scriptDir ?? fromScenario;
   const absolute =
-    isAbsolute(datasetPath) || scriptDir === undefined
+    isAbsolute(datasetPath) || baseDir === undefined
       ? resolve(datasetPath)
-      : resolve(scriptDir, datasetPath);
+      : resolve(baseDir, datasetPath);
   const raw = await loadDatasetFile(absolute);
   return applyDataset(scenario, parseDataset(raw));
 }

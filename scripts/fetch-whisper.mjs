@@ -10,8 +10,8 @@
  * the STT TypeScript modules (Node 24 type stripping).
  * W18a: `--large` ensures `ggml-small-q5_1.bin` (F-39 fallback) before returning.
  */
-import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { createWriteStream, statSync } from 'node:fs';
+import { mkdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -54,15 +54,36 @@ async function download(url, dest) {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
 }
 
-/** W18a: skip if present so re-running `--large` does not re-fetch ~190MB. */
-async function ensureSmallFallback() {
+/** Reject truncated HTML/error bodies; real ggml-small-q5_1.bin is ~190MB. */
+const SMALL_MIN_BYTES = 1_000_000;
+
+function existingSmallOk(dest) {
+  try {
+    const st = statSync(dest);
+    return st.isFile() && st.size >= SMALL_MIN_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+/** W18a / L7-179: skip only a valid small file; truncated files/dirs are re-fetched atomically. */
+async function ensureSmallFallback(downloadAtomic) {
   const dest = join(outDir, MODEL_NAME);
-  if (existsSync(dest)) {
+  if (existingSmallOk(dest)) {
     process.stdout.write(`F-39 fallback already present: ${dest}\n`);
     return;
   }
+  await rm(dest, { recursive: true, force: true });
   process.stdout.write(`Downloading ${MODEL_NAME} (F-39 fallback, ~190MB)…\n`);
-  await download(MODEL_URL, dest);
+  const response = await fetch(MODEL_URL, { redirect: 'follow' });
+  if (!response.ok) {
+    throw new Error(`GET ${MODEL_URL} → ${String(response.status)}`);
+  }
+  await downloadAtomic({
+    dest,
+    response,
+    minBytes: SMALL_MIN_BYTES
+  });
   process.stdout.write(`Wrote ${dest}\n`);
 }
 
@@ -91,7 +112,7 @@ async function main() {
       minBytes: STT_LARGE_MIN_BYTES
     });
     process.stdout.write(`Wrote ${largePath}\n`);
-    await ensureSmallFallback();
+    await ensureSmallFallback(downloadResponseToFileAtomic);
     return;
   }
   const modelPath = join(outDir, MODEL_NAME);
