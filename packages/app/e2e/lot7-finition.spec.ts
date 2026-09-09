@@ -37,6 +37,11 @@ test.describe('Lot 7 chrome (F-47 / F-59 / F-38)', () => {
       await expect(chrome.locator('#stt-upgrade-refuse')).toHaveCount(1);
       const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
       if (shotDir !== undefined && shotDir.length > 0) {
+        await chrome.evaluate(() => {
+          document.getElementById('replay-panel')?.removeAttribute('hidden');
+          document.getElementById('stt-upgrade')?.removeAttribute('hidden');
+        });
+        await chrome.locator('#replay-panel').scrollIntoViewIfNeeded();
         await chrome.screenshot({ path: join(shotDir, 'chrome-lot7-controls.png') });
       }
     } finally {
