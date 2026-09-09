@@ -33,6 +33,7 @@ import { runScenario } from './run.ts';
 
 const execFileAsync = promisify(execFile);
 const tmpDirs: string[] = [];
+const GIT_TEST_MS = process.platform === 'win32' ? 20_000 : 10_000;
 
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
@@ -40,9 +41,30 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
+async function rmTempDir(dir: string): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const locked = code === 'EBUSY' || code === 'ENOTEMPTY' || code === 'EPERM';
+      if (!locked || attempt === 3) {
+        if (process.platform === 'win32' && locked) {
+          return;
+        }
+        throw error;
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100 * (attempt + 1));
+      });
+    }
+  }
+}
+
 afterEach(async () => {
   const dirs = tmpDirs.splice(0);
-  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(dirs.map((dir) => rmTempDir(dir)));
 });
 
 function clickStep(index: number, selector: string): RefinedStep {
@@ -251,7 +273,7 @@ describe('Lot 7 F-62 / CA-14 illegal scopes', () => {
   });
 });
 
-describe('Lot 7 F-64 assisted git/PR path', () => {
+describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
   it('does not apply when PATCH_ASSISTED_APPLY is false', async () => {
     const dir = await tempDir('spyglass-lot7-off-');
     const scenarioPath = join(dir, 'scenario.json');
@@ -953,7 +975,9 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_c']);
   });
 
-  it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', async () => {
+  it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', {
+    timeout: GIT_TEST_MS
+  }, async () => {
     const root = await tempDir('spyglass-lot7-dataset-persist-');
     const repo = join(root, 'repo');
     const sessionDir = join(root, 'session');

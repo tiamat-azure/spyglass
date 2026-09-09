@@ -295,6 +295,9 @@ Ask-user F8 (AbortError / first-use latency) remains unchanged.
   Duplicate refs stay one dataset variable (R4a); a later step overwrites
   `dataset.values[name]`. There is no conflict warn/error.
 
+Windows `lot7-patch` git tests use a 20s timeout and retry `rm` on
+`EBUSY` (L7-012 restore after failed commit).
+
 Ask-user still held: **S11** (screenshot skip/blur vs accept for
 parameterRef recovery steps), **D11** (gitignore `recorded.json` vs
 document plaintext-on-disk risk).
