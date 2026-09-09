@@ -1371,8 +1371,8 @@ status.
   (`password`, `pin`, `pin_code`, `otp`, `cvv`, `apikey` / `api_key`,
   `ssn`, `token`, `mot-de-passe`). L36a-scrub unchanged.
 
-Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
-revision.
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**747 passed**, 1 skipped (62 files).
 
 Ask-user still held: **L36c** user-stop status.
 
