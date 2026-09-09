@@ -708,6 +708,19 @@ Applied on tip `4fa1a5370db4aaf6c926059f0c6196eb9b887c16`. Product decisions
 Unit tests after this pass: **425 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 25 (Copilot auto-fix)
+
+Applied on tip `2c87b8c37502479d8f551e4902232eb3c6568975`. Product decisions
+1–19 and prior locks (incl. A19a) are unchanged.
+
+- **L6-076** `resolveReportDir` runs absolute `--report` through
+  `resolve(reportDir)` so Windows drive-letter canonicalization matches
+  Node `path.resolve`. Absolute stays absolute (A19a); only normalization
+  changes.
+
+Unit tests after this pass: **425 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
