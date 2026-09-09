@@ -7,7 +7,8 @@ export type { AssistedApplyResult, PreparePr } from './assisted-apply.ts';
 export {
   ACTION_DESCRIPTOR_SCOPE,
   applyAssistedPatches,
-  assertAssistedApplyAllowed
+  assertAssistedApplyAllowed,
+  confirmedDescriptor
 } from './assisted-apply.ts';
 export { applyBaseUrl } from './base-url.ts';
 export type { CorpusSite, CorpusWaveResult, MeasuredRates } from './corpus.ts';

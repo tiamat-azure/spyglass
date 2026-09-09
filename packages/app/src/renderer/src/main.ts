@@ -502,6 +502,7 @@ const replaySteps = requireEl<HTMLOListElement>('replay-steps');
 const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
 const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
 const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
+const sttUpgradeCopy = requireEl<HTMLElement>('stt-upgrade-copy');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -878,8 +879,12 @@ requireEl<HTMLButtonElement>('stt-upgrade-accept').addEventListener('click', () 
   if (api === undefined) {
     return;
   }
-  void api.sttUpgrade.decide('accept').then(() => {
-    sttUpgrade.hidden = true;
+  void api.sttUpgrade.decide('accept').then((result) => {
+    if (result.ok) {
+      sttUpgrade.hidden = true;
+      return;
+    }
+    sttUpgradeCopy.textContent = 'Téléchargement impossible. Réessayez ou refusez définitivement.';
   });
 });
 

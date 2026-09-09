@@ -46,7 +46,7 @@ export async function processSuggestedPatch(input: {
   health = recordSuggestedPatches(health, input.suggested, policy);
   const healthPath = await saveHealth(sessionDir, health);
   const result: PatchLifecycleResult = { health, healthPath };
-  if (!policy.assistedApply) {
+  if (!policy.assistedApply || input.suggested.patches.length === 0) {
     return result;
   }
   const scenarioPath = resolveScenarioPath(input.scenarioPath, policy.repo);

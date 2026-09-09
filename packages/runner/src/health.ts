@@ -88,9 +88,11 @@ export async function saveHealth(sessionDir: string, health: ScenarioHealth): Pr
 }
 
 /**
- * F-63: increment consecutiveRuns when the same descriptor hash repeats for a
- * step; reset to 1 when a run produces a different descriptor. Isolated
- * success never reaches confirmRuns.
+ * F-63 / L7-001: consecutiveRuns counts **distinct** run IDs that produced the
+ * same descriptor. Re-processing the same suggested-patch (same runId) is a
+ * no-op. A run that produces a different descriptor, or no descriptor patch
+ * for that step, resets/invalidates the candidate. Isolated success never
+ * reaches confirmRuns.
  */
 export function recordSuggestedPatches(
   health: ScenarioHealth,
@@ -98,27 +100,35 @@ export function recordSuggestedPatches(
   policy: PatchPolicy
 ): ScenarioHealth {
   const byStep = new Map(health.patchCandidates.map((entry) => [entry.stepIndex, entry]));
+  const patchedSteps = new Set<number>();
   for (const patch of suggested.patches) {
     if (!isActionDescriptorPatch(patch)) {
       continue;
     }
+    patchedSteps.add(patch.stepIndex);
     const hash = descriptorHash(patch.suggested);
     const previous = byStep.get(patch.stepIndex);
     if (previous === undefined || previous.descriptorHash !== hash) {
-      byStep.set(patch.stepIndex, {
-        stepIndex: patch.stepIndex,
-        descriptorHash: hash,
-        consecutiveRuns: 1,
-        lastRunId: suggested.runId
-      });
+      byStep.set(patch.stepIndex, newCandidate(patch.stepIndex, hash, suggested.runId));
       continue;
     }
+    const runIds = distinctRunIds(previous);
+    if (runIds[runIds.length - 1] === suggested.runId) {
+      continue;
+    }
+    runIds.push(suggested.runId);
     byStep.set(patch.stepIndex, {
       stepIndex: patch.stepIndex,
       descriptorHash: hash,
-      consecutiveRuns: previous.consecutiveRuns + 1,
-      lastRunId: suggested.runId
+      consecutiveRuns: runIds.length,
+      lastRunId: suggested.runId,
+      runIds
     });
+  }
+  for (const stepIndex of [...byStep.keys()]) {
+    if (!patchedSteps.has(stepIndex)) {
+      byStep.delete(stepIndex);
+    }
   }
   const next: ScenarioHealth = {
     ...health,
@@ -127,6 +137,23 @@ export function recordSuggestedPatches(
   };
   next.status = healthStatus(next.appliedPatches, policy);
   return next;
+}
+
+function newCandidate(stepIndex: number, descriptorHash: string, runId: string): PatchCandidate {
+  return {
+    stepIndex,
+    descriptorHash,
+    consecutiveRuns: 1,
+    lastRunId: runId,
+    runIds: [runId]
+  };
+}
+
+function distinctRunIds(entry: PatchCandidate): string[] {
+  if (entry.runIds !== undefined && entry.runIds.length > 0) {
+    return [...entry.runIds];
+  }
+  return entry.lastRunId.length > 0 ? [entry.lastRunId] : [];
 }
 
 export function isActionDescriptorPatch(patch: SuggestedPatchEntry): boolean {

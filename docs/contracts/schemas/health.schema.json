@@ -13,7 +13,7 @@
     "appliedPatches": { "type": "integer", "minimum": 0 },
     "patchCandidates": {
       "type": "array",
-      "description": "État de confirmation des patchs (F-63). Une entrée est supprimée dès qu'une exécution produit un descripteur différent pour la même étape.",
+      "description": "État de confirmation des patchs (F-63). Une entrée est supprimée dès qu'une exécution produit un descripteur différent, ou n'en produit aucun, pour la même étape. consecutiveRuns ne compte que des runId distincts.",
       "items": {
         "type": "object",
         "required": ["stepIndex", "descriptorHash", "consecutiveRuns", "lastRunId"],
@@ -22,7 +22,13 @@
           "stepIndex": { "type": "integer" },
           "descriptorHash": { "type": "string" },
           "consecutiveRuns": { "type": "integer", "minimum": 1 },
-          "lastRunId": { "type": "string" }
+          "lastRunId": { "type": "string" },
+          "runIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Run IDs distincts et ordonnés ayant produit ce descripteur (L7-001)."
+          }
         }
       }
     }

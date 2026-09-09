@@ -320,6 +320,21 @@ export async function runWhisperCli(options: {
   }
 }
 
+/** L7-008: first-use latency persistence must not fail transcription. */
+export async function notifyFirstUseLatency(
+  hook: ((latencyMs: number) => void | Promise<void>) | undefined,
+  latencyMs: number
+): Promise<void> {
+  if (hook === undefined) {
+    return;
+  }
+  try {
+    await hook(latencyMs);
+  } catch {
+    // telemetry / fallback marker write is best-effort
+  }
+}
+
 export function createWhisperEngine(options: {
   bin: string;
   model: string;
@@ -365,7 +380,7 @@ export function createWhisperEngine(options: {
       return;
     }
     firstUseNoted = true;
-    await options.onFirstUseLatency(latencyMs);
+    await notifyFirstUseLatency(options.onFirstUseLatency, latencyMs);
   };
 
   const transcribe = async (utteranceId: string, pcm: Buffer): Promise<string> => {

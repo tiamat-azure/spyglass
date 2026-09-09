@@ -47,16 +47,28 @@ export type ReplayEngineDeps = {
 export class ReplayEngine {
   private running = false;
   private waiting: ((action: 'continue' | 'stop') => void) | undefined;
+  /** L7-004: next/stop before the gate is installed. Stop wins. */
+  private pendingContinues = 0;
+  private pendingStop = false;
 
   constructor(private readonly deps: ReplayEngineDeps) {}
 
   next(): void {
+    if (this.pendingStop) {
+      return;
+    }
     const waiting = this.waiting;
     this.waiting = undefined;
-    waiting?.('continue');
+    if (waiting !== undefined) {
+      waiting('continue');
+      return;
+    }
+    this.pendingContinues += 1;
   }
 
   stop(): void {
+    this.pendingStop = true;
+    this.pendingContinues = 0;
     const waiting = this.waiting;
     this.waiting = undefined;
     waiting?.('stop');
@@ -114,10 +126,18 @@ export class ReplayEngine {
         ...(request.stepByStep === true
           ? {
               stepGate: {
-                wait: async () =>
-                  await new Promise<'continue' | 'stop'>((resolve) => {
+                wait: async (): Promise<'continue' | 'stop'> => {
+                  if (this.pendingStop) {
+                    return 'stop';
+                  }
+                  if (this.pendingContinues > 0) {
+                    this.pendingContinues -= 1;
+                    return 'continue';
+                  }
+                  return await new Promise<'continue' | 'stop'>((resolve) => {
                     this.waiting = resolve;
-                  })
+                  });
+                }
               }
             }
           : {})
@@ -134,6 +154,8 @@ export class ReplayEngine {
     } finally {
       this.running = false;
       this.waiting = undefined;
+      this.pendingContinues = 0;
+      this.pendingStop = false;
       session.endReplay();
     }
   }

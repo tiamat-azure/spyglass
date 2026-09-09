@@ -5,6 +5,12 @@
 export const STT_PACKAGE = '@spyglass/stt' as const;
 
 export { correlateVoiceSegment } from './correlate.ts';
+export {
+  downloadResponseToFileAtomic,
+  STT_LARGE_MIN_BYTES,
+  streamToFileAtomic,
+  writeFileAtomic
+} from './download-model.ts';
 export type { SttEngine } from './engine.ts';
 export type { InProcessFinal, InProcessStt } from './in-process.ts';
 export { createInProcessStt } from './in-process.ts';
@@ -65,6 +71,7 @@ export { concatPcm, pcm16ToWav } from './wav.ts';
 export type { WhisperPaths } from './whisper-engine.ts';
 export {
   createWhisperEngine,
+  notifyFirstUseLatency,
   resolveWhisperPaths,
   runWhisperCli,
   whisperAvailable,

@@ -91,8 +91,10 @@ NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 3. **STT download** uses `ggml-large-v3-turbo-q5_0.bin`. Tests use
    `SPYGLASS_STT_UPGRADE_FAKE=1` and never fetch ~575 Mo.
 4. **Export/import** copies the session folder (plus
-   `spyglass-session.json` manifest). Path-traversal session ids are
-   refused.
+   `spyglass-session.json` manifest). Path-traversal session ids and
+   `.` / `..` are refused (L7-007).
+
+Pass-1 adversarial (L7-001 … L7-008) is recorded in `CHANGELOG.md`.
 
 ## Residuals
 

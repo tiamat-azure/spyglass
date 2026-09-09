@@ -140,6 +140,8 @@ export type ScenarioHealth = {
     descriptorHash: string;
     consecutiveRuns: number;
     lastRunId: string;
+    /** Distinct ordered run IDs that produced this descriptor (F-63 / L7-001). */
+    runIds?: string[];
   }>;
 };
 

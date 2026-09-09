@@ -2,7 +2,13 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
 import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
-import { largeModelPath, STT_LARGE_MODEL_FILE, STT_LARGE_MODEL_URL } from '@spyglass/stt';
+import {
+  downloadResponseToFileAtomic,
+  largeModelPath,
+  STT_LARGE_MODEL_FILE,
+  STT_LARGE_MODEL_URL,
+  writeFileAtomic
+} from '@spyglass/stt';
 import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
 import type {
   NavState,
@@ -989,7 +995,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     await mkdir(modelDir, { recursive: true });
     const dest = largeModelPath(modelDir);
     if (process.env.SPYGLASS_STT_UPGRADE_FAKE === '1') {
-      await writeFile(dest, `${STT_LARGE_MODEL_FILE}\n`, 'utf8');
+      await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
       return { ok: true };
     }
     try {
@@ -997,7 +1003,12 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       if (!response.ok || response.body === null) {
         return { ok: false };
       }
-      await writeFile(dest, Buffer.from(await response.arrayBuffer()));
+      const digest = process.env.STT_LARGE_SHA256;
+      await downloadResponseToFileAtomic({
+        dest,
+        response,
+        ...(digest !== undefined && digest.length > 0 ? { expectedSha256: digest } : {})
+      });
       return { ok: true };
     } catch {
       return { ok: false };

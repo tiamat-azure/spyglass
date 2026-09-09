@@ -406,36 +406,43 @@ async function runScenarioOnDriver(
   }
 
   const result: RunScenarioResult = { exitCode: report.exitCode, report };
+  const suggested: SuggestedPatch = {
+    schemaVersion: 1,
+    runId,
+    sessionId: executable.sessionId,
+    applied: false,
+    patches
+  };
   if (suggestedPatch !== undefined) {
     result.suggestedPatch = suggestedPatch;
-    const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
-      suggested: suggestedPatch,
-      scenario: executable,
-      policy: resolvePatchPolicy(options.env ?? process.env, {
-        ...(resolved.repo !== undefined ? { repo: resolved.repo } : {})
-      })
-    };
-    if (options.env !== undefined) {
-      lifecycleInput.env = options.env;
-    }
-    if (resolved.reportDir !== undefined) {
-      lifecycleInput.reportDir = resolved.reportDir;
-    }
-    const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
-    if (scenarioPath !== undefined) {
-      lifecycleInput.scenarioPath = scenarioPath;
-    }
-    const sessionDir = resolved.sessionDir ?? options.sessionDir;
-    if (sessionDir !== undefined) {
-      lifecycleInput.sessionDir = sessionDir;
-    }
-    const lifecycle = await processSuggestedPatch(lifecycleInput);
-    if (lifecycle.healthPath !== undefined) {
-      result.healthPath = lifecycle.healthPath;
-    }
-    if (lifecycle.assistedApply !== undefined) {
-      result.assistedApply = lifecycle.assistedApply;
-    }
+  }
+  const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
+    suggested,
+    scenario: executable,
+    policy: resolvePatchPolicy(options.env ?? process.env, {
+      ...(resolved.repo !== undefined ? { repo: resolved.repo } : {})
+    })
+  };
+  if (options.env !== undefined) {
+    lifecycleInput.env = options.env;
+  }
+  if (resolved.reportDir !== undefined) {
+    lifecycleInput.reportDir = resolved.reportDir;
+  }
+  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+  if (scenarioPath !== undefined) {
+    lifecycleInput.scenarioPath = scenarioPath;
+  }
+  const sessionDir = resolved.sessionDir ?? options.sessionDir;
+  if (sessionDir !== undefined) {
+    lifecycleInput.sessionDir = sessionDir;
+  }
+  const lifecycle = await processSuggestedPatch(lifecycleInput);
+  if (lifecycle.healthPath !== undefined) {
+    result.healthPath = lifecycle.healthPath;
+  }
+  if (lifecycle.assistedApply !== undefined) {
+    result.assistedApply = lifecycle.assistedApply;
   }
   if (runDir !== undefined) {
     result.runDir = runDir;

@@ -10,3 +10,23 @@
 - In-app pas-à-pas replay with Suivant / Arrêter and chat follow (F-59).
 - Scenario parameterization: fill/select values become `--dataset`
   variables; distinct datasets replay the same scenario (F-48).
+
+## Pass-1 adversarial fixes (L7-001 … L7-008)
+
+- **L7-001:** F-63 confirmation counts distinct ordered `runIds`; same
+  `runId` is a no-op; an intervening run without a descriptor patch for
+  that step invalidates the candidate.
+- **L7-002:** `prPrepared` is true only when a PR was actually prepared
+  (`preparePr` or successful `gh pr create`). Push/`gh` failure is
+  local-only (`ok: true`, `prPrepared: false`), not a fake prepared PR.
+- **L7-003:** Assisted apply replaces the action descriptor with the
+  confirmed suggestion (plus required `type`); stale optional fields are
+  not preserved.
+- **L7-004:** In-app pas-à-pas queues `next()` / `stop()` issued before
+  the step gate; stop wins.
+- **L7-005:** Large STT model streams to a `.partial` file, size/digest
+  checked, then atomic rename.
+- **L7-006:** STT upgrade banner stays visible when download fails.
+- **L7-007:** Import rejects `.` / `..` session ids and verifies dest is
+  inside `sessionsRoot` before `rm`.
+- **L7-008:** First-use latency persistence cannot fail transcription.

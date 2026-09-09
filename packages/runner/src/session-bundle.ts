@@ -1,5 +1,5 @@
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 
 export const SESSION_BUNDLE_MANIFEST = 'spyglass-session.json';
 
@@ -46,8 +46,12 @@ export async function importSessionFolder(
   if (!isSafeSessionId(sessionId)) {
     throw new Error('import refused: invalid sessionId');
   }
-  const dest = join(resolve(sessionsRoot), sessionId);
-  await mkdir(resolve(sessionsRoot), { recursive: true });
+  const root = resolve(sessionsRoot);
+  const dest = resolve(root, sessionId);
+  if (!isInsideSessionsRoot(root, dest)) {
+    throw new Error('import refused: invalid sessionId');
+  }
+  await mkdir(root, { recursive: true });
   await rm(dest, { recursive: true, force: true });
   await cp(source, dest, { recursive: true, dereference: false });
   return { sessionDir: dest, sessionId };
@@ -67,5 +71,13 @@ function isSafeSessionId(sessionId: string): boolean {
   if (sessionId !== basename(sessionId)) {
     return false;
   }
-  return /^[A-Za-z0-9._-]+$/u.test(sessionId);
+  if (sessionId === '.' || sessionId === '..') {
+    return false;
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(sessionId);
+}
+
+function isInsideSessionsRoot(sessionsRoot: string, dest: string): boolean {
+  const rel = relative(sessionsRoot, dest);
+  return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
 }

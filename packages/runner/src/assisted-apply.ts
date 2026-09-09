@@ -21,7 +21,7 @@ import {
 } from './git-repo.ts';
 import { incrementAppliedPatches, promotedCandidates } from './health.ts';
 import type { PatchPolicy } from './patch-config.ts';
-import { asScenario } from './scenario.ts';
+import { asScenario, cloneDescriptor } from './scenario.ts';
 
 export const ACTION_DESCRIPTOR_SCOPE = 'action.descriptor' as const;
 
@@ -237,12 +237,12 @@ export async function applyAssistedPatches(input: {
     const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
     if (pushed.code === 0) {
       const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
-      prPrepared = true;
-      if (gh !== undefined) {
-        prUrl = gh;
+      if (gh.ok) {
+        prPrepared = true;
+        if (gh.url !== undefined && gh.url.length > 0) {
+          prUrl = gh.url;
+        }
       }
-    } else {
-      prPrepared = true;
     }
   }
 
@@ -303,10 +303,20 @@ function withDescriptorHistory(
     ...step,
     action: {
       ...step.action,
-      descriptor: { ...step.action.descriptor, ...suggested, type: step.action.type }
+      descriptor: confirmedDescriptor(suggested, step.action.type)
     },
     patchHistory
   };
+}
+
+/** L7-003: apply the confirmed suggestion only; do not keep stale optional fields. */
+export function confirmedDescriptor(
+  suggested: ReplayDescriptor,
+  type: ReplayDescriptor['type']
+): ReplayDescriptor {
+  const next = cloneDescriptor(suggested);
+  next.type = type;
+  return next;
 }
 
 async function gitOkOrThrow(git: GitExec, cwd: string, args: readonly string[]): Promise<string> {
@@ -323,7 +333,7 @@ async function tryGhPrCreate(input: {
   defaultBranch: string;
   title: string;
   body: string;
-}): Promise<string | undefined> {
+}): Promise<{ ok: true; url?: string } | { ok: false }> {
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
   const execFileAsync = promisify(execFile);
@@ -349,9 +359,12 @@ async function tryGhPrCreate(input: {
       .split('\n')
       .map((line) => line.trim())
       .find((line) => line.startsWith('http'));
-    return url;
+    if (url !== undefined && url.length > 0) {
+      return { ok: true, url };
+    }
+    return { ok: true };
   } catch {
-    return undefined;
+    return { ok: false };
   }
 }
 

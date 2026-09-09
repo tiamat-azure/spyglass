@@ -191,6 +191,27 @@ describe('Lot 7 F-47 session export/import', () => {
       /invalid sessionId/
     );
   });
+
+  it('refuses dot-segment session ids and does not rm the sessions root (L7-007)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-dotid-'));
+    const sessionsRoot = join(root, 'sessions');
+    await mkdir(sessionsRoot, { recursive: true });
+    const marker = join(sessionsRoot, 'keep.txt');
+    await writeFile(marker, 'safe\n', 'utf8');
+    await writeFile(
+      join(root, 'meta.json'),
+      `${JSON.stringify({ sessionId: '.', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await expect(importSessionFolder(root, sessionsRoot)).rejects.toThrow(/invalid sessionId/);
+    await writeFile(
+      join(root, 'meta.json'),
+      `${JSON.stringify({ sessionId: '..', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await expect(importSessionFolder(root, sessionsRoot)).rejects.toThrow(/invalid sessionId/);
+    expect(await readFile(marker, 'utf8')).toBe('safe\n');
+  });
 });
 
 describe('Lot 7 F-59 step gate', () => {

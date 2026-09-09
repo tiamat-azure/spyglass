@@ -99,6 +99,7 @@ describe('Lot 7 F-63 confirmation', () => {
     health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
     expect(health.patchCandidates[0]?.consecutiveRuns).toBe(2);
     expect(health.patchCandidates[0]?.lastRunId).toBe('run_b');
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a', 'run_b']);
   });
 
   it('resets consecutiveRuns when a run produces a different descriptor', () => {
@@ -110,6 +111,28 @@ describe('Lot 7 F-63 confirmation', () => {
     expect(health.patchCandidates[0]?.descriptorHash).toBe(
       descriptorHash({ type: 'click', selector: '#other' })
     );
+  });
+
+  it('does not promote when the same runId is recorded twice (L7-001)', () => {
+    let health = emptyHealth('ses_lot7');
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+  });
+
+  it('invalidates a candidate on an intervening run with no patch for that step (L7-001)', () => {
+    let health = emptyHealth('ses_lot7');
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(
+      health,
+      { schemaVersion: 1, runId: 'run_b', sessionId: 'ses_lot7', applied: false, patches: [] },
+      policy
+    );
+    expect(health.patchCandidates).toEqual([]);
+    health = recordSuggestedPatches(health, patch('#new', 'run_c'), policy);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_c']);
   });
 });
 
@@ -295,6 +318,77 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
     expect(onDisk.steps[0]?.patchHistory?.[0]?.scope).toBe('action.descriptor');
     expect(result.health.appliedPatches).toBe(1);
+  });
+
+  it('does not claim PR preparation when git push fails (L7-002)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-pushfail-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push') {
+        return { stdout: '', stderr: 'rejected', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.prPrepared).toBe(false);
+    expect(result.merged).toBe(false);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+  });
+
+  it('replaces the descriptor with the confirmed suggestion only (L7-003)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-desc-'));
+    await initGitRepo(dir);
+    const stale = clickStep(0, '#old');
+    stale.action.descriptor.fallbackSelectors = ['#stale'];
+    stale.action.descriptor.arguments = ['keep-me'];
+    const scn = scenario([stale]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({ url: 'https://github.com/example/target/pull/8' })
+    });
+    expect(result.ok).toBe(true);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    const descriptor = onDisk.steps[0]?.action.descriptor;
+    expect(descriptor).toEqual({ type: 'click', selector: '#new' });
+    expect(descriptor?.fallbackSelectors).toBeUndefined();
+    expect(descriptor?.arguments).toBeUndefined();
+    expect(descriptorHash(descriptor ?? { type: 'click', selector: '#new' })).toBe(
+      descriptorHash({ type: 'click', selector: '#new' })
+    );
   });
 });
 
