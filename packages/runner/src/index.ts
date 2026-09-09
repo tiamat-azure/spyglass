@@ -3,7 +3,7 @@
  * ADR-0006 / ADR-0008 / PRD F-45, F-48, F-50–F-65, §6.12–6.13.
  */
 
-export type { AssistedApplyResult, HasOpenPr, PreparePr } from './assisted-apply.ts';
+export type { AssistedApplyResult, CreatePr, HasOpenPr, PreparePr } from './assisted-apply.ts';
 export {
   ACTION_DESCRIPTOR_SCOPE,
   applyAssistedPatches,

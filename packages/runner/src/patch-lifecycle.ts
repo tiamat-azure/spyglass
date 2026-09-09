@@ -4,6 +4,7 @@ import type { Scenario, ScenarioHealth, SuggestedPatch } from '@spyglass/contrac
 import {
   type AssistedApplyResult,
   applyAssistedPatches,
+  type CreatePr,
   type HasOpenPr,
   type PreparePr
 } from './assisted-apply.ts';
@@ -34,6 +35,7 @@ export async function processSuggestedPatch(input: {
   git?: GitExec;
   preparePr?: PreparePr;
   hasOpenPr?: HasOpenPr;
+  createPr?: CreatePr;
 }): Promise<PatchLifecycleResult> {
   const env = input.env ?? process.env;
   const policy = input.policy ?? resolvePatchPolicy(env, {});
@@ -81,6 +83,9 @@ export async function processSuggestedPatch(input: {
     }
     if (input.hasOpenPr !== undefined) {
       applyInput.hasOpenPr = input.hasOpenPr;
+    }
+    if (input.createPr !== undefined) {
+      applyInput.createPr = input.createPr;
     }
     const assisted = await applyAssistedPatches(applyInput);
     result.assistedApply = assisted;

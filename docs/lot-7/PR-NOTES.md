@@ -177,3 +177,4 @@ Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
   recreates the remote branch only when no open PR uses that head. An
   open PR is `ok: false` / `code: 'open-pr'`; remote is left alone.
   Local branch stays for resume. Health is not incremented (H5b / P12a).
+  L7-094 stubs `createPr` so Windows does not hang on live `gh pr create`.

@@ -426,7 +426,8 @@ Ask-user still held: **P14** (remote force-delete vs gate on open PR).
   An open PR (or `gh` unable to prove none) returns
   `{ ok: false, code: 'open-pr' }`, leaves the remote branch, keeps the
   local commit (P12a), and does not increment health (H5b). No open PR
-  keeps L7-094 retry recoverability.
+  keeps L7-094 retry recoverability. The L7-094 unit test stubs `createPr`
+  so Windows CI does not hang on live `gh pr create` after a mocked push.
 
 Ask-user still held: none for P12–P14.
 

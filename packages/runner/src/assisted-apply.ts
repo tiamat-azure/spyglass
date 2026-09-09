@@ -77,6 +77,15 @@ export type PreparePr = (input: {
 /** P14a: true when an open PR already uses this spyglass/patch-* head. */
 export type HasOpenPr = (input: { repo: string; branch: string }) => Promise<boolean>;
 
+/** After a successful push: default is `gh pr create --draft`. Tests stub this. */
+export type CreatePr = (input: {
+  repo: string;
+  branch: string;
+  defaultBranch: string;
+  title: string;
+  body: string;
+}) => Promise<{ ok: true; url?: string } | { ok: false }>;
+
 /**
  * F-62: only action.descriptor may be assisted-applied. Verification and
  * scenario structure (add/remove/reorder) are proposal-only forever. There is
@@ -176,6 +185,7 @@ export async function applyAssistedPatches(input: {
   git?: GitExec;
   preparePr?: PreparePr;
   hasOpenPr?: HasOpenPr;
+  createPr?: CreatePr;
   now?: Date;
 }): Promise<AssistedApplyResult> {
   const env = input.env ?? process.env;
@@ -430,7 +440,13 @@ export async function applyAssistedPatches(input: {
         reason: pushed.reason
       });
     }
-    const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
+    const gh = await (input.createPr ?? tryGhPrCreate)({
+      repo: repoRoot,
+      branch,
+      defaultBranch,
+      title,
+      body
+    });
     if (!gh.ok) {
       return prPrepFailed({
         branch,
@@ -661,6 +677,10 @@ function isNonFastForwardPush(stderr: string): boolean {
 
 const GH_PR_CREATE_TIMEOUT_MS = 120_000;
 
+function ghExecEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT: 'never' };
+}
+
 async function pushPatchBranch(
   git: GitExec,
   repoRoot: string,
@@ -706,7 +726,8 @@ async function defaultHasOpenPr(input: { repo: string; branch: string }): Promis
         cwd: input.repo,
         encoding: 'utf8',
         timeout: GH_PR_CREATE_TIMEOUT_MS,
-        killSignal: 'SIGKILL'
+        killSignal: 'SIGKILL',
+        env: ghExecEnv()
       }
     );
     const parsed = JSON.parse(result.stdout) as unknown;
@@ -746,7 +767,8 @@ async function tryGhPrCreate(input: {
         cwd: input.repo,
         encoding: 'utf8',
         timeout: GH_PR_CREATE_TIMEOUT_MS,
-        killSignal: 'SIGKILL'
+        killSignal: 'SIGKILL',
+        env: ghExecEnv()
       }
     );
     const url = result.stdout

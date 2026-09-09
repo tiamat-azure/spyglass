@@ -682,7 +682,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenarioPath,
       policy,
       git,
-      hasOpenPr: async () => false
+      hasOpenPr: async () => false,
+      createPr: async () => ({ ok: false })
     });
     expect(first.ok).toBe(false);
     if (first.ok) {
@@ -703,7 +704,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenarioPath,
       policy,
       git,
-      hasOpenPr: async () => false
+      hasOpenPr: async () => false,
+      createPr: async () => ({ ok: false })
     });
     expect(second.ok).toBe(false);
     if (second.ok) {
