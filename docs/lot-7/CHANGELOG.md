@@ -976,6 +976,9 @@ Ask-user still held: G28, P28, S28, X28, F28, W28.
   refuses with `code: 'unresolved-default'`. L7-126 (no literal `HEAD`)
   still holds.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**684 passed**, 1 skipped (62 files). `lot7-patch.test.ts` 84.
+
 Ask-user still held: P28, S28, X28, F28, W28.
 
 ## CI — macOS Electron e2e close hang
