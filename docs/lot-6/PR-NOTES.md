@@ -558,6 +558,9 @@ Applied on tip `1fffddf9718a1acec538f21f2c56be4ddda54eb5`. Product decisions
   L6-050. Intermediate `{tree,headless,protocol}.html` is unlinked in the
   same `finally`.
 
+Unit tests after this pass: **409 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
