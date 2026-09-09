@@ -341,13 +341,14 @@ export class RefineEngine {
     }
     const before = await rawFingerprint(sessionDir);
     const generated = await this.writeGeneratedPackage(sessionDir, file);
+    const discardGenerated = !generated.protectExisting;
     if (!generated.ok) {
       return await this.abortFinalizeAfterGenerate(
         sessionDir,
         file,
         false,
         generated.error,
-        !generated.protectExisting
+        discardGenerated
       );
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
@@ -355,7 +356,8 @@ export class RefineEngine {
         sessionDir,
         file,
         false,
-        'raw.jsonl mutated during finalize'
+        'raw.jsonl mutated during finalize',
+        discardGenerated
       );
     }
     file.status = 'finalized';
@@ -366,7 +368,8 @@ export class RefineEngine {
         sessionDir,
         file,
         true,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
+        discardGenerated
       );
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
@@ -374,7 +377,8 @@ export class RefineEngine {
         sessionDir,
         file,
         true,
-        'raw.jsonl mutated during finalize'
+        'raw.jsonl mutated during finalize',
+        discardGenerated
       );
     }
     try {
@@ -384,7 +388,8 @@ export class RefineEngine {
         sessionDir,
         file,
         true,
-        error instanceof Error ? error.message : String(error)
+        error instanceof Error ? error.message : String(error),
+        discardGenerated
       );
     }
     this.current = file;
@@ -396,6 +401,8 @@ export class RefineEngine {
    * generate-first `generated/` so CLI cannot treat leftovers as truth.
    * R42a: persistReviewing is also true when the finalized persistRevision
    * throws, so disk cannot stay `finalized` while memory is `reviewing`.
+   * P65a: skip discard when `protectExisting` (a previously good finalized
+   * `generated/` existed); do not `rm -rf` it after atomic replace.
    */
   private async abortFinalizeAfterGenerate(
     sessionDir: string,
@@ -428,15 +435,18 @@ export class RefineEngine {
   private async writeGeneratedPackage(
     sessionDir: string,
     file: RefinedRevisionFile
-  ): Promise<{ ok: true } | { ok: false; error: string; protectExisting: boolean }> {
+  ): Promise<
+    | { ok: true; protectExisting: boolean }
+    | { ok: false; error: string; protectExisting: boolean }
+  > {
     const protectExisting = await generatedScenarioExists(sessionDir);
     try {
       if (this.deps.generate !== undefined) {
         await this.deps.generate(sessionDir, file);
-        return { ok: true };
+        return { ok: true, protectExisting };
       }
       await writeGeneratedFromRevision(sessionDir, file);
-      return { ok: true };
+      return { ok: true, protectExisting };
     } catch (error) {
       try {
         if (!protectExisting) {

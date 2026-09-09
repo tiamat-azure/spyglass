@@ -233,8 +233,9 @@ still resolve with WHATWG. Relative `--report` is resolved from the
 scenario file directory, not `process.cwd()` (A19a). The script runs
 outside Electron; `--no-ai` needs no API key. Omitting `driver` in
 `runScenario` launches a real standalone Playwright Chromium (generated
-`scenario.ts` / CLI). In-app replay (`ReplayEngine`) always passes an
-explicit driver bound to the guest window (S44b). In-app Rejouer loads
+`scenario.ts` / CLI) and defaults `argv` / `env` to `process.argv.slice(2)`
+/ `process.env` (S44b / S66b). In-app replay (`ReplayEngine`) always passes an
+explicit driver bound to the guest window. In-app Rejouer loads
 `generated/scenario.json` only when the latest `rev-N` is `finalized`
 (G56a). Corpus `--out` must be a `.json` file under `docs/lot-6/` (O57a).
 Measurement protocol for

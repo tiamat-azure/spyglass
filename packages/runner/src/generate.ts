@@ -274,6 +274,10 @@ Session \`${sessionId}\`. Artefact **hybride** (ADR-0006, PRD §6.12) :
 | \`package.json\` | dépendance déclarée \`${RUNNER_PACKAGE}\` |
 | \`README.md\` | ce mode d'emploi |
 
+Sans \`driver\`, \`runScenario\` lance Chromium Playwright et lit
+\`process.argv.slice(2)\` / \`process.env\` (S44b / S66b). L'app passe un
+driver explicite.
+
 Le moteur (vérifications, tentatives, rattrapage, rapports) vit dans la
 librairie, pas dans ce fichier. Corriger le runner n'exige pas de régénérer
 tous les scénarios.

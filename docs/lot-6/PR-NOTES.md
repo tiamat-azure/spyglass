@@ -123,6 +123,9 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 11. **S44b / L6-044.** Omitting `driver` in `runScenario` launches a real
     standalone Playwright Chromium (generated script / CLI). In-app callers
     (`ReplayEngine`) must pass an explicit driver. Do not invert this.
+    **S66b / L6-066.** The driver-less path still defaults `argv` to
+    `process.argv.slice(2)` and `env` to `process.env`. Do not remove those
+    host defaults.
 12. **N52b / L6-052.** `chromiumLaunchArgs` still adds `--no-sandbox` /
     `--disable-setuid-sandbox` when `CI` is `1`/`true`/`yes` **or**
     `SPYGLASS_NO_SANDBOX=1`. Do **not** require the env var alone. Emit a
@@ -146,6 +149,13 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
     must not `rm -rf` a previously good finalized package. Only call
     `discardGeneratedPackage` when there was no existing `scenario.json`
     to protect (first generate / L6-005).
+17. **P65a / L6-065.** Post-generate abort (raw mutation, persist failure,
+    `finalizeScenario` throw) must not `discardGeneratedPackage` when
+    `protectExisting` is true. First generate-first leftover is still
+    discarded (L6-004). Aligns with D61a after atomic replace.
+18. **S66b / L6-066.** Driver-less `runScenario` keeps
+    `options.argv ?? process.argv.slice(2)` and
+    `options.env ?? process.env`. Documented with S44b (JSDoc / README).
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -597,6 +607,21 @@ Applied on tip `789ec78d8c3ce1fc38dd02ac11f5686bfa33c0ce`. Product decisions
 
 Unit tests after this pass: **412 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 21 (P65a / S66b locks)
+
+Applied on tip `82534d31852610a8fe50a61eed350c8dfa24f6bd`. Prior locks
+1–16 (incl. D61a, S44b, L6-062..064) are unchanged. Locks **P65a** and
+**S66b**.
+
+- **L6-065 / P65a** Post-generate abort paths pass
+  `discardGenerated: !protectExisting`. A previously good finalized
+  `generated/` is not deleted on raw mutation / persist /
+  `finalizeScenario` abort after atomic replace. Generate-first leftover
+  is still discarded (L6-004).
+- **L6-066 / S66b** Driver-less `runScenario` keeps
+  `process.argv.slice(2)` / `process.env` defaults. Documented in JSDoc,
+  README, generated README, and this file alongside S44b.
 
 ## Residuals
 

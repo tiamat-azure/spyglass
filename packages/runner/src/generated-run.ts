@@ -6,7 +6,8 @@ import { asScenario } from './scenario.ts';
 
 /**
  * Convenience wrapper around driver-less `runScenario` (prints exit JSON).
- * Omitting `driver` launches standalone Playwright Chromium (S44b).
+ * Omitting `driver` launches standalone Playwright Chromium (S44b) using
+ * host `process.argv.slice(2)` / `process.env` (S66b).
  * Generated scenario.ts calls `runScenario` directly (ADR-0006 / PRD §6.12).
  */
 export async function runGeneratedScript(

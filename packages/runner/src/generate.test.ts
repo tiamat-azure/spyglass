@@ -121,6 +121,12 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(runSrc).toContain('runScenarioStandalone');
     expect(runSrc).toContain('launchPlaywrightRun');
     expect(runSrc).toMatch(/omitting `options\.driver` launches a real standalone Playwright/u);
+    expect(runSrc).toContain('options.argv ?? process.argv.slice(2)');
+    expect(runSrc).toContain('options.env ?? process.env');
+    expect(runSrc).toContain('S66b');
+    const readme = await readFile(join(repoRoot(), 'README.md'), 'utf8');
+    expect(readme).toMatch(/process\.argv\.slice\(2\)/);
+    expect(readme).toMatch(/S44b \/ S66b/);
     const replaySrc = await readFile(
       join(repoRoot(), 'packages/app/src/main/replay-engine.ts'),
       'utf8'
@@ -211,6 +217,7 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(generatedReadme('ses_x')).toMatch(/Windows/);
     expect(generatedReadme('ses_x')).toContain('env -S node --experimental-transform-types');
     expect(generatedReadme('ses_x')).toMatch(/sans.*driver/u);
+    expect(generatedReadme('ses_x')).toContain('process.argv.slice(2)');
   });
 
   it('runScenario without a driver prints F-58 help and needs no API keys', async () => {

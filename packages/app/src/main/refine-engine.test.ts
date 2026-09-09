@@ -537,6 +537,122 @@ describe('RefineEngine', () => {
     expect(kept.startUrl).toBe('https://keep.test/good');
   });
 
+  it('keeps generated/ on persist abort after atomic replace when protectExisting (P65a / L6-065)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    await writeGeneratedPackage({
+      sessionDir: session.dir,
+      scenario: {
+        schemaVersion: 1,
+        sessionId: 'ses_lot4',
+        startUrl: 'https://keep.test/good',
+        generatedAt: '2026-09-08T12:00:00.000Z',
+        steps: []
+      }
+    });
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const revPath = join(sessionDir, 'refined', `rev-${String(file.revision)}.json`);
+        unlinkSync(revPath);
+        mkdirSync(revPath);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    const kept = JSON.parse(
+      await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
+    ) as { startUrl?: string };
+    expect(kept.startUrl).toBeDefined();
+    expect(kept.startUrl?.length).toBeGreaterThan(0);
+  });
+
+  it('keeps generated/ on raw mutation abort after atomic replace when protectExisting (P65a / L6-065)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    await writeGeneratedPackage({
+      sessionDir: session.dir,
+      scenario: {
+        schemaVersion: 1,
+        sessionId: 'ses_lot4',
+        startUrl: 'https://keep.test/good',
+        generatedAt: '2026-09-08T12:00:00.000Z',
+        steps: []
+      }
+    });
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const rawPath = join(sessionDir, 'raw.jsonl');
+        await writeFile(rawPath, `${await readFile(rawPath, 'utf8')}\n`, 'utf8');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/raw\.jsonl mutated/);
+    }
+    await expect(access(join(session.dir, 'generated', 'scenario.json'))).resolves.toBeUndefined();
+  });
+
   it('surfaces persistRevision rollback failure instead of silent diverge (R33a / L6-033)', async () => {
     const events: RawEvent[] = [
       click('evt_000001', 1, 'https://app.example.test/a', 1),

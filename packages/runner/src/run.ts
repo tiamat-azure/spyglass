@@ -39,9 +39,10 @@ export type ReplayProgress = {
 
 export type RunScenarioHooks = RunScenarioOptions & {
   /**
-   * S44b: omit to launch a real standalone Playwright Chromium (generated
-   * `scenario.ts` / CLI / ADR-0006). In-app callers (Electron ReplayEngine)
-   * must pass an explicit driver bound to the guest window.
+   * S44b / S66b: omit to launch a real standalone Playwright Chromium
+   * (generated `scenario.ts` / CLI / ADR-0006) using host
+   * `process.argv.slice(2)` and `process.env`. In-app callers (Electron
+   * ReplayEngine) must pass an explicit driver bound to the guest window.
    */
   driver?: PageDriver;
   recoverer?: Recoverer;
@@ -68,6 +69,10 @@ export function newRunId(now = new Date()): string {
  * Chromium (`runScenarioStandalone` → `launchPlaywrightRun`). That is the
  * generated-script / CLI path. In-app replay must pass an explicit
  * `PageDriver` so Electron does not spawn a second browser.
+ *
+ * S66b — the driver-less path defaults `argv` to `process.argv.slice(2)` and
+ * `env` to `process.env` (host process). Keep those defaults. In-app callers
+ * pass an explicit driver and should not rely on host argv/env.
  */
 export async function runScenario(
   scenario: Scenario,
