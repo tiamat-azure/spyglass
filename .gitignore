@@ -4,6 +4,7 @@ out/
 release/
 coverage/
 sessions/
+.spyglass/
 .env
 .env.*
 !.env.example
