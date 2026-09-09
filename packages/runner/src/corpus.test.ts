@@ -174,6 +174,26 @@ describe('Lot 6 measurement protocol corpus', () => {
     expect(src).toContain('mkdir(dirname(out), { recursive: true })');
   });
 
+  it('writes corpus --out via the jailed real path and re-checks before mkdir/write (L6-075)', async () => {
+    const src = await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), 'corpus-cli.ts'),
+      'utf8'
+    );
+    expect(src).toContain('return await jailCorpusOutPath(resolved)');
+    expect(src).not.toMatch(/return resolved;$/m);
+    expect(src).toContain('commitCorpusOutWritePath');
+    expect(src).toContain('--out path changed after validation');
+    expect(src.indexOf('out = await commitCorpusOutWritePath(out)')).toBeLessThan(
+      src.indexOf('mkdir(dirname(out), { recursive: true })')
+    );
+    expect(src.indexOf('mkdir(dirname(out), { recursive: true })')).toBeLessThan(
+      src.lastIndexOf('out = await commitCorpusOutWritePath(out)')
+    );
+    expect(src.lastIndexOf('out = await commitCorpusOutWritePath(out)')).toBeLessThan(
+      src.indexOf('await writeFile(out,')
+    );
+  });
+
   it('measure-corpus script uses --experimental-transform-types (L6-007)', async () => {
     const pkg = JSON.parse(
       await readFile(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')

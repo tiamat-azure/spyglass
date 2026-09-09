@@ -69,19 +69,33 @@ export async function resolveCorpusOutPath(
               ? 'measured-rates.local.json'
               : 'measured-rates.json'
         );
+  return await jailCorpusOutPath(resolved);
+}
+
+/** O34a / L6-075: jail on the realpath leaf, not the pre-realpath string. */
+async function jailCorpusOutPath(candidate: string): Promise<string> {
   const rootReal = await realpath(resolve(repoRoot()));
   const lot6Real = await realpathExistingPrefix(resolve(repoRoot(), 'docs/lot-6'));
-  const realTarget = await realpathExistingPrefix(resolved);
+  const realTarget = await realpathExistingPrefix(candidate);
   if (!isInsideDir(rootReal, realTarget)) {
-    throw new Error(`--out path escapes the repo: ${resolved}`);
+    throw new Error(`--out path escapes the repo: ${candidate}`);
   }
   if (!isInsideDir(lot6Real, realTarget) || resolve(realTarget) === resolve(lot6Real)) {
-    throw new Error(`--out path escapes docs/lot-6: ${resolved}`);
+    throw new Error(`--out path escapes docs/lot-6: ${candidate}`);
   }
-  if (!resolved.toLowerCase().endsWith('.json') || !realTarget.toLowerCase().endsWith('.json')) {
+  if (!candidate.toLowerCase().endsWith('.json') || !realTarget.toLowerCase().endsWith('.json')) {
     throw new Error('--out must be a .json file under docs/lot-6');
   }
-  return resolved;
+  return realTarget;
+}
+
+/** Re-realpath after the check/use gap; reject if the jailed target moved. */
+async function commitCorpusOutWritePath(validatedReal: string): Promise<string> {
+  const realNow = await jailCorpusOutPath(validatedReal);
+  if (resolve(realNow) !== resolve(validatedReal)) {
+    throw new Error('--out path changed after validation');
+  }
+  return realNow;
 }
 
 export async function runCorpusCli(
@@ -101,7 +115,7 @@ export async function runCorpusCli(
   const wave = publicLive ? (wantsJ1 ? 'J+1' : 'J+0') : 'local-immutable';
   let close: (() => Promise<void>) | undefined;
   try {
-    const out = await resolveCorpusOutPath(argv, wave);
+    let out = await resolveCorpusOutPath(argv, wave);
     let sites = [...PUBLIC_CORPUS];
     if (!publicLive) {
       const server = await startFixtureServer();
@@ -115,7 +129,9 @@ export async function runCorpusCli(
       env,
       headless: true
     });
+    out = await commitCorpusOutWritePath(out);
     await mkdir(dirname(out), { recursive: true });
+    out = await commitCorpusOutWritePath(out);
     await writeFile(out, `${JSON.stringify(measured, null, 2)}\n`, 'utf8');
     process.stdout.write(`${JSON.stringify({ out, rate: measured.replayWithoutAiRate })}\n`);
     return measured.sites.every((row) => row.ok) ? 0 : 1;
