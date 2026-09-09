@@ -948,6 +948,9 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 - **L7-212:** Hung-git SIGKILL test drops the brittle ≥300ms wall-clock
   floor; kill + 15s upper bound remain.
 
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**679 passed**, 1 skipped (62 files). `lot7-patch.test.ts` 80.
+
 Ask-user still held: R28, G28, P28, S28, X28, F28, W28.
 
 ## CI — macOS Electron e2e close hang
