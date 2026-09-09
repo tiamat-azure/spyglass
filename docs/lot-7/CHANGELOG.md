@@ -904,6 +904,9 @@ Ask-user still held: D27, A27, L27 (not assumed).
   path while the scenario file lived in another directory. Use an
   absolute path or a path relative to the scenario / generated script.
 
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**672 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 59.
+
 Ask-user still held: A27, L27.
 
 ## CI — macOS Electron e2e close hang
