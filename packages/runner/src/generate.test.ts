@@ -513,7 +513,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(genSrc).not.toContain('asScenario(scenarioInput, parsed.baseUrl)');
     const generatedTs = generatedScenarioTsSource();
     expect(generatedTs).toContain('asScenario(JSON.parse');
-    expect(generatedTs.indexOf('asScenario(')).toBeLessThan(generatedTs.indexOf('await runScenario('));
+    expect(generatedTs.indexOf('asScenario(')).toBeLessThan(
+      generatedTs.indexOf('await runScenario(')
+    );
     const chunks: string[] = [];
     const write = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array) => {
@@ -536,7 +538,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(source).toMatch(
       /import \{ asScenario, generatedHelpText, runScenario \} from '@spyglass\/runner'/
     );
-    expect(source).toContain("asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'))");
+    expect(source).toContain(
+      "asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'))"
+    );
     expect(source.indexOf('asScenario(')).toBeLessThan(source.indexOf('await runScenario('));
 
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-v59a-'));
