@@ -717,6 +717,50 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(upstreamPushes).toBe(3);
   });
 
+  it('surfaces git push origin --delete stderr (L7-105)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7105-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push' && args.includes('--delete')) {
+        return { stdout: '', stderr: 'remote ref refuse: cannot lock', code: 1 };
+      }
+      if (args[0] === 'push' && args.includes('-u')) {
+        return {
+          stdout: '',
+          stderr: '! [rejected] spyglass/patch (non-fast-forward)',
+          code: 1
+        };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      hasOpenPr: async () => false,
+      createPr: async () => ({ ok: false })
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/remote ref refuse: cannot lock/);
+    expect(result.reason).not.toBe('git push failed');
+  });
+
   it('refuses remote delete/recreate when an open PR exists (P14a)', async () => {
     const dir = await tempDir('spyglass-lot7-p14a-');
     await initGitRepo(dir);

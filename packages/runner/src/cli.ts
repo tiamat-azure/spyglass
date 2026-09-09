@@ -31,6 +31,9 @@ export async function runCli(
   if (parsed.repo !== undefined) {
     parsed.repo = resolve(parsed.repo);
   }
+  if (parsed.sessionDir !== undefined) {
+    parsed.sessionDir = resolve(parsed.sessionDir);
+  }
   if (parsed.datasetPath !== undefined && parsed.datasetPath.length > 0) {
     parsed.datasetPath = isAbsolute(parsed.datasetPath)
       ? parsed.datasetPath

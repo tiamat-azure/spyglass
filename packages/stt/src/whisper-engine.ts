@@ -320,6 +320,9 @@ export async function runWhisperCli(options: {
   }
 }
 
+/** L7-108: cap first-use persist retries for the engine lifetime. */
+const FIRST_USE_RETRY_LIMIT = 3;
+
 /**
  * L7-008: first-use latency persistence must not fail transcription.
  * L7-043: returns false when the hook fails so firstUseNoted can retry.
@@ -366,6 +369,8 @@ export function createWhisperEngine(options: {
   const jobs = new Set<WhisperJob>();
   let firstUseNoted = false;
   let firstUsePending: Promise<void> | undefined;
+  let firstUseAttempts = 0;
+  let firstUseBackoffUntil = 0;
 
   const killJobs = (utteranceId?: string): void => {
     for (const job of [...jobs]) {
@@ -397,18 +402,28 @@ export function createWhisperEngine(options: {
     if (hook === undefined) {
       return;
     }
-    while (!firstUseNoted) {
+    let skipBackoff = false;
+    while (!firstUseNoted && firstUseAttempts < FIRST_USE_RETRY_LIMIT) {
       if (firstUsePending !== undefined) {
         await firstUsePending;
+        skipBackoff = true;
         continue;
       }
+      if (!skipBackoff && Date.now() < firstUseBackoffUntil) {
+        return;
+      }
+      skipBackoff = false;
       // L7-097: persist this call's sample; do not reuse the first latencyMs
       // after joining a failed in-flight hook.
       const pending = (async () => {
+        firstUseAttempts += 1;
         const noted = await notifyFirstUseLatency(hook, latencyMs);
         if (noted) {
           firstUseNoted = true;
+          return;
         }
+        const delayMs = Math.min(250 * 2 ** (firstUseAttempts - 1), 4_000);
+        firstUseBackoffUntil = Date.now() + delayMs;
       })();
       firstUsePending = pending;
       try {

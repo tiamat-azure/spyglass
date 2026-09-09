@@ -431,6 +431,23 @@ Ask-user still held: **P14** (remote force-delete vs gate on open PR).
 
 Ask-user still held: none for P12–P14.
 
+## Pass-15 adversarial fixes (L7-103 … L7-108)
+
+- **L7-103:** After SIGKILL on the Electron close timeout, wait for process
+  `exit` (2s grace) before returning so `rm(userData)` does not race a
+  dying process (Windows EBUSY/EPERM).
+- **L7-104:** `spyglass-run` resolves `--session-dir` to an absolute path
+  after parse (same cwd-stable treatment as `--repo`).
+- **L7-105:** Non-fast-forward remote delete failures surface git
+  `--delete` stderr (or `git push origin --delete <branch> failed`).
+- **L7-106:** P13a fail-closed: missing or ambiguous recorded-step lookup
+  still strips fill/select `suggested.arguments` (and original args).
+- **L7-107:** `runScenario` reuses the already-redacted `suggestedPatch`
+  for `processSuggestedPatch` instead of rebuilding from raw patches.
+- **L7-108:** First-use latency persist retries are capped (3) with
+  backoff so a rejecting `onFirstUseLatency` does not rewrite on every
+  finalize for the engine lifetime.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

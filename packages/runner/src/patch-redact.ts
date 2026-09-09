@@ -19,7 +19,11 @@ export function findStepByIndex(
   if (scenario === undefined) {
     return undefined;
   }
-  return scenario.steps.find((step) => step.index === stepIndex) ?? scenario.steps[stepIndex];
+  const matches = scenario.steps.filter((step) => step.index === stepIndex);
+  if (matches.length !== 1) {
+    return undefined;
+  }
+  return matches[0];
 }
 
 /** L7-038: persist suggested-patch originals from the recorded scenario, without parameter args. */
@@ -45,13 +49,15 @@ export function redactSuggestedPatchEntryForPersistence(
 ): SuggestedPatchEntry {
   const original = cloneDescriptor(patch.original);
   const suggested = cloneDescriptor(patch.suggested);
+  const secretType = isSecretArgType(original.type) || isSecretArgType(suggested.type);
   if (hasParameterRef(recordedStep)) {
     delete original.arguments;
     delete suggested.arguments;
-  } else if (
-    original.arguments === undefined &&
-    (isSecretArgType(original.type) || isSecretArgType(suggested.type))
-  ) {
+  } else if (recordedStep === undefined && secretType) {
+    // L7-106: missing/ambiguous recorded step — do not keep fill/select args.
+    delete original.arguments;
+    delete suggested.arguments;
+  } else if (original.arguments === undefined && secretType) {
     delete suggested.arguments;
   }
   return { ...patch, original, suggested };

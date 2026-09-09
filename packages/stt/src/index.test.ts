@@ -567,6 +567,66 @@ describe('@spyglass/stt', () => {
     }
   });
 
+  it('caps first-use latency hook retries when persist keeps failing (L7-108)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7108-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        throw new Error('persist failed');
+      }
+    });
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const id = `u${String(index)}`;
+        engine.begin(id);
+        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
+        await engine.finalize(id);
+      }
+      expect(calls).toBeGreaterThan(0);
+      expect(calls).toBeLessThanOrEqual(3);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('caps first-use latency hook retries when persist keeps failing (L7-108)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7108-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        throw new Error('persist failed');
+      }
+    });
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const id = `u${String(index)}`;
+        engine.begin(id);
+        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
+        await engine.finalize(id);
+      }
+      expect(calls).toBeGreaterThan(0);
+      expect(calls).toBeLessThanOrEqual(3);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
   it('does not note first-use latency on abort or cancellation (F8a)', async () => {
     const dir = join(tmpdir(), `spyglass-whisper-f8a-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });

@@ -34,4 +34,9 @@ describe('shared F-58 help text (H29a / L6-029)', () => {
     expect(generated).not.toContain('--max-ai-retries <n>');
     expect(run).not.toContain('--max-ai-retries <n>');
   });
+
+  it('resolves --session-dir to an absolute path after parse (L7-104)', async () => {
+    const cli = await readFile(join(repoRoot(), 'packages/runner/src/cli.ts'), 'utf8');
+    expect(cli).toContain('parsed.sessionDir = resolve(parsed.sessionDir)');
+  });
 });

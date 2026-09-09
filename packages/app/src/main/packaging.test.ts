@@ -284,5 +284,8 @@ describe('packaged Observe', () => {
     const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');
+    expect(closeElectron).toContain("kill('SIGKILL')");
+    expect(closeElectron).toContain("once('exit'");
+    expect(closeElectron).toContain('KILL_EXIT_GRACE_MS');
   });
 });

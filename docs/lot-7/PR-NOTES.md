@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **555 passed**, 1 skipped (60 files) |
+| `pnpm test` | **561 passed**, 1 skipped (60 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (43), `patch-redact.test.ts` (7), `lot7-parameters.test.ts` (35),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (44), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (35),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -150,6 +150,7 @@ Captain lock **P13a** (strip proposed-side secret args before patch
 persistence) is in `CHANGELOG.md`.
 Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
 `CHANGELOG.md`.
+Pass-15 (L7-103 … L7-108) is in `CHANGELOG.md`.
 
 ## Residuals
 

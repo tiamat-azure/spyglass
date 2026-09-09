@@ -702,9 +702,15 @@ async function pushPatchBranch(
       reason: `open PR exists for ${branch}; remote left unchanged`
     };
   }
-  const deleted = await git(['push', 'origin', '--delete', branch], repoRoot);
+  const deletedArgs = ['push', 'origin', '--delete', branch] as const;
+  const deleted = await git(deletedArgs, repoRoot);
   if (deleted.code !== 0) {
-    return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
+    const detail = deleted.stderr.trim();
+    return {
+      ok: false,
+      code: 'pr-prep-failed',
+      reason: detail.length > 0 ? detail : `git ${deletedArgs.join(' ')} failed`
+    };
   }
   const retried = await git(['push', '-u', 'origin', branch], repoRoot);
   if (retried.code === 0) {

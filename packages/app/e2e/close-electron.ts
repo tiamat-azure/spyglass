@@ -1,9 +1,18 @@
 /** Playwright `electronApp.close()` waits for `app.quit()` / process exit. */
 const CLOSE_TIMEOUT_MS = 12_000;
+/** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
+const KILL_EXIT_GRACE_MS = 2_000;
+
+type ElectronChild = {
+  kill: (signal?: NodeJS.Signals) => boolean;
+  killed?: boolean;
+  exitCode?: number | null;
+  once?: (event: 'exit', listener: () => void) => unknown;
+};
 
 type LaunchedElectron = {
   close: () => Promise<void>;
-  process: () => { kill: (signal?: NodeJS.Signals) => boolean } | null | undefined;
+  process: () => ElectronChild | null | undefined;
 };
 
 /**
@@ -27,10 +36,36 @@ export async function closeElectron(electronApp: LaunchedElectron): Promise<void
       })
     ]);
   } catch {
-    electronApp.process()?.kill('SIGKILL');
+    const child = electronApp.process();
+    child?.kill('SIGKILL');
+    await waitForProcessExit(child);
   } finally {
     if (timer !== undefined) {
       clearTimeout(timer);
     }
   }
+}
+
+async function waitForProcessExit(child: ElectronChild | null | undefined): Promise<void> {
+  if (child === undefined || child === null) {
+    return;
+  }
+  if (child.killed === true || (child.exitCode !== undefined && child.exitCode !== null)) {
+    return;
+  }
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      if (typeof child.once === 'function') {
+        child.once('exit', () => {
+          resolve();
+        });
+        return;
+      }
+      resolve();
+    }),
+    new Promise<void>((resolve) => {
+      const grace = setTimeout(resolve, KILL_EXIT_GRACE_MS);
+      grace.unref();
+    })
+  ]);
 }

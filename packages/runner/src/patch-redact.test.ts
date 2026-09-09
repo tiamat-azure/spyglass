@@ -119,6 +119,29 @@ describe('P13a patch secret redaction', () => {
     expect(redacted.patches[0]?.original.arguments).toEqual(['visible-user']);
   });
 
+  it('strips fill/select suggested args when the recorded step cannot be resolved (L7-106)', () => {
+    const secret = 'dataset-secret';
+    const redacted = redactSuggestedPatchForPersistence(leakyFillPatch(secret));
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.suggested.arguments).toBeUndefined();
+    expect(redacted.patches[0]?.original.arguments).toBeUndefined();
+  });
+
+  it('strips fill args when recorded step indexes are ambiguous (L7-106)', () => {
+    const secret = 'dataset-secret';
+    const first = fillStep('#email', 'visible-user');
+    const duplicate = fillStep('#password', 'recorded-secret', 'password');
+    duplicate.index = 0;
+    const redacted = redactSuggestedPatchForPersistence(leakyFillPatch(secret), {
+      schemaVersion: 1,
+      sessionId: 'ses_lot7',
+      startUrl: 'https://exemple.test/login',
+      steps: [first, duplicate]
+    });
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.suggested.arguments).toBeUndefined();
+  });
+
   it('keeps navigate URL args', () => {
     const redacted = redactSuggestedPatchForPersistence({
       schemaVersion: 1,

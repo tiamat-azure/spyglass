@@ -427,37 +427,7 @@ async function runScenarioOnDriver(
     warnings: unique(warnings),
     steps: stepReports
   };
-  const suggestedPatch: SuggestedPatch | undefined =
-    patches.length > 0
-      ? redactSuggestedPatchForPersistence(
-          {
-            schemaVersion: 1,
-            runId,
-            sessionId: executable.sessionId,
-            applied: false,
-            patches
-          },
-          scenario
-        )
-      : undefined;
-
-  let runDir: string | undefined;
-  if (resolved.reportDir !== undefined) {
-    runDir = resolved.reportDir;
-    await writeRunArtifacts({
-      runDir,
-      report,
-      scenario,
-      ...(suggestedPatch !== undefined ? { suggestedPatch } : {})
-    });
-  }
-
-  if (options.closeDriver === true) {
-    await options.driver.close();
-  }
-
-  const result: RunScenarioResult = { exitCode: report.exitCode, report };
-  const suggested: SuggestedPatch = redactSuggestedPatchForPersistence(
+  const suggestedPatch: SuggestedPatch = redactSuggestedPatchForPersistence(
     {
       schemaVersion: 1,
       runId,
@@ -467,11 +437,28 @@ async function runScenarioOnDriver(
     },
     scenario
   );
-  if (suggestedPatch !== undefined) {
+
+  let runDir: string | undefined;
+  if (resolved.reportDir !== undefined) {
+    runDir = resolved.reportDir;
+    await writeRunArtifacts({
+      runDir,
+      report,
+      scenario,
+      ...(patches.length > 0 ? { suggestedPatch } : {})
+    });
+  }
+
+  if (options.closeDriver === true) {
+    await options.driver.close();
+  }
+
+  const result: RunScenarioResult = { exitCode: report.exitCode, report };
+  if (patches.length > 0) {
     result.suggestedPatch = suggestedPatch;
   }
   const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
-    suggested,
+    suggested: suggestedPatch,
     // L7-019: persist the recorded scenario, not dataset-materialized secrets.
     scenario,
     policy: resolvePatchPolicy(options.env ?? process.env, {
