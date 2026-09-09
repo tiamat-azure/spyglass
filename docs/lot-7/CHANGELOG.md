@@ -153,10 +153,13 @@
   Local commit with a failed/missing PR still returns `ok: true`
   (`prPrepared: false`) and does **not** increment `appliedPatches`
   (overrides L7-011 health-on-local-commit).
-- **P6a:** An existing `STT_MODEL_PATH` is honoured over `STT_MODEL_DIR`
-  conventional small/large discovery when not in large-model fallback.
-  L7-016 still requires `ggml-small-q5_1.bin` when fallback is set and
-  the explicit basename is large.
+- **P6a:** An existing `STT_MODEL_PATH` that is not the conventional
+  small/large file inside `STT_MODEL_DIR` is honoured over directory
+  discovery when not in large-model fallback (explicit large/custom in
+  another directory still wins even if `MODEL_DIR` has small). F3a still
+  prefers large when fallback is false and the explicit path is the
+  conventional small. L7-016 still requires `ggml-small-q5_1.bin` when
+  fallback is set and the explicit basename is large.
 - **C6a:** `scripts/capture-lot-7.mjs` screenshots are labelled
   **illustrative fixtures** in PR-NOTES / DEMO (not live app/repo
   capture). The capture script is unchanged this lot.

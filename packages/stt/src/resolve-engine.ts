@@ -56,10 +56,13 @@ export async function createEngineFromEnv(
       const explicit = env.STT_MODEL_PATH?.trim();
       const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
       const largeOk = existsSync(largePath);
-      if (explicitOk && !fallback) {
+      const explicitIsConventional =
+        (smallOk && explicit === smallPath) || (largeOk && explicit === largePath);
+      if (explicitOk && !fallback && !explicitIsConventional) {
         // P6a / M4a: honor STT_MODEL_PATH over STT_MODEL_DIR conventional
-        // small/large discovery. L7-016 still refuses large weights as the
-        // small engine when fallback is set.
+        // small/large discovery. F3a still prefers large when fallback is
+        // false and the explicit path is the conventional small in MODEL_DIR.
+        // L7-016 still refuses large weights as the small engine when fallback.
         model = explicit;
       } else {
         const choice = chooseWhisperModel({
