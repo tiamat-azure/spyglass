@@ -1211,6 +1211,9 @@ Ask-user still held: C31, W31, R32.
   undefined) and does not fall back to large via `existing[0]`. A30a
   `missing-session-dir` and I30a whisper-cli digest unchanged.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**719 passed**, 1 skipped (62 files).
+
 Ask-user still held: R32.
 
 ## CI — macOS Electron e2e close hang
