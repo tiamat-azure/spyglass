@@ -114,7 +114,9 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   const files = await listRefinedRevisionNames(refinedDir);
   const latestName = files.at(-1);
   const latest =
-    latestName !== undefined ? await readRevisionFile(refinedDir, latestName) : undefined;
+    latestName !== undefined
+      ? await readRevisionFile(refinedDir, latestName, true)
+      : undefined;
   // G56a: leftover generated/ from generate-first is not authoritative unless
   // the latest rev-N is already finalized.
   if (latest?.status === 'finalized' && latest.steps.length > 0) {
@@ -160,18 +162,28 @@ async function listRefinedRevisionNames(refinedDir: string): Promise<string[]> {
   return files;
 }
 
-/** L6-062: skip unreadable non-selected rev-N.json instead of failing the walk. */
+/** L6-062: skip unreadable non-selected rev-N.json. C68a: latest must fail closed. */
 async function readRevisionFile(
   refinedDir: string,
-  name: string
+  name: string,
+  required = false
 ): Promise<RefinedRevisionFile | undefined> {
   try {
     const value = JSON.parse(await readFile(join(refinedDir, name), 'utf8')) as unknown;
     if (typeof value !== 'object' || value === null) {
+      if (required) {
+        throw new Error(`corrupt revision ${name}`);
+      }
       return undefined;
     }
     return value as RefinedRevisionFile;
   } catch (error) {
+    if (error instanceof Error && error.message.startsWith('corrupt revision ')) {
+      throw error;
+    }
+    if (required) {
+      throw new Error(`corrupt revision ${name}`);
+    }
     if (error instanceof SyntaxError) {
       return undefined;
     }

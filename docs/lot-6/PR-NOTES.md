@@ -156,6 +156,10 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 18. **S66b / L6-066.** Driver-less `runScenario` keeps
     `options.argv ?? process.argv.slice(2)` and
     `options.env ?? process.env`. Documented with S44b (JSDoc / README).
+19. **C68a / L6-068.** If the **highest-numbered** `rev-N.json` is
+    unreadable or corrupt JSON, Rejouer `loadFinalizedScenario` **fails
+    closed**. Do not silently fall back to an older finalized revision.
+    Older non-selected corrupt revs may still be skipped (L6-062).
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -638,6 +642,16 @@ Applied on tip `6f162f336c39bb266e54d61ec8d61e34bea4aa3d`. Product decisions
 
 Unit tests after this pass: **415 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 22 (C68a lock)
+
+Applied on tip `eb5da22718046aef7dec418dba52fa75e8977953`. Prior locks
+1–18 (incl. G56a, L6-062) are unchanged. Locks **C68a**.
+
+- **L6-068 / C68a** Highest-numbered `rev-N.json` unreadable/corrupt JSON
+  fails closed in `loadFinalizedScenario`. Older non-selected corrupt
+  revs remain skippable (L6-062). No silent fallback to an older
+  finalized revision.
 
 ## Residuals
 

@@ -473,4 +473,45 @@ describe('ReplayEngine', () => {
     const older = await loadFinalizedScenario(dir);
     expect(older.steps[0]?.action.descriptor.selector).toBe('#rev2');
   });
+
+  it('fails closed when the highest-numbered rev-N.json is corrupt (C68a / L6-068)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-c68a-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#rev1')]
+      }),
+      'utf8'
+    );
+    await writeFile(join(dir, 'refined', 'rev-2.json'), '{', 'utf8');
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/leftover',
+        steps: [clickStep('#leftover')]
+      }),
+      'utf8'
+    );
+    await expect(loadFinalizedScenario(dir)).rejects.toThrow(/corrupt revision rev-2\.json/);
+  });
 });
