@@ -92,8 +92,15 @@ make clean         # remove out/, release/, coverage/ and .spyglass/
 `check`, `test-unit` and `test-e2e` stay callable on their own for a faster
 loop; `make test` is the gate that chains all three.
 
-On a Linux box with no usable display, wrap the e2e target the way CI does:
-`xvfb-run --auto-servernum make test-e2e`.
+The e2e target drives a real Electron window. On Linux, CI runs it under
+`xvfb-run --auto-servernum` (a virtual X server, no physical display), and a
+Wayland desktop session needs the same wrapper for `electron.launch` to attach
+reliably:
+
+```bash
+sudo apt install xvfb            # or add `xvfb-run` to your Nix home.packages
+SPYGLASS_DISABLE_GPU=1 xvfb-run --auto-servernum make test-e2e
+```
 
 ### Runtime state
 
@@ -219,13 +226,26 @@ From a source checkout:
 4. In the right pane, click **Observe page**, **or** from another terminal:
 
 ```bash
-pnpm observe
+# from a source checkout, userData is ~/.config/@spyglass/app
+SPYGLASS_CDP_INFO=~/.config/@spyglass/app/cdp.json pnpm observe
 # equivalent:
 # node packages/app/scripts/stagehand-observe.mjs --cdp-url http://127.0.0.1:<port>
 ```
 
-The CDP URL and guest target are written to `userData/cdp.json` (also
-`SPYGLASS_CDP_INFO` when set). The chat pane prints the endpoint.
+The CDP URL and guest target are written to `userData/cdp.json`, and the chat
+pane prints the endpoint. `userData` depends on how the app was started:
+
+| Run | `userData` |
+| --- | --- |
+| source checkout (`pnpm start`, `pnpm dev`) | `~/.config/@spyglass/app/` (the package name) |
+| packaged build | `~/.config/Spyglass/` (the electron-builder `productName`) |
+
+`pnpm observe` and `pnpm act` only auto-discover the packaged path, so from a
+source checkout pass `SPYGLASS_CDP_INFO` (or `--cdp-url`) as shown above.
+Without it they exit with `No CDP URL. Start Spyglass, then pass --cdp-url or
+read userData/cdp.json.`
+
+`make status` reports the endpoint whichever path was used.
 
 - With `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, observe uses that model.
 - Without a key, a **local stub LLM** still runs `stagehand.observe()` over CDP
