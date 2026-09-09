@@ -653,6 +653,9 @@ Applied on tip `eb5da22718046aef7dec418dba52fa75e8977953`. Prior locks
   revs remain skippable (L6-062). No silent fallback to an older
   finalized revision.
 
+Unit tests after this pass: **416 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
