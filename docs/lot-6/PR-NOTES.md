@@ -656,6 +656,31 @@ Applied on tip `eb5da22718046aef7dec418dba52fa75e8977953`. Prior locks
 Unit tests after this pass: **416 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 22 (Copilot auto-fix)
+
+Applied on tip `897e6879086900ab50f4e64910d718406232f750`. Product decisions
+1–19 and prior locks (incl. C68a, D35b, O34a, S44b, G56a, L6-028) are
+unchanged.
+
+- **L6-069** `resolveCorpusOutPath` requires `.json` on both the resolved
+  path and the realpath leaf, so `docs/lot-6/out.json → notes.md` cannot
+  overwrite a non-JSON file.
+- **L6-070** `loadFinalizedScenarioForGenerate` fail-closes once the newest
+  `status === 'finalized'` revision is found: use it if `steps.length > 0`,
+  else throw. Do not fall back to an older finalized rev (C68a spirit).
+  Newer reviewing revs are still skipped until that newest finalized.
+- **L6-071** Explicit proof screenshots (`SPYGLASS_PROOF_SCREENSHOT` /
+  `proofScreenshot`) no longer swallow `driver.screenshot` failures into a
+  successful run; the error propagates and the driver still closes.
+- **L6-072** `runScenarioStandalone` overrides `parseGeneratedArgv` headless
+  only when `options.headless !== undefined`. Headed-default (D35b) stays;
+  argv `--headless` from the parser is kept.
+- **L6-073** `runScenarioStandalone` forwards `options.onProgress` into
+  `launchPlaywrightRun` so driver-less callers receive progress events.
+
+Unit tests after this pass: **422 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
