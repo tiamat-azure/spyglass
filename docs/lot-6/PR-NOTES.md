@@ -681,6 +681,19 @@ unchanged.
 Unit tests after this pass: **422 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 23 (Copilot auto-fix)
+
+Applied on tip `8a56a8c28ba5b3d5448b9ed70fb9197ea4cb8fa3`. Product decisions
+1–19 and prior locks (incl. C68a, D35b, L6-031) are unchanged.
+
+- **L6-074** `runScenarioStandalone` sets `parsed.trace` whenever
+  `options.trace !== undefined`, matching other F-58 overrides, so callers
+  can force `trace: false` over argv `--trace`. Generated `--help` still
+  exits in the template before `runScenario` (L6-031); help path unchanged.
+
+Unit tests after this pass: **423 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
