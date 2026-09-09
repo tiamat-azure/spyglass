@@ -74,22 +74,28 @@ export class SttUpgradeStore {
   }
 
   async recordCorrection(): Promise<void> {
-    return this.enqueuePersist(() => {
-      this.disk.correctionCount += 1;
+    return this.enqueuePersist((candidate) => {
+      candidate.correctionCount += 1;
     });
   }
 
   async refusePermanently(): Promise<void> {
-    return this.enqueuePersist(() => {
-      this.disk.refusedPermanently = true;
+    return this.enqueuePersist((candidate) => {
+      candidate.refusedPermanently = true;
     });
   }
 
-  /** L7-060: serialize mutations and publish via atomic temp+rename. */
-  private enqueuePersist(mutate: () => void): Promise<void> {
+  /**
+   * L7-060: serialize mutations and publish via atomic temp+rename.
+   * L7-076: mutate a candidate, write it, then assign in-memory state so a
+   * failed write cannot diverge from disk.
+   */
+  private enqueuePersist(mutate: (candidate: SttUpgradeDisk) => void): Promise<void> {
     const run = this.persistQueue.then(async () => {
-      mutate();
-      await this.writeDisk();
+      const candidate: SttUpgradeDisk = { ...this.disk };
+      mutate(candidate);
+      await this.writeDisk(candidate);
+      this.disk = candidate;
     });
     this.persistQueue = run.then(
       () => undefined,
@@ -98,8 +104,8 @@ export class SttUpgradeStore {
     return run;
   }
 
-  private async writeDisk(): Promise<void> {
-    const payload = `${JSON.stringify(this.disk, null, 2)}\n`;
+  private async writeDisk(disk: SttUpgradeDisk): Promise<void> {
+    const payload = `${JSON.stringify(disk, null, 2)}\n`;
     await writeFileAtomic(this.path, Buffer.from(payload));
   }
 }

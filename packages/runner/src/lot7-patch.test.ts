@@ -840,6 +840,23 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(isGitApplyError(new Error('git commit failed'))).toBe(false);
   });
 
+  it('refuses assisted apply when scenarioPath is missing (L7-078)', async () => {
+    const sessionDir = await tempDir('spyglass-lot7-nopath-');
+    const scn = scenario([clickStep(0, '#old')]);
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: sessionDir });
+    const result = await processSuggestedPatch({
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      policy,
+      sessionDir
+    });
+    expect(result.health).toBeDefined();
+    expect(result.assistedApply?.ok).toBe(false);
+    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
+      expect(result.assistedApply.code).toBe('missing-scenario-path');
+    }
+  });
+
   it('folds DEFAULT_BRANCH_NAMES into isDefaultBranchName (L7-031)', () => {
     expect(isDefaultBranchName('main')).toBe(true);
     expect(isDefaultBranchName('master')).toBe(true);

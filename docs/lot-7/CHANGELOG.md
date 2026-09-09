@@ -270,8 +270,34 @@ Ask-user F8 (AbortError / first-use latency) remains unchanged.
   scenario does not begin+end a replay cycle. `running` is still set
   before the load await (L7-021 / L7-004).
 
-Ask-user still held: **R10** (shared `parameterRef` last-write-wins vs
-conflict).
+## Pass-11 adversarial fixes (L7-076 … L7-082) + Captain lock R10a
+
+- **L7-076:** `SttUpgradeStore` builds a disk candidate, writes it
+  atomically, then assigns in-memory state. A failed write leaves
+  `correctionCount` / `refusedPermanently` unchanged.
+- **L7-077:** STT upgrade refuse hides the banner only when `result.ok`;
+  otherwise the copy surfaces `result.error` (banner stays visible).
+- **L7-078:** When `PATCH_ASSISTED_APPLY` is on and patches are present
+  but `scenarioPath` is missing, `processSuggestedPatch` sets
+  `assistedApply` to a `missing-scenario-path` refusal instead of a
+  silent health-only return.
+- **L7-079:** AI recovery redacts parameterized snapshot `text` as well
+  as `values` (live field values and remaining descriptor arguments).
+- **L7-080:** Missing or malformed `--dataset` (and P2a missing
+  `parameterRef`) returns `exitCode: 1` with a structured
+  `ExecutionReport` warning, not an unstructured throw.
+- **L7-081:** Whisper `transcribe()` does not await `onFirstUseLatency`
+  (fire-and-forget). A hanging hook cannot block finalize. F8a abort
+  skip and L7-059 single-note still hold.
+- **L7-082:** Flag values that start with `-` stay rejected (L7-069).
+  Unusual paths need a relative prefix such as `./-secrets.json`.
+- **R10a:** Shared explicit `parameterRef` last-write-wins on extract.
+  Duplicate refs stay one dataset variable (R4a); a later step overwrites
+  `dataset.values[name]`. There is no conflict warn/error.
+
+Ask-user still held: **S11** (screenshot skip/blur vs accept for
+parameterRef recovery steps), **D11** (gitignore `recorded.json` vs
+document plaintext-on-disk risk).
 
 ## CI — macOS Electron e2e close hang
 

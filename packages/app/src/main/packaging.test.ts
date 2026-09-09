@@ -213,8 +213,14 @@ describe('packaged Observe', () => {
     expect(renderer).toContain('importSession');
     expect(renderer).toContain('sttUpgradeCopyDefault');
     expect(renderer).toContain('sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault');
+    const refuseIdx = renderer.indexOf('stt-upgrade-refuse');
+    expect(refuseIdx).toBeGreaterThan(-1);
+    const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 700);
+    expect(refuseHandler).toContain('result.ok');
+    expect(refuseHandler).toContain('sttUpgrade.hidden = true');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
+    expect(whisper).toContain('void noteFirstUse');
     const downloadModel = readFileSync(
       join(appRoot, '../../packages/stt/src/download-model.ts'),
       'utf8'
@@ -241,6 +247,7 @@ describe('packaged Observe', () => {
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');
     expect(upgradeStore).toContain('writeFileAtomic');
     expect(upgradeStore).toContain('persistQueue');
+    expect(upgradeStore).toContain('this.disk = candidate');
     const ipcValidate = readFileSync(join(appRoot, 'src/main/ipc-validate.ts'), 'utf8');
     expect(ipcValidate).not.toContain('parsePathPayload');
     expect(inProcess).toContain('export function createInProcessStt(');

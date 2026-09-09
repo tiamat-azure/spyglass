@@ -167,6 +167,11 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
       /--session-dir requires a value/
     );
   });
+
+  it('accepts a relative dataset path whose basename starts with - (L7-082)', () => {
+    const parsed = parseRunnerArgv(['s.json', '--dataset', './-secrets.json'], {});
+    expect(parsed.datasetPath).toBe('./-secrets.json');
+  });
 });
 
 describe('F-50 deterministic replay without LLM', () => {

@@ -39,6 +39,7 @@ export type AssistedApplyRefusal = {
     | 'missing-repo'
     | 'scenario-outside-repo'
     | 'no-matching-patch'
+    | 'missing-scenario-path'
     | 'git-error'
     | 'internal-error'
     | 'type-mismatch';

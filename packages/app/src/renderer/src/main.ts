@@ -920,8 +920,12 @@ requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () 
   }
   void api.sttUpgrade
     .decide('refuse')
-    .then(() => {
-      sttUpgrade.hidden = true;
+    .then((result) => {
+      if (result.ok) {
+        sttUpgrade.hidden = true;
+        return;
+      }
+      sttUpgradeCopy.textContent = result.error ?? 'Mise à jour vocale indisponible. Réessayez.';
     })
     .catch(() => {
       sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';

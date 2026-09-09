@@ -570,6 +570,35 @@ describe('@spyglass/stt', () => {
     expect(isCancelledTranscription(new Error('whisper.cpp exceeded 80 ms'))).toBe(false);
   });
 
+  it('does not block transcribe on a hanging first-use latency hook (L7-081)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-hanghook-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => new Promise(() => undefined)
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const result = await Promise.race([
+        engine.finalize('u1'),
+        new Promise<string>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('transcribe blocked on onFirstUseLatency'));
+          }, 2000);
+        })
+      ]);
+      expect(result).toBe('transcription locale');
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
   it('rejects invalid client frames', () => {
     expect(parseClientMessage({ type: 'start' })).toBeUndefined();
     expect(parseClientMessage({ type: 'hello', sampleRate: 16000 })?.type).toBe('hello');

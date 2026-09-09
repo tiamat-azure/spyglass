@@ -440,12 +440,13 @@ export function createWhisperEngine(options: {
         }
       });
       if (!controller.signal.aborted) {
-        await noteFirstUse(Date.now() - started);
+        // L7-081: do not block transcribe() on a hanging onFirstUseLatency hook.
+        void noteFirstUse(Date.now() - started);
       }
       return text;
     } catch (error) {
       if (!isCancelledTranscription(error, controller.signal)) {
-        await noteFirstUse(Date.now() - started);
+        void noteFirstUse(Date.now() - started);
       }
       throw error;
     } finally {

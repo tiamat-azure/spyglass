@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -68,5 +68,18 @@ describe('SttUpgradeStore (F-38)', () => {
     expect(store.snapshot(dir).correctionCount).toBe(3);
     const disk = JSON.parse(await readFile(path, 'utf8')) as { correctionCount: number };
     expect(disk.correctionCount).toBe(3);
+  });
+
+  it('keeps in-memory state unchanged when atomic persist fails (L7-076)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-store-fail-'));
+    const path = join(dir, 'stt-upgrade.json');
+    const store = new SttUpgradeStore(path);
+    await store.load();
+    await store.recordCorrection();
+    expect(store.snapshot(dir).correctionCount).toBe(1);
+    await rm(path);
+    await mkdir(path);
+    await expect(store.recordCorrection()).rejects.toThrow();
+    expect(store.snapshot(dir).correctionCount).toBe(1);
   });
 });

@@ -193,9 +193,24 @@ async function runScenarioOnDriver(
   if (resolved.aiRecovery && !multimodal) {
     warnings.push(TEXT_ONLY_WARNING);
   }
-  const executable = await scenarioWithDataset(scenario, resolved, options);
   const runId = options.runId ?? newRunId();
   const startedAt = new Date();
+  let executable: Scenario;
+  try {
+    executable = await scenarioWithDataset(scenario, resolved, options);
+  } catch (error) {
+    return await datasetLoadFailure({
+      scenario,
+      resolved,
+      options,
+      error,
+      runId,
+      startedAt,
+      smartModel,
+      multimodal,
+      warnings
+    });
+  }
   const original = scenario.steps.map((step) => originalDescriptorForPatch(step));
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
@@ -664,23 +679,78 @@ function redactSnapshotForRecovery(
   snapshot: { url: string; title: string; text: string; values: Record<string, string> },
   scenario: Scenario
 ): { url: string; title: string; text: string; values: Record<string, string> } {
-  const redactedSelectors = new Set(
-    scenario.steps
-      .filter(
-        (step) => step.action.parameterRef !== undefined && step.action.parameterRef.length > 0
-      )
-      .map((step) => step.action.descriptor.selector)
+  const parameterized = scenario.steps.filter(
+    (step) => step.action.parameterRef !== undefined && step.action.parameterRef.length > 0
   );
-  if (redactedSelectors.size === 0) {
+  if (parameterized.length === 0) {
     return snapshot;
   }
+  const secrets = new Set<string>();
   const values: Record<string, string> = { ...snapshot.values };
-  for (const selector of redactedSelectors) {
+  for (const step of parameterized) {
+    const selector = step.action.descriptor.selector;
     if (Object.hasOwn(values, selector)) {
+      const live = values[selector];
+      if (live !== undefined && live.length > 0) {
+        secrets.add(live);
+      }
       values[selector] = '';
     }
+    for (const argument of step.action.descriptor.arguments ?? []) {
+      if (argument.length > 0) {
+        secrets.add(argument);
+      }
+    }
   }
-  return { ...snapshot, values };
+  let text = snapshot.text;
+  const ordered = [...secrets].sort((left, right) => right.length - left.length);
+  for (const secret of ordered) {
+    text = text.split(secret).join('');
+  }
+  return { ...snapshot, values, text };
+}
+
+async function datasetLoadFailure(input: {
+  scenario: Scenario;
+  resolved: ReturnType<typeof resolveRunnerOptions>;
+  options: RunScenarioHooks & { driver: PageDriver };
+  error: unknown;
+  runId: string;
+  startedAt: Date;
+  smartModel: string;
+  multimodal: boolean;
+  warnings: string[];
+}): Promise<RunScenarioResult> {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  input.warnings.push(`dataset: ${message}`);
+  const report: ExecutionReport = {
+    schemaVersion: 1,
+    runId: input.runId,
+    sessionId: input.scenario.sessionId,
+    startedAt: input.startedAt.toISOString(),
+    finishedAt: new Date().toISOString(),
+    exitCode: 1,
+    headless: input.resolved.headless,
+    aiRecovery: input.resolved.aiRecovery,
+    maxAiRetries: input.resolved.maxAiRetries,
+    smartModel: input.smartModel,
+    multimodal: input.multimodal,
+    warnings: unique(input.warnings),
+    steps: []
+  };
+  let runDir: string | undefined;
+  if (input.resolved.reportDir !== undefined) {
+    runDir = input.resolved.reportDir;
+    await writeRunArtifacts({ runDir, report });
+  }
+  if (input.options.closeDriver === true) {
+    await input.options.driver.close();
+  }
+  const result: RunScenarioResult = { exitCode: 1, report };
+  if (runDir !== undefined) {
+    result.runDir = runDir;
+  }
+  return result;
 }
 
 async function scenarioWithDataset(

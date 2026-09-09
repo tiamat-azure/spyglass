@@ -134,11 +134,19 @@ Pass-9 (L7-066 … L7-073) is in `CHANGELOG.md`.
 Pass-10 (L7-074 … L7-075) plus Captain locks **F8a** (AbortError /
 cancellation excluded from first-use latency) and **B10b** (load scenario
 before `beginReplay`) are in `CHANGELOG.md`.
+Pass-11 (L7-076 … L7-082) plus Captain lock **R10a** (shared explicit
+`parameterRef` last-write-wins on extract; no conflict warn/error) are
+in `CHANGELOG.md`.
 
 ## Residuals
 
 - Live `gh pr create` against GitHub is optional; tests stub `preparePr`.
 - Live whisper `large-v3-turbo` first-use latency is not measured here (no
   575 Mo weights in CI).
-- Shared `parameterRef` last-write-wins on extract is unchanged (R10
-  ask-user).
+- **R10a:** Shared explicit `parameterRef` last-write-wins on extract.
+  Duplicate refs stay one dataset variable (R4a). A later step overwrites
+  `dataset.values[name]`. No conflict warn/error (Captain lock).
+- **S11** ask-user: screenshot skip/blur vs accept for parameterRef
+  recovery steps (unchanged).
+- **D11** ask-user: gitignore `datasets/recorded.json` vs document
+  plaintext-on-disk risk (unchanged).

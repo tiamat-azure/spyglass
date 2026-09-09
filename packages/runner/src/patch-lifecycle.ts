@@ -52,6 +52,12 @@ export async function processSuggestedPatch(input: {
   }
   const scenarioPath = resolveScenarioPath(input.scenarioPath, policy.repo);
   if (scenarioPath === undefined) {
+    // L7-078: assisted apply is on and there are patches — do not silently skip.
+    result.assistedApply = {
+      ok: false,
+      code: 'missing-scenario-path',
+      reason: 'assisted apply requires scenarioPath'
+    };
     return result;
   }
   try {

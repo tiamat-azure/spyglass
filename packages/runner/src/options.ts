@@ -252,7 +252,12 @@ export function parseRunnerArgv(
   return parsed;
 }
 
-/** L7-069: a following token that looks like a flag means the value was omitted. */
+/**
+ * L7-069: a following token that looks like a flag means the value was omitted.
+ * L7-082: unusual paths that start with `-` are rejected as a missing value.
+ * Pass them with a relative prefix (for example `./-secrets.json`) so the token
+ * does not look like a flag.
+ */
 function requireFlagValue(flag: string, next: string | undefined): string {
   if (next === undefined || next.startsWith('-')) {
     throw new Error(`${flag} requires a value`);

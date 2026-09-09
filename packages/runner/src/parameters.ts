@@ -17,7 +17,8 @@ const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp|otp|pin|cvv|apikey|api
 
 export function parameterNameFromStep(step: RefinedStep, used: Set<string>): string | undefined {
   if (step.action.parameterRef !== undefined && step.action.parameterRef.trim().length > 0) {
-    // R4a: preserve duplicate explicit refs as a shared dataset variable.
+    // R4a / R10a: preserve duplicate explicit refs as a shared dataset variable
+    // (extract last-write-wins; no conflict warn/error).
     return step.action.parameterRef.trim();
   }
   if (!isParameterizedType(step.action.type)) {
@@ -49,6 +50,7 @@ export function extractScenarioParameters(scenario: Scenario): {
     }
     used.add(name);
     const value = recorded ?? '';
+    // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
     values[name] = value;
     if (isSecretName(name) || looksMasked(value)) {
       secrets.push(name);

@@ -12,6 +12,7 @@ import {
   parseDataset,
   writeGeneratedDatasets
 } from './parameters.ts';
+import type { Recoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 import {
   exportSessionFolder,
@@ -87,6 +88,19 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('password');
     expect(extracted.scenario.steps[1]?.action.parameterRef).not.toBe('password_2');
     expect(extracted.dataset.values.password).toBe('s3cret');
+  });
+
+  it('last-write-wins when shared explicit parameterRef values differ (R10a)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/login',
+      steps: [fillStep(0, '#pw1', 'first', 'password'), fillStep(1, '#pw2', 'second', 'password')]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('password');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('password');
+    expect(extracted.dataset.values.password).toBe('second');
   });
 
   it('still uniquifies generated selector-derived names (R4a)', () => {
@@ -273,6 +287,94 @@ describe('Lot 7 F-48 parameterization', () => {
     });
     expect(result.exitCode).toBe(0);
     expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
+  });
+
+  it('redacts parameter values from recovery snapshot text (L7-079)', async () => {
+    const secret = 's3cret-password';
+    const step = fillStep(0, '#password', secret, 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ text: string; values: Record<string, string> }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({ text: context.afterDom.text, values: { ...context.afterDom.values } });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: `visible ${secret} on page`,
+      elements: [
+        { selector: '#password', visible: true, value: '', text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.values['#password']).toBe('');
+      expect(snap.text).not.toContain(secret);
+    }
+  });
+
+  it('returns a failed ExecutionReport when the dataset file is missing (L7-080)', async () => {
+    const dir = await tempDir('spyglass-lot7-ds-miss-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: join(dir, 'missing.json')
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.report.steps).toEqual([]);
+    expect(result.report.warnings.join('\n')).toMatch(/dataset:/);
+    expect(driver.fills).toEqual([]);
+  });
+
+  it('returns a failed ExecutionReport when the dataset JSON is malformed (L7-080)', async () => {
+    const dir = await tempDir('spyglass-lot7-ds-bad-');
+    await writeFile(join(dir, 'bad.json'), '{not json\n', 'utf8');
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: join(dir, 'bad.json')
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.report.exitCode).toBe(1);
+    expect(result.report.warnings.join('\n')).toMatch(/dataset:/);
+    expect(driver.fills).toEqual([]);
   });
 });
 
