@@ -145,6 +145,7 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeBlock).toMatch(/downloadResponseToFileAtomic/);
     expect(largeBlock).toMatch(/STT_LARGE_SHA256/);
     expect(largeBlock).toMatch(/minBytes:\s*STT_LARGE_MIN_BYTES/);
+    expect(largeBlock).toMatch(/if\s*\(!response\.ok\)/);
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 

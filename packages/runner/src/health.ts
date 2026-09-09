@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { ScenarioHealth, SuggestedPatch, SuggestedPatchEntry } from '@spyglass/contracts';
 import { validateHealth } from '@spyglass/contracts';
@@ -6,6 +7,8 @@ import { descriptorHash } from './descriptor-hash.ts';
 import type { PatchPolicy } from './patch-config.ts';
 
 export const HEALTH_FILE = 'health.json';
+/** L7-148: bound stored runIds on never-applied candidates. consecutiveRuns stays uncapped. */
+export const MAX_CANDIDATE_RUN_IDS = 32;
 
 export type PatchCandidate = ScenarioHealth['patchCandidates'][number];
 
@@ -98,7 +101,14 @@ export async function saveHealth(sessionDir: string, health: ScenarioHealth): Pr
   }
   await mkdir(sessionDir, { recursive: true });
   const path = healthFilePath(sessionDir);
-  await writeFile(path, `${JSON.stringify(health, null, 2)}\n`, 'utf8');
+  const tmp = `${path}.tmp-${randomBytes(8).toString('hex')}`;
+  try {
+    await writeFile(tmp, `${JSON.stringify(health, null, 2)}\n`, 'utf8');
+    await rename(tmp, path);
+  } catch (error) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
   return path;
 }
 
@@ -135,9 +145,9 @@ export function recordSuggestedPatches(
     byStep.set(patch.stepIndex, {
       stepIndex: patch.stepIndex,
       descriptorHash: hash,
-      consecutiveRuns: runIds.length,
+      consecutiveRuns: previous.consecutiveRuns + 1,
       lastRunId: suggested.runId,
-      runIds
+      runIds: capRunIds(runIds)
     });
   }
   for (const stepIndex of [...byStep.keys()]) {
@@ -169,6 +179,13 @@ function distinctRunIds(entry: PatchCandidate): string[] {
     return [...entry.runIds];
   }
   return entry.lastRunId.length > 0 ? [entry.lastRunId] : [];
+}
+
+function capRunIds(runIds: string[]): string[] {
+  if (runIds.length <= MAX_CANDIDATE_RUN_IDS) {
+    return runIds;
+  }
+  return runIds.slice(-MAX_CANDIDATE_RUN_IDS);
 }
 
 export function isActionDescriptorPatch(patch: SuggestedPatchEntry): boolean {

@@ -252,6 +252,21 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('tightens existing dataset modes after rewrite (L7-152)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7152-');
+    const datasets = join(dir, 'datasets');
+    await mkdir(datasets, { recursive: true, mode: 0o755 });
+    await writeFile(join(datasets, 'recorded.json'), '{}\n', { encoding: 'utf8', mode: 0o644 });
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const paths = await writeGeneratedDatasets(dir, extracted.dataset);
+    if (process.platform !== 'win32') {
+      const dirMode = (await stat(join(dir, 'datasets'))).mode & 0o777;
+      const recordedMode = (await stat(paths.recorded)).mode & 0o777;
+      expect(dirMode).toBe(0o700);
+      expect(recordedMode).toBe(0o600);
+    }
+  });
+
   it('writeGeneratedPackage emits datasets/recorded.json and example.json', async () => {
     const sessionDir = await tempDir('spyglass-lot7-genpkg-');
     const paths = await writeGeneratedPackage({
@@ -501,6 +516,63 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(captured.length).toBeGreaterThan(0);
     for (const snap of captured) {
       expect(snap.values['#password']).toBe('');
+      expect(snap.text).not.toContain(secret);
+    }
+  });
+
+  it('redacts parameterized secrets from snapshot url and title (L7-151)', async () => {
+    const secret = 'tok_secret_value';
+    const step = fillStep(0, '#token', secret, 'token');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{
+      url: string;
+      title: string;
+      text: string;
+      values: Record<string, string>;
+    }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({
+            url: context.afterDom.url,
+            title: context.afterDom.title,
+            text: context.afterDom.text,
+            values: { ...context.afterDom.values }
+          });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: `https://exemple.test/login?token=${secret}`,
+      title: `Welcome ${secret}`,
+      text: 'visible page',
+      elements: [
+        { selector: '#token', visible: true, value: secret, text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.url).not.toContain(secret);
+      expect(snap.title).not.toContain(secret);
       expect(snap.text).not.toContain(secret);
     }
   });
@@ -859,6 +931,26 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest);
     await symlink(join(root, 'outside'), join(dest, 'escape'));
     await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+  });
+
+  it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {
+    const root = await tempDir('spyglass-lot7-l7154-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const leaked = join(root, 'outside.json');
+    await writeFile(leaked, 'KEEP\n', 'utf8');
+    await symlink(leaked, join(sessionDir, SESSION_BUNDLE_MANIFEST));
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    expect(await readFile(leaked, 'utf8')).toBe('KEEP\n');
+    const written = await readFile(join(dest, SESSION_BUNDLE_MANIFEST), 'utf8');
+    expect(written).toContain('spyglass-session');
+    expect(written).not.toBe('KEEP\n');
   });
 
   it('refuses a symlink meta.json before reading it (L7-064)', async () => {

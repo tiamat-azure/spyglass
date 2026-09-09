@@ -588,6 +588,44 @@ Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**
 Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**
 (fail-fast missing dataset vs silent empty).
 
+## Pass-21 adversarial fixes (L7-142 … L7-157)
+
+- **L7-142:** `closeElectron` attaches a no-op `.catch(() => {})` to
+  `electronApp.close()` before `Promise.race`, so a late reject after
+  timeout+SIGKILL is not an unhandled rejection.
+- **L7-143:** `sttUpgradeStatus` returns `error: 'store-unavailable'` when
+  `ensureSttUpgradeStore()` fails (same explicit style as
+  `fallback-unreadable`).
+- **L7-144:** Pre-mutation git probes in `applyAssistedPatches` map thrown
+  failures to structured `ok:false` `git-error` / `internal-error` /
+  `unresolved-default`.
+- **L7-145:** `Suivant` / `replayNext` is disabled while a next request is
+  in flight.
+- **L7-146:** Session export/import promise chains catch errors into
+  `replayStatus` (finally still re-enables).
+- **L7-147:** Accept and refuse STT upgrade buttons are both disabled while
+  either decision is pending.
+- **L7-148:** Stored candidate `runIds` are capped at last 32;
+  `consecutiveRuns` stays the uncapped streak.
+- **L7-149:** `saveHealth` publishes via temp + rename.
+- **L7-151:** `redactSnapshotForRecovery` also redacts parameterized secrets
+  from `snapshot.url` and `snapshot.title`.
+- **L7-152:** After writing `recorded.json`, `chmod` `datasets/` to `0o700`
+  and the file to `0o600` even when they already existed with broader modes.
+- **L7-153:** Empty patch sets reset F-63 candidates only on successful
+  runs; failed/stopped empty runs leave existing candidates.
+- **L7-154:** Export unlinks staged `spyglass-session.json` (no-follow)
+  before write so a source symlink cannot redirect outside staging.
+- **L7-155:** `fetch-whisper.mjs --large` checks `response.ok` before
+  `downloadResponseToFileAtomic`.
+- **L7-156:** `whisperCandidateModels` uses `STT_LARGE_MODEL_FILE` instead
+  of hardcoding the large basename.
+- **L7-157:** `readLargeFallback` returns `fallback` after the boolean
+  guard.
+
+Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
+**H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

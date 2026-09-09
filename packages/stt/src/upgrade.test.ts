@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -244,6 +244,28 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
 
   it('trims STT_MODEL_DIR (L7-133)', () => {
     expect(resolveSttModelDir({ STT_MODEL_DIR: ' /opt/whisper ' })).toBe('/opt/whisper');
+  });
+
+  it('lists large model candidates via STT_LARGE_MODEL_FILE (L7-156)', async () => {
+    const src = await readFile(new URL('./whisper-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export function whisperCandidateModels');
+    const end = src.indexOf('export function resolveWhisperPaths');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('STT_LARGE_MODEL_FILE');
+    expect(body.match(/ggml-large-v3-turbo-q5_0\.bin/g) ?? []).toEqual([]);
+  });
+
+  it('returns the parsed fallback boolean directly (L7-157)', async () => {
+    const src = await readFile(new URL('./upgrade.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function readLargeFallback');
+    const end = src.indexOf('export async function writeLargeFallback');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('return fallback;');
+    expect(body).not.toContain('return fallback === true');
   });
 
   it('pins the known large-model SHA-256 (S4a)', () => {

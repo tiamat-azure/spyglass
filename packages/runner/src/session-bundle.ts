@@ -9,6 +9,7 @@ import {
   realpath,
   rename,
   rm,
+  unlink,
   writeFile
 } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -60,6 +61,8 @@ export async function exportSessionFolder(
       exportedAt: now.toISOString()
     };
     const manifestPath = join(staging, SESSION_BUNDLE_MANIFEST);
+    // L7-154: a source symlink named spyglass-session.json would otherwise redirect this write.
+    await unlinkIfPresent(manifestPath);
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     await replaceDirectory(dest, staging);
     return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
@@ -136,6 +139,24 @@ async function pathExists(path: string): Promise<boolean> {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
       return false;
+    }
+    throw err;
+  }
+}
+
+/** L7-154: unlink without following so a copied symlink cannot redirect the write. */
+async function unlinkIfPresent(path: string): Promise<void> {
+  try {
+    const st = await lstat(path);
+    if (st.isSymbolicLink() || st.isFile()) {
+      await unlink(path);
+      return;
+    }
+    throw new Error('export refused: spyglass-session.json is not a regular file');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return;
     }
     throw err;
   }

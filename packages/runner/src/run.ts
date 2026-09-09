@@ -494,12 +494,15 @@ async function runScenarioOnDriver(
   if (options.createPr !== undefined) {
     lifecycleInput.createPr = options.createPr;
   }
-  const lifecycle = await processSuggestedPatch(lifecycleInput);
-  if (lifecycle.healthPath !== undefined) {
-    result.healthPath = lifecycle.healthPath;
-  }
-  if (lifecycle.assistedApply !== undefined) {
-    result.assistedApply = lifecycle.assistedApply;
+  // L7-153: empty patches reset F-63 candidates only on a successful (clean) run.
+  if (suggestedPatch.patches.length > 0 || report.exitCode === 0) {
+    const lifecycle = await processSuggestedPatch(lifecycleInput);
+    if (lifecycle.healthPath !== undefined) {
+      result.healthPath = lifecycle.healthPath;
+    }
+    if (lifecycle.assistedApply !== undefined) {
+      result.assistedApply = lifecycle.assistedApply;
+    }
   }
   if (runDir !== undefined) {
     result.runDir = runDir;
@@ -744,11 +747,15 @@ function redactSnapshotForRecovery(
     }
   }
   let text = snapshot.text;
+  let url = snapshot.url;
+  let title = snapshot.title;
   const ordered = [...secrets].sort((left, right) => right.length - left.length);
   for (const secret of ordered) {
     text = redactSecretFromText(text, secret);
+    url = redactSecretFromText(url, secret);
+    title = redactSecretFromText(title, secret);
   }
-  return { ...snapshot, values, text };
+  return { ...snapshot, values, text, url, title };
 }
 
 /** L7-124: redact PIN/OTP/tokens without substring-stripping unrelated words. */

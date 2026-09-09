@@ -1049,7 +1049,8 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         refusedPermanently: false,
         largeAvailable: false,
         propose: false,
-        fallback: false
+        fallback: false,
+        error: 'store-unavailable'
       };
     }
   });

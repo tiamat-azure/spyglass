@@ -68,6 +68,9 @@ async function main() {
       redirect: 'follow',
       signal: AbortSignal.timeout(STT_LARGE_DOWNLOAD_TIMEOUT_MS)
     });
+    if (!response.ok) {
+      throw new Error(`GET ${STT_LARGE_MODEL_URL} → ${String(response.status)}`);
+    }
     await downloadResponseToFileAtomic({
       dest: largePath,
       response,

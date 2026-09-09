@@ -25,9 +25,12 @@ type LaunchedElectron = {
  */
 export async function closeElectron(electronApp: LaunchedElectron): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // L7-142: keep a no-op handler so a late reject after timeout+SIGKILL is not unhandled.
+  const closing = electronApp.close();
+  void closing.catch(() => {});
   try {
     await Promise.race([
-      electronApp.close(),
+      closing,
       new Promise<void>((_, reject) => {
         timer = setTimeout(() => {
           reject(new Error('electron close timeout'));

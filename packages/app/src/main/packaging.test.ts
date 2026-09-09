@@ -216,17 +216,21 @@ describe('packaged Observe', () => {
     expect(renderer).toContain('stt-upgrade-refuse');
     const refuseIdx = renderer.indexOf('sttUpgradeRefuse.addEventListener');
     expect(refuseIdx).toBeGreaterThan(-1);
-    const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 900);
+    const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 1100);
     expect(refuseHandler).toContain('result.ok');
     expect(refuseHandler).toContain('sttUpgrade.hidden = true');
     expect(refuseHandler).toContain('sttUpgradeRefuse.disabled = true');
     expect(refuseHandler).toContain('sttUpgradeRefuse.disabled = false');
+    expect(refuseHandler).toContain('sttUpgradeAccept.disabled = true');
+    expect(refuseHandler).toContain('sttUpgradeAccept.disabled = false');
     const acceptIdx = renderer.indexOf('sttUpgradeAccept.addEventListener');
     expect(acceptIdx).toBeGreaterThan(-1);
-    const acceptHandler = renderer.slice(acceptIdx, acceptIdx + 900);
+    const acceptHandler = renderer.slice(acceptIdx, acceptIdx + 1100);
     expect(acceptHandler).toContain('result.ok');
     expect(acceptHandler).toContain('result.error');
     expect(acceptHandler).toContain('sttUpgradeAccept.disabled = false');
+    expect(acceptHandler).toContain('sttUpgradeRefuse.disabled = true');
+    expect(acceptHandler).toContain('sttUpgradeRefuse.disabled = false');
     expect(main).toContain("error: 'bad-request'");
     expect(main).toContain("error: 'forbidden'");
     expect(main).toContain('sessionBundleIpcError');
@@ -262,6 +266,7 @@ describe('packaged Observe', () => {
     expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
     expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
     expect(main).toContain("error: 'fallback-unreadable'");
+    expect(main).toContain("error: 'store-unavailable'");
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');
     expect(upgradeStore).toContain('writeFileAtomic');
     expect(upgradeStore).toContain('persistQueue');
@@ -276,16 +281,22 @@ describe('packaged Observe', () => {
     expect(bridge).not.toMatch(/createInProcessStt\(/);
     const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
     expect(exportIdx).toBeGreaterThan(-1);
-    expect(renderer.slice(exportIdx, exportIdx + 900)).not.toContain('window.prompt');
-    expect(renderer.slice(exportIdx, exportIdx + 900)).toContain(
-      'sessionExportBtn.disabled = true'
-    );
+    const exportHandler = renderer.slice(exportIdx, exportIdx + 1200);
+    expect(exportHandler).not.toContain('window.prompt');
+    expect(exportHandler).toContain('sessionExportBtn.disabled = true');
+    expect(exportHandler).toContain('.catch((error: unknown) => {');
+    expect(exportHandler).toContain('replayStatus.textContent');
     const importIdx = renderer.indexOf('sessionImportBtn.addEventListener');
     expect(importIdx).toBeGreaterThan(-1);
-    expect(renderer.slice(importIdx, importIdx + 900)).not.toContain('window.prompt');
-    expect(renderer.slice(importIdx, importIdx + 900)).toContain(
-      'sessionImportBtn.disabled = true'
-    );
+    const importHandler = renderer.slice(importIdx, importIdx + 1200);
+    expect(importHandler).not.toContain('window.prompt');
+    expect(importHandler).toContain('sessionImportBtn.disabled = true');
+    expect(importHandler).toContain('.catch((error: unknown) => {');
+    const nextIdx = renderer.indexOf('replayNextBtn.addEventListener');
+    expect(nextIdx).toBeGreaterThan(-1);
+    const nextHandler = renderer.slice(nextIdx, nextIdx + 900);
+    expect(nextHandler).toContain('replayNextBtn.disabled = true');
+    expect(nextHandler).toContain('api.replay');
     const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');
@@ -293,5 +304,6 @@ describe('packaged Observe', () => {
     expect(closeElectron).toContain("once('exit'");
     expect(closeElectron).toContain('KILL_EXIT_GRACE_MS');
     expect(closeElectron).not.toContain('child.killed === true');
+    expect(closeElectron).toContain('void closing.catch(() => {})');
   });
 });

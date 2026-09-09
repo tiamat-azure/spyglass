@@ -114,7 +114,7 @@ export async function readLargeFallback(modelDir: string): Promise<boolean> {
   if (typeof fallback !== 'boolean') {
     throw new Error('corrupt large-fallback.json: fallback');
   }
-  return fallback === true;
+  return fallback;
 }
 
 export async function writeLargeFallback(modelDir: string, fallback: boolean): Promise<void> {

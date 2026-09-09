@@ -257,13 +257,23 @@ export async function applyAssistedPatches(input: {
   }
 
   const git = input.git ?? defaultGitExec;
-  if (await isWorktreeDirty(git, repoRoot)) {
-    return { ok: false, reason: 'F-64: refusing dirty worktree', code: 'dirty-worktree' };
-  }
+  const hash = patchSetHash(toApply);
+  const branch = patchBranchName(input.suggested.sessionId, hash);
 
   let defaultBranch: string;
+  let starting: StartingHead;
+  let leftoverExists: boolean;
   try {
+    // L7-144: pre-mutation probes must not throw out of applyAssistedPatches.
+    if (await isWorktreeDirty(git, repoRoot)) {
+      return { ok: false, reason: 'F-64: refusing dirty worktree', code: 'dirty-worktree' };
+    }
     defaultBranch = await detectDefaultBranch(git, repoRoot);
+    starting = {
+      name: await currentBranch(git, repoRoot),
+      sha: (await gitOk(git, repoRoot, ['rev-parse', 'HEAD'])).trim()
+    };
+    leftoverExists = await localBranchExists(git, repoRoot, branch);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     if (isUnresolvedDefaultBranchError(error)) {
@@ -275,18 +285,12 @@ export async function applyAssistedPatches(input: {
       code: isGitApplyError(error) ? 'git-error' : 'internal-error'
     };
   }
-  const starting: StartingHead = {
-    name: await currentBranch(git, repoRoot),
-    sha: (await gitOk(git, repoRoot, ['rev-parse', 'HEAD'])).trim()
-  };
-  const hash = patchSetHash(toApply);
-  const branch = patchBranchName(input.suggested.sessionId, hash);
 
   // L7-084 / P12a: a prior ok:false / pr-prep-failed attempt leaves spyglass/patch-* around.
   // Reuse it and resume PR prep instead of failing checkout -b.
   let skipMutate = false;
   let reloadScenarioFromDefault = false;
-  if (await localBranchExists(git, repoRoot, branch)) {
+  if (leftoverExists) {
     const ontoPatch = await checkoutOrGitError(git, repoRoot, starting, ['checkout', branch]);
     if (ontoPatch !== undefined) {
       return ontoPatch;

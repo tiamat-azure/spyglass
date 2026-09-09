@@ -58,20 +58,20 @@ export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): st
   if (dir !== undefined && dir.length > 0) {
     candidates.push(
       join(dir, file),
-      join(dir, 'ggml-large-v3-turbo-q5_0.bin'),
+      join(dir, STT_LARGE_MODEL_FILE),
       join(dir, 'ggml-small-q5_1.bin')
     );
   }
   if (resources !== undefined && resources.length > 0) {
     candidates.push(
       join(resources, file),
-      join(resources, 'ggml-large-v3-turbo-q5_0.bin'),
+      join(resources, STT_LARGE_MODEL_FILE),
       join(resources, 'ggml-small-q5_1.bin')
     );
   }
   candidates.push(
     join(process.cwd(), 'vendor/whisper', file),
-    join(process.cwd(), 'vendor/whisper/ggml-large-v3-turbo-q5_0.bin'),
+    join(process.cwd(), 'vendor/whisper', STT_LARGE_MODEL_FILE),
     join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin')
   );
   return candidates;

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -32,6 +32,7 @@ import {
   healthStatus,
   incrementAppliedPatches,
   loadHealth,
+  MAX_CANDIDATE_RUN_IDS,
   recordSuggestedPatches,
   resolveSessionDir,
   saveHealth
@@ -198,6 +199,19 @@ describe('Lot 7 F-63 confirmation', () => {
   it('increments appliedPatches by unique step indexes (L7-136)', () => {
     const health = incrementAppliedPatches(emptyHealth('ses_lot7'), [0, 0, 1], policy);
     expect(health.appliedPatches).toBe(2);
+  });
+
+  it('caps stored runIds while keeping consecutiveRuns (L7-148)', () => {
+    let health = emptyHealth('ses_lot7');
+    const extra = 3;
+    for (let i = 0; i < MAX_CANDIDATE_RUN_IDS + extra; i += 1) {
+      health = recordSuggestedPatches(health, patch('#new', `run_${String(i)}`), policy);
+    }
+    const stored = health.patchCandidates[0]?.runIds ?? [];
+    expect(stored).toHaveLength(MAX_CANDIDATE_RUN_IDS);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(MAX_CANDIDATE_RUN_IDS + extra);
+    expect(stored[0]).toBe(`run_${String(extra)}`);
+    expect(stored[stored.length - 1]).toBe(`run_${String(MAX_CANDIDATE_RUN_IDS + extra - 1)}`);
   });
 
   it('invalidates a candidate on an intervening run with no patch for that step (L7-001)', () => {
@@ -1426,6 +1440,41 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
+  it('maps a throwing pre-mutation git probe to git-error (L7-144)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7144-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'status') {
+        throw new GitApplyError('status probe exploded');
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('git-error');
+    expect(result.reason).toMatch(/status probe exploded/);
+  });
+
   it('refuses a fill step with a click suggestion without rewriting type (L7-049)', async () => {
     const dir = await tempDir('spyglass-lot7-type-mismatch-');
     await initGitRepo(dir);
@@ -1722,6 +1771,79 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_c']);
   });
 
+  it('does not reset candidates on a failed empty-patch run (L7-153)', async () => {
+    const sessionDir = await tempDir('spyglass-lot7-l7153-');
+    const broken = clickStep(0, '#target');
+    broken.verification.expected = '#alive';
+    broken.verification.timeoutMs = 50;
+    const scn = scenario([broken]);
+    const recoverDriver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [
+        { selector: '#target', visible: false },
+        { selector: '#alt', visible: true },
+        { selector: '#alive', visible: true }
+      ]
+    });
+    recoverDriver.failSelectors.add('#target');
+    await runScenario(scn, {
+      driver: recoverDriver,
+      aiRecovery: true,
+      recoverer: new StaticRecoverer({ type: 'click', selector: '#alt' }, 'recovered'),
+      reportDir: join(sessionDir, 'runs', 'run_a'),
+      sessionDir,
+      runId: 'run_a',
+      env: { PATCH_ASSISTED_APPLY: 'false' }
+    });
+    let health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates).toHaveLength(1);
+
+    const failDriver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [
+        { selector: '#target', visible: false },
+        { selector: '#alive', visible: false }
+      ]
+    });
+    const failed = await runScenario(scn, {
+      driver: failDriver,
+      aiRecovery: false,
+      reportDir: join(sessionDir, 'runs', 'run_fail'),
+      sessionDir,
+      runId: 'run_fail',
+      env: { PATCH_ASSISTED_APPLY: 'false' }
+    });
+    expect(failed.exitCode).toBe(1);
+    expect(failed.suggestedPatch).toBeUndefined();
+    health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates).toHaveLength(1);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+
+    const stopDriver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [
+        { selector: '#target', visible: true },
+        { selector: '#alive', visible: true }
+      ]
+    });
+    const stopped = await runScenario(scn, {
+      driver: stopDriver,
+      aiRecovery: false,
+      reportDir: join(sessionDir, 'runs', 'run_stop'),
+      sessionDir,
+      runId: 'run_stop',
+      env: { PATCH_ASSISTED_APPLY: 'false' },
+      stepGate: {
+        wait: async () => 'stop'
+      }
+    });
+    expect(stopped.exitCode).toBe(1);
+    expect(stopped.suggestedPatch).toBeUndefined();
+    health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(health.patchCandidates).toHaveLength(1);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+  });
+
   it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', {
     timeout: GIT_TEST_MS
   }, async () => {
@@ -1911,6 +2033,17 @@ describe('saveHealth schema', () => {
     await saveHealth(dir, health);
     const disk = JSON.parse(await readFile(join(dir, 'health.json'), 'utf8')) as unknown;
     expect(disk).toMatchObject({ schemaVersion: 1, status: 'healthy', appliedPatches: 0 });
+  });
+
+  it('publishes health.json via temp + rename (L7-149)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7149-');
+    await saveHealth(dir, emptyHealth('ses_lot7'));
+    const names = await readdir(dir);
+    expect(names.filter((name) => name.includes('.tmp-'))).toEqual([]);
+    expect(names).toContain('health.json');
+    const src = await readFile(new URL('./health.ts', import.meta.url), 'utf8');
+    expect(src).toContain('await rename(tmp, path)');
+    expect(src).not.toMatch(/await writeFile\(path,/);
   });
 
   it('returns empty health when health.json is missing (L7-010)', async () => {

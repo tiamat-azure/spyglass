@@ -846,7 +846,20 @@ replayRunBtn.addEventListener('click', () => {
 });
 
 replayNextBtn.addEventListener('click', () => {
-  void api?.replay.next();
+  if (api === undefined || replayNextBtn.disabled) {
+    return;
+  }
+  replayNextBtn.disabled = true;
+  void api.replay
+    .next()
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    })
+    .finally(() => {
+      if (!replayHaltBtn.disabled) {
+        replayNextBtn.disabled = false;
+      }
+    });
 });
 
 replayHaltBtn.addEventListener('click', () => {
@@ -866,6 +879,9 @@ sessionExportBtn.addEventListener('click', () => {
         return;
       }
       replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
     })
     .finally(() => {
       sessionExportBtn.disabled = false;
@@ -887,6 +903,9 @@ sessionImportBtn.addEventListener('click', () => {
       }
       replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
     })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    })
     .finally(() => {
       sessionExportBtn.disabled = false;
       sessionImportBtn.disabled = false;
@@ -894,10 +913,11 @@ sessionImportBtn.addEventListener('click', () => {
 });
 
 sttUpgradeAccept.addEventListener('click', () => {
-  if (api === undefined || sttUpgradeAccept.disabled) {
+  if (api === undefined || sttUpgradeAccept.disabled || sttUpgradeRefuse.disabled) {
     return;
   }
   sttUpgradeAccept.disabled = true;
+  sttUpgradeRefuse.disabled = true;
   sttUpgradeCopy.textContent = 'Téléchargement en cours…';
   void api.sttUpgrade
     .decide('accept')
@@ -913,13 +933,15 @@ sttUpgradeAccept.addEventListener('click', () => {
     })
     .finally(() => {
       sttUpgradeAccept.disabled = false;
+      sttUpgradeRefuse.disabled = false;
     });
 });
 
 sttUpgradeRefuse.addEventListener('click', () => {
-  if (api === undefined || sttUpgradeRefuse.disabled) {
+  if (api === undefined || sttUpgradeAccept.disabled || sttUpgradeRefuse.disabled) {
     return;
   }
+  sttUpgradeAccept.disabled = true;
   sttUpgradeRefuse.disabled = true;
   void api.sttUpgrade
     .decide('refuse')
@@ -934,6 +956,7 @@ sttUpgradeRefuse.addEventListener('click', () => {
       sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
     })
     .finally(() => {
+      sttUpgradeAccept.disabled = false;
       sttUpgradeRefuse.disabled = false;
     });
 });
