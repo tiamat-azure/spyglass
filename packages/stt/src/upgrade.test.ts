@@ -320,6 +320,56 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(engine.model).toBe(explicit);
   });
 
+  it('attaches first-use latency for STT_MODEL_PATH large outside modelDir (F28b)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stt-f28b-'));
+    const modelDir = join(root, 'dir');
+    const other = join(root, 'other');
+    await mkdir(modelDir, { recursive: true });
+    await mkdir(other, { recursive: true });
+    const bin = await writeWhisperCliStub(modelDir);
+    await writeFile(join(modelDir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    const explicit = join(other, STT_LARGE_MODEL_FILE);
+    await writeFile(explicit, 'large-weights\n', 'utf8');
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: modelDir,
+      STT_BIN: bin,
+      STT_MODEL_PATH: explicit,
+      STT_MAX_LATENCY_MS: '1'
+    });
+    expect(engine.model).toBe(explicit);
+    engine.begin('u1');
+    engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+    await engine.finalize('u1');
+    const marker = join(modelDir, STT_FALLBACK_MARKER);
+    const deadline = Date.now() + 4000;
+    let raw = '';
+    while (Date.now() < deadline) {
+      try {
+        raw = await readFile(marker, 'utf8');
+        break;
+      } catch {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 50);
+        });
+      }
+    }
+    expect(raw).toMatch(/"fallback":\s*true/);
+  });
+
+  it('does not gate first-use latency on join(modelDir, STT_LARGE) (F28b)', async () => {
+    const src = await readFile(new URL('./resolve-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('function finishWhisperFromEnv');
+    const end = src.indexOf('function collectModelSelection');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('onFirstUseLatency');
+    expect(body).toContain('basename(model) === STT_LARGE_MODEL_FILE');
+    expect(body).not.toContain('sameResolvedPath(model, ctx.selection.largePath)');
+    expect(body).not.toContain('ctx.selection.largeOk &&');
+  });
+
   it('honours large-fallback.json beside STT_MODEL_PATH even when STT_MODEL_DIR differs (L7-209)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7209-'));
     const modelDir = join(root, 'dir');
@@ -433,3 +483,26 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(STT_LARGE_SHA256).toMatch(/^[0-9a-f]{64}$/u);
   });
 });
+
+async function writeWhisperCliStub(dir: string): Promise<string> {
+  const bin = join(dir, 'whisper-cli.cjs');
+  const lines = [
+    "'use strict';",
+    "const { writeFileSync } = require('node:fs');",
+    'const argv = process.argv.slice(2);',
+    "let out = '';",
+    'for (let i = 0; i < argv.length; i += 1) {',
+    "  if (argv[i] === '-of' && argv[i + 1] !== undefined) {",
+    '    out = argv[i + 1];',
+    '    i += 1;',
+    '  }',
+    '}',
+    "const text = 'transcription locale\\n';",
+    'if (out.length > 0) {',
+    "  writeFileSync(out + '.txt', text);",
+    '}',
+    'process.stdout.write(text);'
+  ];
+  await writeFile(bin, `${lines.join('\n')}\n`);
+  return bin;
+}

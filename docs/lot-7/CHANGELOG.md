@@ -1022,6 +1022,16 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: F28, W28.
 
+## Captain lock F28b (first-use latency on any selected large)
+
+- **F28b:** `finishWhisperFromEnv` attaches `onFirstUseLatency` (F-39
+  large→small safety net) whenever the selected model basename is
+  `STT_LARGE_MODEL_FILE`, not only when the path equals
+  `join(modelDir, STT_LARGE…)`. `STT_MODEL_PATH` and other alternate
+  large locations that still select large get the same first-use hook.
+
+Ask-user still held: W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

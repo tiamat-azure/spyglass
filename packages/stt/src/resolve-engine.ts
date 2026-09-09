@@ -125,7 +125,10 @@ function finishWhisperFromEnv(
     language: ctx.language,
     timeoutMs: ctx.timeoutMs
   };
-  if (ctx.selection.largeOk && sameResolvedPath(model, ctx.selection.largePath)) {
+  // F28b / F-39: attach the large→small safety net whenever the selected
+  // file is the large model (basename), including STT_MODEL_PATH copies
+  // outside join(modelDir, STT_LARGE_MODEL_FILE).
+  if (basename(model) === STT_LARGE_MODEL_FILE) {
     const budgetMs = parseMaxLatencyMs(env);
     engineOpts.onFirstUseLatency = async (latencyMs) => {
       await recordFirstUseLatency({ modelDir: ctx.modelDir, latencyMs, budgetMs });

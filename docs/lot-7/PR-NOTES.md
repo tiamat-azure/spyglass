@@ -254,6 +254,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **X28a:** `withDestLock` stays a single-process in-memory Map. No
   cross-process lockfile this lot. Concurrent import/export is serialized
   only within one process.
+- **F28b:** `onFirstUseLatency` attaches whenever the selected Whisper
+  file is the large model (basename), including `STT_MODEL_PATH` copies
+  outside `join(modelDir, STT_LARGE…)`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -312,4 +315,5 @@ before schema checks (H21a); raw schema still fail-closed (L7-128).
 scrubs known secrets by value even without `parameterRef`. **S28b:**
 `resolveScenarioPath` fails when the path resolves outside `--repo`.
 **X28a:** `withDestLock` is single-process (in-memory Map); no
-cross-process lockfile. Held: F28, W28.
+cross-process lockfile. **F28b:** first-use latency hook follows any
+selected large model, not only `join(modelDir, STT_LARGE…)`. Held: W28.
