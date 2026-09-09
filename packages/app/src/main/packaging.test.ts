@@ -281,7 +281,9 @@ describe('packaged Observe', () => {
     expect(resolveEngine).toContain('export function createEngineFromEnv(');
     expect(resolveEngine).not.toContain('export async function createEngineFromEnv(');
     expect(resolveEngine).toContain('export async function createEngineFromEnvAsync(');
-    expect(resolveEngine).toContain('ctx.selection.largeOk');
+    expect(resolveEngine).toContain('basename(model) === STT_LARGE_MODEL_FILE');
+    expect(resolveEngine).not.toContain('sameResolvedPath(model, ctx.selection.largePath)');
+    expect(resolveEngine).toContain('selection.largeOk');
     expect(resolveEngine).not.toContain('existsSync(ctx.selection.largePath)');
     expect(resolveEngine).toContain('largeFallbackMarkerDirs');
     expect(resolveEngine).toContain('readAlignedLargeFallbackSync');
