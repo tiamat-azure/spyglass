@@ -28,6 +28,7 @@ import { applyDataset, assertParameterRefsResolved, parseDataset } from './param
 import { resolvePatchPolicy } from './patch-config.ts';
 import { loadDatasetFile, processSuggestedPatch } from './patch-lifecycle.ts';
 import {
+  collectKnownParameterSecretValues,
   findStepByIndex,
   hasParameterRef,
   originalDescriptorForPatch,
@@ -358,7 +359,8 @@ async function runScenarioOnDriver(
               diagnosis: recovered.diagnosis,
               confidence: recovered.confidence
             },
-            recordedStep
+            recordedStep,
+            collectKnownParameterSecretValues(scenario.steps, executable.steps)
           )
         );
         emit(options, {
@@ -439,7 +441,8 @@ async function runScenarioOnDriver(
       applied: false,
       patches
     },
-    scenario
+    scenario,
+    executable.steps
   );
 
   let runDir: string | undefined;

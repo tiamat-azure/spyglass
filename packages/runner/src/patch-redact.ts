@@ -5,7 +5,12 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
-import { stripParameterizedArgument } from './parameters.ts';
+import {
+  isSecretParameterName,
+  isSecretSelector,
+  looksMaskedParameterValue,
+  stripParameterizedArgument
+} from './parameters.ts';
 import { cloneDescriptor } from './scenario.ts';
 
 export function hasParameterRef(step: RefinedStep | undefined): boolean {
@@ -40,16 +45,131 @@ function isSecretArgType(type: ReplayDescriptor['type']): boolean {
   return type === 'fill' || type === 'select';
 }
 
+function addStringArg(into: Set<string>, value: unknown): void {
+  if (typeof value === 'string' && value.length > 0) {
+    into.add(value);
+  }
+}
+
+function addKnownValuesFromDescriptor(into: Set<string>, descriptor: ReplayDescriptor): void {
+  if (!isSecretArgType(descriptor.type)) {
+    return;
+  }
+  const args = descriptor.arguments ?? [];
+  if (isSecretSelector(descriptor.selector)) {
+    addStringArg(into, args[0]);
+  }
+  for (const argument of args) {
+    if (typeof argument === 'string' && looksMaskedParameterValue(argument)) {
+      into.add(argument);
+    }
+  }
+}
+
+function addKnownValuesFromStep(into: Set<string>, step: RefinedStep): void {
+  const descriptor = step.action.descriptor;
+  if (!isSecretArgType(descriptor.type)) {
+    return;
+  }
+  const ref = step.action.parameterRef;
+  const secretField =
+    hasParameterRef(step) ||
+    isSecretSelector(descriptor.selector) ||
+    (ref !== undefined && isSecretParameterName(ref));
+  if (secretField) {
+    addStringArg(into, descriptor.arguments?.[0]);
+  }
+  addKnownValuesFromDescriptor(into, descriptor);
+}
+
 /**
- * P13a: fail-closed redaction of dataset-materialized args on proposed/`after`
- * descriptors before suggested-patch.json or health candidate hashes.
+ * P28b / R19a: known parameter and secret fill/select values, including
+ * secret-named fields that were never given a `parameterRef`.
+ */
+export function collectKnownParameterSecretValues(
+  ...stepLists: Array<readonly RefinedStep[] | undefined>
+): Set<string> {
+  const known = new Set<string>();
+  for (const steps of stepLists) {
+    if (steps === undefined) {
+      continue;
+    }
+    for (const step of steps) {
+      addKnownValuesFromStep(known, step);
+    }
+  }
+  return known;
+}
+
+function scrubKnownValuesFromDescriptor(
+  descriptor: ReplayDescriptor,
+  known: ReadonlySet<string>
+): void {
+  if (!isSecretArgType(descriptor.type) || descriptor.arguments === undefined) {
+    return;
+  }
+  const first = descriptor.arguments[0];
+  if (typeof first === 'string' && first.length > 0 && known.has(first)) {
+    stripParameterizedArgument(descriptor);
+  }
+  if (descriptor.arguments === undefined) {
+    return;
+  }
+  const next: string[] = [];
+  for (const [index, item] of descriptor.arguments.entries()) {
+    if (typeof item === 'string' && item.length > 0 && known.has(item)) {
+      if (index === 0) {
+        next.push(undefined as unknown as string);
+      }
+      continue;
+    }
+    if (typeof item === 'string') {
+      next.push(item);
+    }
+  }
+  const kept = next.some((item) => typeof item === 'string' && item.length > 0);
+  if (!kept) {
+    delete descriptor.arguments;
+    return;
+  }
+  descriptor.arguments = next;
+}
+
+function knownValuesForPatch(
+  patch: SuggestedPatchEntry,
+  recordedStep: RefinedStep | undefined,
+  extra: ReadonlySet<string> | readonly string[] | undefined
+): Set<string> {
+  const known = new Set<string>();
+  if (extra !== undefined) {
+    for (const value of extra) {
+      if (value.length > 0) {
+        known.add(value);
+      }
+    }
+  }
+  if (recordedStep !== undefined) {
+    addKnownValuesFromStep(known, recordedStep);
+  }
+  addKnownValuesFromDescriptor(known, patch.original);
+  addKnownValuesFromDescriptor(known, patch.suggested);
+  return known;
+}
+
+/**
+ * P13a / P28b: fail-closed redaction of dataset-materialized and known
+ * secret args on proposed/`after` descriptors before suggested-patch.json
+ * or health candidate hashes. P28b scrubs by value even when the recorded
+ * step has no `parameterRef`.
  */
 export function redactSuggestedPatchEntryForPersistence(
   patch: SuggestedPatchEntry,
-  recordedStep?: RefinedStep
+  recordedStep?: RefinedStep,
+  knownValues?: ReadonlySet<string> | readonly string[]
 ): SuggestedPatchEntry {
   const original = cloneDescriptor(patch.original);
   const suggested = cloneDescriptor(patch.suggested);
+  const known = knownValuesForPatch(patch, recordedStep, knownValues);
   const secretType = isSecretArgType(original.type) || isSecretArgType(suggested.type);
   if (hasParameterRef(recordedStep)) {
     stripParameterizedArgument(original);
@@ -61,17 +181,29 @@ export function redactSuggestedPatchEntryForPersistence(
   } else if (original.arguments === undefined && secretType) {
     delete suggested.arguments;
   }
+  scrubKnownValuesFromDescriptor(original, known);
+  scrubKnownValuesFromDescriptor(suggested, known);
   return { ...patch, original, suggested };
 }
 
 export function redactSuggestedPatchForPersistence(
   suggested: SuggestedPatch,
-  scenario?: Scenario
+  scenario?: Scenario,
+  liveSteps?: readonly RefinedStep[]
 ): SuggestedPatch {
+  const known = collectKnownParameterSecretValues(scenario?.steps, liveSteps);
+  for (const patch of suggested.patches) {
+    addKnownValuesFromDescriptor(known, patch.original);
+    addKnownValuesFromDescriptor(known, patch.suggested);
+  }
   return {
     ...suggested,
     patches: suggested.patches.map((patch) =>
-      redactSuggestedPatchEntryForPersistence(patch, findStepByIndex(scenario, patch.stepIndex))
+      redactSuggestedPatchEntryForPersistence(
+        patch,
+        findStepByIndex(scenario, patch.stepIndex),
+        known
+      )
     )
   };
 }

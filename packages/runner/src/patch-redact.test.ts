@@ -10,6 +10,7 @@ import { processSuggestedPatch } from './patch-lifecycle.ts';
 import {
   originalDescriptorForPatch,
   overlayLiveArgumentsForRecovery,
+  redactSuggestedPatchEntryForPersistence,
   redactSuggestedPatchForPersistence
 } from './patch-redact.ts';
 import { writeRunArtifacts } from './report.ts';
@@ -156,15 +157,128 @@ describe('P13a patch secret redaction', () => {
     expect(JSON.stringify(redacted)).not.toMatch(secret);
   });
 
-  it('keeps non-parameterized fill args', () => {
-    const redacted = redactSuggestedPatchForPersistence(leakyFillPatch('visible-user'), {
+  it('keeps non-parameterized non-secret fill args', () => {
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_p13a',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: { type: 'fill', selector: '#email', arguments: ['visible-user'] },
+            suggested: { type: 'fill', selector: '#email-new', arguments: ['visible-user'] },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [fillStep('#email', 'visible-user')]
+      }
+    );
+    expect(redacted.patches[0]?.suggested.arguments).toEqual(['visible-user']);
+    expect(redacted.patches[0]?.original.arguments).toEqual(['visible-user']);
+  });
+
+  it('strips secret-named fill args even without parameterRef (P28b)', () => {
+    const secret = 'dataset-secret';
+    const redacted = redactSuggestedPatchForPersistence(leakyFillPatch(secret), {
       schemaVersion: 1,
       sessionId: 'ses_lot7',
       startUrl: 'https://exemple.test/login',
-      steps: [fillStep('#email', 'visible-user')]
+      steps: [fillStep('#password', secret)]
     });
-    expect(redacted.patches[0]?.suggested.arguments).toEqual(['visible-user']);
-    expect(redacted.patches[0]?.original.arguments).toEqual(['visible-user']);
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.original.arguments).toBeUndefined();
+    expect(redacted.patches[0]?.suggested.arguments).toBeUndefined();
+  });
+
+  it('strips known parameter values from a non-parameterized sibling fill (P28b)', () => {
+    const secret = 'dataset-secret';
+    const email = fillStep('#email', 'alice');
+    const password = fillStep('#password', secret, 'password');
+    password.index = 1;
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_p28b',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: { type: 'fill', selector: '#email', arguments: [secret] },
+            suggested: { type: 'fill', selector: '#email-new', arguments: [secret] },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [email, password]
+      }
+    );
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.original.arguments).toBeUndefined();
+    expect(redacted.patches[0]?.suggested.arguments).toBeUndefined();
+    expect(redacted.patches[0]?.suggested.selector).toBe('#email-new');
+  });
+
+  it('scrubs a trailing arg that equals a known secret (P28b)', () => {
+    const secret = 'dataset-secret';
+    const user = fillStep('#user', 'alice');
+    user.action.descriptor.arguments = ['alice', secret];
+    const password = fillStep('#password', secret, 'password');
+    password.index = 1;
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_p28b',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: { type: 'fill', selector: '#user', arguments: ['alice', secret] },
+            suggested: { type: 'fill', selector: '#user-new', arguments: ['alice', secret] },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [user, password]
+      }
+    );
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.original.arguments).toEqual(['alice']);
+    expect(redacted.patches[0]?.suggested.arguments).toEqual(['alice']);
+  });
+
+  it('scrubs by value on a single entry without a scenario (P28b)', () => {
+    const secret = 'dataset-secret';
+    const entry = leakyFillPatch(secret).patches[0];
+    expect(entry).toBeDefined();
+    if (entry === undefined) {
+      return;
+    }
+    const redacted = redactSuggestedPatchEntryForPersistence(entry, fillStep('#password', secret));
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.suggested.arguments).toBeUndefined();
   });
 
   it('strips fill/select suggested args when the recorded step cannot be resolved (L7-106)', () => {

@@ -244,6 +244,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **G28b:** `detectDefaultBranch` requires `origin/HEAD` or local/remote
   `main`/`master`. It does not use the currently checked-out branch as
   the PR base. Missing those refs fail with `unresolved-default`.
+- **P28b:** `redactSuggestedPatchEntryForPersistence` scrubs known
+  parameter/secret values by value (R19a), even when the recorded step
+  has no `parameterRef`. L7-106 missing-step and P13a parameterized
+  strips stay.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -297,5 +301,6 @@ Pass-28 (L7-210 … L7-212): re-check dirty worktree before write/commit,
 SIGKILL bound. **R28a:** `validateHealth` migrates missing `runIds`
 before schema checks (H21a); raw schema still fail-closed (L7-128).
 **G28b:** `detectDefaultBranch` is `origin/HEAD` or local/remote
-`main`/`master` only (no checkout fallback). Held: P28, S28, X28, F28,
-W28.
+`main`/`master` only (no checkout fallback). **P28b:** patch redaction
+scrubs known secrets by value even without `parameterRef`. Held: S28,
+X28, F28, W28.

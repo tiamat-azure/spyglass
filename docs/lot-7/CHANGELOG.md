@@ -981,6 +981,17 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: P28, S28, X28, F28, W28.
 
+## Captain lock P28b (scrub known secrets by value)
+
+- **P28b:** `redactSuggestedPatchEntryForPersistence` always scrubs known
+  parameter/secret fill/select values **by value** (R19a fail-closed), not
+  only when the recorded step is missing (L7-106) or has a `parameterRef`
+  (P13a). Secret-named fields and live dataset args are stripped even when
+  that step looks non-parameterized. Non-secret fills and navigate URLs
+  stay. A27b trailing args remain unless they equal a known secret.
+
+Ask-user still held: S28, X28, F28, W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

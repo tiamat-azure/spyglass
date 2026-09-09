@@ -52,7 +52,7 @@ export function extractScenarioParameters(scenario: Scenario): {
     const value = typeof recorded === 'string' ? recorded : '';
     // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
     setOwnString(values, name, value);
-    if (isSecretName(name) || looksMasked(value)) {
+    if (isSecretParameterName(name) || looksMaskedParameterValue(value)) {
       if (!secrets.includes(name)) {
         secrets.push(name);
       }
@@ -297,11 +297,15 @@ function uniqueName(base: string, used: Set<string>): string {
   return `${base}_${String(index)}`;
 }
 
-function isSecretName(name: string): boolean {
+export function isSecretParameterName(name: string): boolean {
   return SECRET_NAME.test(name);
 }
 
-function looksMasked(value: string): boolean {
+export function isSecretSelector(selector: string): boolean {
+  return isSecretParameterName(selector) || isSecretParameterName(nameFromSelector(selector));
+}
+
+export function looksMaskedParameterValue(value: string): boolean {
   return value.includes('•') || value.startsWith('secret:');
 }
 
