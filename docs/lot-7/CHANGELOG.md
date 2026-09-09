@@ -1257,6 +1257,9 @@ Ask-user queue: clear.
 - **L7-239:** `chooseWhisperModel` existence-checks `largePath` like
   `resolveWhisperPaths` and does not return a missing large file.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**728 passed**, 1 skipped (62 files).
+
 Ask-user queue: clear.
 
 ## CI — macOS Electron e2e close hang
