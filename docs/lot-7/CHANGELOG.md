@@ -1042,6 +1042,9 @@ Ask-user still held: W28.
   darwin), extract uses `Expand-Archive` on win32 (not always
   `tar -xf`). Linux `.tar.gz` still uses `tar`.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**698 passed**, 1 skipped (62 files). `download-model.test.ts` 17.
+
 Ask-user still held: none.
 
 ## CI — macOS Electron e2e close hang
