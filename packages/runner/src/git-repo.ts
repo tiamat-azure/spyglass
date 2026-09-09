@@ -42,7 +42,8 @@ export async function defaultGitExec(args: readonly string[], cwd: string): Prom
       encoding: 'utf8',
       maxBuffer: 2_000_000,
       timeout: GIT_EXEC_TIMEOUT_MS,
-      killSignal: 'SIGKILL'
+      killSignal: 'SIGKILL',
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
     });
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   } catch (error) {

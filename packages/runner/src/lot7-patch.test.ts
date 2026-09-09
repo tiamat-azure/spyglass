@@ -633,44 +633,54 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const src = await readFile(fileURLToPath(new URL('./git-repo.ts', import.meta.url)), 'utf8');
     expect(src).toContain('timeout: GIT_EXEC_TIMEOUT_MS');
     expect(src).toContain("killSignal: 'SIGKILL'");
+    expect(src).toContain("GIT_TERMINAL_PROMPT: '0'");
   });
 
-  it('pushes after recreating a local branch that already exists on origin (L7-094)', async () => {
-    const root = await tempDir('spyglass-lot7-nff-');
-    const origin = join(root, 'origin.git');
-    const dir = join(root, 'repo');
-    await mkdir(origin, { recursive: true });
-    await mkdir(dir, { recursive: true });
-    await execFileAsync('git', ['init', '--bare', origin]);
+  it('retries push after a non-fast-forward when origin already has the branch (L7-094)', async () => {
+    const dir = await tempDir('spyglass-lot7-nff-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
     await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
     await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
     await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
-    await execFileAsync('git', ['remote', 'add', 'origin', origin], { cwd: dir });
-    await execFileAsync('git', ['push', '-u', 'origin', 'main'], { cwd: dir });
     let health = emptyHealth('ses_lot7');
     const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
     health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
     health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let upstreamPushes = 0;
+    let deletedRemote = false;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push' && args.includes('--delete')) {
+        deletedRemote = true;
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      if (args[0] === 'push' && args.includes('-u')) {
+        upstreamPushes += 1;
+        if (upstreamPushes === 2) {
+          return {
+            stdout: '',
+            stderr: '! [rejected] spyglass/patch (non-fast-forward)',
+            code: 1
+          };
+        }
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
     const first = await applyAssistedPatches({
       health,
       suggested: patch('#new', 'run_b'),
       scenario: scn,
       scenarioPath,
       policy,
-      git: defaultGitExec
+      git
     });
     expect(first.ok).toBe(true);
     if (!first.ok) {
       return;
     }
     expect(first.prPrepared).toBe(false);
-    const remoteBefore = (
-      await execFileAsync('git', ['ls-remote', 'origin', first.branch], { cwd: dir })
-    ).stdout.trim();
-    expect(remoteBefore.length).toBeGreaterThan(0);
     await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
     await execFileAsync('git', ['branch', '-D', first.branch], { cwd: dir });
     const second = await applyAssistedPatches({
@@ -679,7 +689,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenario: scn,
       scenarioPath,
       policy,
-      git: defaultGitExec
+      git
     });
     expect(second.ok).toBe(true);
     if (!second.ok) {
@@ -687,11 +697,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     }
     expect(second.branch).toBe(first.branch);
     expect(second.prPrepared).toBe(false);
-    const remoteAfter = (
-      await execFileAsync('git', ['ls-remote', 'origin', second.branch], { cwd: dir })
-    ).stdout.trim();
-    expect(remoteAfter).toContain(second.commit);
-    expect(remoteAfter).not.toContain(first.commit);
+    expect(deletedRemote).toBe(true);
+    expect(upstreamPushes).toBe(3);
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
