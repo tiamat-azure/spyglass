@@ -61,7 +61,7 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (270 files) |
+| `pnpm lint` | pass (271 files) |
 | `pnpm typecheck` | pass (6 packages) |
 | `pnpm test` | **576 passed**, 1 skipped (61 files) |
 | `pnpm test:schemas` | 2 passed |
