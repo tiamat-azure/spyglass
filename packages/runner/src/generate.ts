@@ -1,4 +1,5 @@
-import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { chmod, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Scenario } from '@spyglass/contracts';
 import { RUNNER_PACKAGE } from './package-name.ts';
@@ -42,13 +43,43 @@ export function npmPackageNameForSession(sessionId: string): string {
   return `spyglass-scenario-${slug.length > 0 ? slug : 'session'}`;
 }
 
+function generatedStagingDir(sessionDir: string): string {
+  return runPath(sessionDir, `.${GENERATED_DIR_NAME}-${randomBytes(6).toString('hex')}.tmp`);
+}
+
+/** Rename staging into dest. Keep dest intact if the swap fails (D61a). */
+async function replaceDirAtomic(staging: string, dest: string): Promise<void> {
+  const backup = `${dest}.bak-${randomBytes(6).toString('hex')}`;
+  let movedExisting = false;
+  try {
+    try {
+      await rename(dest, backup);
+      movedExisting = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    await rename(staging, dest);
+  } catch (error) {
+    if (movedExisting) {
+      await rename(backup, dest).catch(() => undefined);
+    }
+    throw error;
+  }
+  if (movedExisting) {
+    await rm(backup, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 /** Thin executable hybrid package (ADR-0006 / F-45 / PRD §6.12, §6.14). */
 export async function writeGeneratedPackage(
   input: WriteGeneratedPackageInput
 ): Promise<GeneratedPackagePaths> {
+  const dir = generatedDir(input.sessionDir);
+  const staging = generatedStagingDir(input.sessionDir);
   try {
-    const dir = generatedDir(input.sessionDir);
-    await mkdir(dir, { recursive: true });
+    await mkdir(staging, { recursive: true });
     const scenarioJson = runPath(dir, GENERATED_SCENARIO_JSON);
     const scenarioTs = runPath(dir, GENERATED_SCENARIO_TS);
     const readme = runPath(dir, GENERATED_README);
@@ -58,21 +89,27 @@ export async function writeGeneratedPackage(
       ...input.scenario,
       generatedAt: input.scenario.generatedAt ?? new Date().toISOString()
     };
-    await writeFile(scenarioJson, `${JSON.stringify(scenario, null, 2)}\n`, 'utf8');
-    await writeFile(scenarioTs, generatedScenarioTsSource(), {
+    await writeFile(
+      runPath(staging, GENERATED_SCENARIO_JSON),
+      `${JSON.stringify(scenario, null, 2)}\n`,
+      'utf8'
+    );
+    const stagingTs = runPath(staging, GENERATED_SCENARIO_TS);
+    await writeFile(stagingTs, generatedScenarioTsSource(), {
       encoding: 'utf8',
       mode: 0o755
     });
-    await chmod(scenarioTs, 0o755);
-    await writeFile(readme, generatedReadme(scenario.sessionId), 'utf8');
+    await chmod(stagingTs, 0o755);
+    await writeFile(runPath(staging, GENERATED_README), generatedReadme(scenario.sessionId), 'utf8');
     await writeFile(
-      packageJson,
+      runPath(staging, GENERATED_PACKAGE_JSON),
       `${JSON.stringify(generatedPackageManifest(scenario.sessionId, version), null, 2)}\n`,
       'utf8'
     );
+    await replaceDirAtomic(staging, dir);
     return { dir, scenarioJson, scenarioTs, readme, packageJson };
   } catch (error) {
-    await discardGeneratedPackage(input.sessionDir).catch(() => undefined);
+    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
 }

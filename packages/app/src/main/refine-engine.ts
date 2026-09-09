@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { validateRefinedStep } from '@spyglass/contracts';
@@ -16,7 +16,11 @@ import {
   unconfirmedWeaks,
   weakGroup
 } from '@spyglass/llm';
-import { discardGeneratedPackage, writeGeneratedFromRevision } from '@spyglass/runner';
+import {
+  discardGeneratedPackage,
+  generatedScenarioJsonPath,
+  writeGeneratedFromRevision
+} from '@spyglass/runner';
 import type { RefinedStepView, RefineRevisionView } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
@@ -416,6 +420,7 @@ export class RefineEngine {
     sessionDir: string,
     file: RefinedRevisionFile
   ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const protectExisting = await generatedScenarioExists(sessionDir);
     try {
       if (this.deps.generate !== undefined) {
         await this.deps.generate(sessionDir, file);
@@ -425,7 +430,9 @@ export class RefineEngine {
       return { ok: true };
     } catch (error) {
       try {
-        await discardGeneratedPackage(sessionDir);
+        if (!protectExisting) {
+          await discardGeneratedPackage(sessionDir);
+        }
       } catch {
         // leftover generated/ is still unusable: CLI requires a finalized rev
       }
@@ -569,6 +576,15 @@ export async function nextRevision(sessionDir: string): Promise<number> {
     return max + 1;
   } catch {
     return 1;
+  }
+}
+
+async function generatedScenarioExists(sessionDir: string): Promise<boolean> {
+  try {
+    await access(generatedScenarioJsonPath(sessionDir));
+    return true;
+  } catch {
+    return false;
   }
 }
 

@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -404,10 +404,51 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
 
   it('discards partial generated/ if writeGeneratedPackage fails mid-write (L6-005)', async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-partial-'));
-    const { mkdir } = await import('node:fs/promises');
-    await mkdir(join(sessionDir, 'generated', 'package.json'), { recursive: true });
-    await expect(writeGeneratedPackage({ sessionDir, scenario: scenario() })).rejects.toThrow();
+    const poisoned = {
+      ...scenario(),
+      generatedAt: {
+        toJSON(): string {
+          throw new Error('mid-write');
+        }
+      }
+    } as unknown as Scenario;
+    await expect(writeGeneratedPackage({ sessionDir, scenario: poisoned })).rejects.toThrow(
+      /mid-write/
+    );
     await expect(access(join(sessionDir, 'generated'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect((await readdir(sessionDir)).filter((name) => name.includes('.tmp'))).toEqual([]);
+  });
+
+  it('keeps a previously good generated/ if regenerate fails mid-write (D61a / L6-061)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-d61a-'));
+    const paths = await writeGeneratedPackage({
+      sessionDir,
+      scenario: { ...scenario(), startUrl: 'https://keep.test/good' }
+    });
+    const before = await readFile(paths.scenarioJson, 'utf8');
+    const poisoned = {
+      ...scenario(),
+      startUrl: 'https://clobber.test/bad',
+      generatedAt: {
+        toJSON(): string {
+          throw new Error('mid-write');
+        }
+      }
+    } as unknown as Scenario;
+    await expect(writeGeneratedPackage({ sessionDir, scenario: poisoned })).rejects.toThrow(
+      /mid-write/
+    );
+    expect(await readFile(paths.scenarioJson, 'utf8')).toBe(before);
+    const json = JSON.parse(before) as Scenario;
+    expect(json.startUrl).toBe('https://keep.test/good');
+    const leftover = (await readdir(sessionDir)).filter(
+      (name) => name.includes('.tmp') || name.includes('.bak-')
+    );
+    expect(leftover).toEqual([]);
+    const src = await readFile(join(repoRoot(), 'packages/runner/src/generate.ts'), 'utf8');
+    expect(src).toContain('replaceDirAtomic(staging, dir)');
+    expect(src).toContain('await rm(staging, { recursive: true, force: true })');
+    expect(src).not.toContain('await discardGeneratedPackage(input.sessionDir)');
   });
 
   it('generated scenario.ts shebang uses env -S transform-types (L6-023)', () => {

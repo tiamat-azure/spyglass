@@ -141,6 +141,11 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
     before `runScenario`, so a hand-edited or missing `startUrl` fails
     with the schema error (same as L6-024 / L6-028). Do not skip
     validation on the generated-script path.
+16. **D61a / L6-061.** `writeGeneratedPackage` writes to a temp dir then
+    atomically replaces `generated/`. A regenerate mid-write failure
+    must not `rm -rf` a previously good finalized package. Only call
+    `discardGeneratedPackage` when there was no existing `scenario.json`
+    to protect (first generate / L6-005).
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -560,6 +565,17 @@ Applied on tip `1fffddf9718a1acec538f21f2c56be4ddda54eb5`. Product decisions
 
 Unit tests after this pass: **409 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 20 (D61a lock)
+
+Applied on tip `46138a04f6d799061d0ec21ca04c04bc4632a3f9`. Product decisions
+1–15 and prior locks (incl. L6-060) are unchanged. Locks **D61a**.
+
+- **L6-061 / D61a** `writeGeneratedPackage` writes a staging dir then
+  `rename`s it over `generated/`. Mid-write failure only `rm`s the
+  staging dir. Finalize generate catch discards only when there was no
+  existing `generated/scenario.json` (L6-005 first generate still
+  fail-closed).
 
 ## Residuals
 
