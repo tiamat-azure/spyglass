@@ -213,6 +213,36 @@ describe('launchPlaywrightRun recoverer / gateway (L6-053 / L6-055)', () => {
     expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ headless: true });
   });
 
+  it('driver-less runScenario honours options.trace false over argv --trace (L6-074)', async () => {
+    const src = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'run.ts'), 'utf8');
+    expect(src).toContain('if (options.trace !== undefined)');
+    expect(src).not.toContain('if (options.trace === true)');
+
+    closeSpy.mockClear();
+    driverFactory.mockReset();
+    gatewayFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const reportDir = await mkdtemp(join(tmpdir(), 'spyglass-l6-074-'));
+    const fromArgv = await runScenario(scenario(), {
+      argv: ['--headless', '--no-ai', '--trace'],
+      env: {},
+      reportDir
+    });
+    expect(fromArgv.exitCode).toBe(0);
+    expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ trace: true });
+
+    driverFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const forcedOff = await runScenario(scenario(), {
+      argv: ['--headless', '--no-ai', '--trace'],
+      env: {},
+      reportDir,
+      trace: false
+    });
+    expect(forcedOff.exitCode).toBe(0);
+    expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ trace: false });
+  });
+
   it('driver-less runScenario forwards options.onProgress (L6-073)', async () => {
     const launchSrc = await readFile(
       join(dirname(fileURLToPath(import.meta.url)), 'launch.ts'),

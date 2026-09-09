@@ -103,8 +103,8 @@ async function runScenarioStandalone(
   if (options.aiRecovery !== undefined) {
     parsed.aiRecovery = options.aiRecovery;
   }
-  if (options.trace === true) {
-    parsed.trace = true;
+  if (options.trace !== undefined) {
+    parsed.trace = options.trace;
   }
   if (options.smartModel !== undefined) {
     parsed.smartModel = options.smartModel;
