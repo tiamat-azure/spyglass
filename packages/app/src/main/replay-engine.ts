@@ -135,8 +135,7 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
     if (name === undefined) {
       continue;
     }
-    const revision =
-      name === latestName ? latest : await readRevisionFile(refinedDir, name);
+    const revision = name === latestName ? latest : await readRevisionFile(refinedDir, name);
     if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
       return scenarioFromRevision(revision, startUrl);
     }
