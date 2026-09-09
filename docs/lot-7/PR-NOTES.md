@@ -307,6 +307,11 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   after size validation and before chmod/success. Fail closed on
   mismatch or missing pin. Pins documented next to
   `STT_WHISPER_CLI_SHA256` (S4a-style env override; unpackaged Node).
+- **C31a:** `closeElectron` SIGKILL remains timeout-only (L7-191). Other
+  `close()` rejections rethrow without force-kill.
+- **W31a:** `pickPreferredWhisperModel` does not fall back to large when
+  `skipLarge` / prefer-small and small is missing (only-large stays
+  unavailable).
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -385,4 +390,5 @@ unique-ified against selector-derived names (R10a last-write-wins).
 only); replay next/stop IPC try/catch. **A30a:** assisted apply requires
 sessionDir (structured `missing-session-dir` refusal). **I30a:**
 whisper-cli download SHA-256 after extract, before chmod (fail closed).
-Held: C31, W31, R32.
+**C31a:** closeElectron SIGKILL timeout-only. **W31a:** skipLarge does
+not fall back to large when small is missing. Held: R32.

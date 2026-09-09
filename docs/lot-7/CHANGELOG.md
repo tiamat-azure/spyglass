@@ -1201,6 +1201,18 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: C31, W31, R32.
 
+## Captain locks C31a + W31a (timeout-only SIGKILL; skipLarge no large fallback)
+
+- **C31a:** Keep SIGKILL timeout-only in `closeElectron` (L7-191). A
+  non-timeout `close()` rejection is rethrown after timer cleanup and
+  must not call `killElectronChild`. Do not restore kill-on-any-close-rejection.
+- **W31a:** Keep unavailable when `skipLarge` / prefer-small and only
+  large is on disk. `pickPreferredWhisperModel` returns `nonLarge` (often
+  undefined) and does not fall back to large via `existing[0]`. A30a
+  `missing-session-dir` and I30a whisper-cli digest unchanged.
+
+Ask-user still held: R32.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

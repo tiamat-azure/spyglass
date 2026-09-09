@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   closeElectron,
@@ -66,7 +67,7 @@ describe('closeElectron waitForProcessExit (L7-117)', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(KILL_EXIT_GRACE_MS - 100);
   });
 
-  it('rethrows non-timeout close() errors without SIGKILL (L7-191)', async () => {
+  it('rethrows non-timeout close() errors without SIGKILL (L7-191 / C31a)', async () => {
     let killed = false;
     await expect(
       closeElectron({
@@ -83,5 +84,19 @@ describe('closeElectron waitForProcessExit (L7-117)', () => {
       })
     ).rejects.toThrow(/quit failed/);
     expect(killed).toBe(false);
+  });
+
+  it('force-kills Electron only after the close timeout (C31a)', () => {
+    const src = readFileSync(new URL('../../e2e/close-electron.ts', import.meta.url), 'utf8');
+    const fnStart = src.indexOf('export async function closeElectron');
+    const fnEnd = src.indexOf('export function killElectronChild');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('ELECTRON_CLOSE_TIMEOUT_MESSAGE');
+    expect(body).toContain('if (!timedOut)');
+    expect(body.indexOf('if (!timedOut)')).toBeLessThan(body.indexOf('throw error'));
+    expect(body.indexOf('throw error')).toBeLessThan(body.indexOf('killElectronChild(child)'));
+    expect(body).not.toMatch(/catch \(error\) \{\s*killElectronChild/);
   });
 });

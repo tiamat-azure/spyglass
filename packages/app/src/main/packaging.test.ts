@@ -197,6 +197,10 @@ describe('packaged Observe', () => {
     expect(pickBody).toContain('readLargeFallbackSync');
     expect(pickBody).toContain('largeFallbackMarkerDirs');
     expect(pickBody).toContain('skipLarge');
+    expect(pickBody).toContain('if (skipLarge)');
+    expect(pickBody.indexOf('if (skipLarge)')).toBeLessThan(
+      pickBody.indexOf('return nonLarge ?? existing[0]')
+    );
     expect(main).toContain("error: 'inactive'");
     expect(main).toContain('activeReplay === undefined');
     const replayNextIdx = main.indexOf('IPC.replayNext');
@@ -444,5 +448,15 @@ describe('packaged Observe', () => {
     expect(closeElectron).toContain('ELECTRON_CLOSE_TIMEOUT_MESSAGE');
     expect(closeElectron).toContain('if (!timedOut)');
     expect(closeElectron).toContain('throw error');
+    const closeStart = closeElectron.indexOf('export async function closeElectron');
+    const closeEnd = closeElectron.indexOf('export function killElectronChild');
+    expect(closeStart).toBeGreaterThan(-1);
+    expect(closeEnd).toBeGreaterThan(closeStart);
+    const closeBody = closeElectron.slice(closeStart, closeEnd);
+    expect(closeBody.indexOf('if (!timedOut)')).toBeLessThan(closeBody.indexOf('throw error'));
+    expect(closeBody.indexOf('throw error')).toBeLessThan(
+      closeBody.indexOf('killElectronChild(child)')
+    );
+    expect(closeBody).not.toMatch(/catch \(error\) \{\s*killElectronChild/);
   });
 });

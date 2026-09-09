@@ -164,7 +164,8 @@ export function pickPreferredWhisperModel(
     return small;
   }
   const nonLarge = existing.find((path) => basename(path) !== STT_LARGE_MODEL_FILE);
-  // L7-178 / F-39 / F23b: permanent fallback must not land back on large.
+  // W31a / L7-178 / F-39 / F23b: skipLarge / prefer-small must not fall back
+  // onto large when small is missing. Only-large stays unavailable.
   if (skipLarge) {
     return nonLarge;
   }

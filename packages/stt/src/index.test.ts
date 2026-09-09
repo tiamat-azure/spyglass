@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -218,6 +218,26 @@ describe('@spyglass/stt', () => {
         STT_LARGE_FALLBACK: '1'
       })
     ).toBeUndefined();
+  });
+
+  it('does not pick large despite skipLarge when no small exists (W31a)', async () => {
+    const large = '/models/ggml-large-v3-turbo-q5_0.bin';
+    const custom = '/models/custom-weights.bin';
+    expect(pickPreferredWhisperModel([large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(pickPreferredWhisperModel([large, large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(pickPreferredWhisperModel([custom, large], { STT_LARGE_FALLBACK: '1' })).toBe(custom);
+    const src = await readFile(new URL('./whisper-engine.ts', import.meta.url), 'utf8');
+    const pickStart = src.indexOf('export function pickPreferredWhisperModel');
+    const pickEnd = src.indexOf('export function whisperAvailable');
+    expect(pickStart).toBeGreaterThan(-1);
+    expect(pickEnd).toBeGreaterThan(pickStart);
+    const pickBody = src.slice(pickStart, pickEnd);
+    expect(pickBody).toContain('if (skipLarge)');
+    expect(pickBody.indexOf('if (skipLarge)')).toBeLessThan(
+      pickBody.indexOf('return nonLarge ?? existing[0]')
+    );
+    expect(pickBody).toMatch(/if \(skipLarge\) \{\s*return nonLarge;/);
+    expect(pickBody).not.toMatch(/if \(skipLarge\) \{\s*return nonLarge \?\? existing\[0\]/);
   });
 
   it('correlates dictation before and after a DOM step', () => {
