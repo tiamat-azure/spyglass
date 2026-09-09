@@ -1226,6 +1226,9 @@ Ask-user still held: R32.
   silent drop is reversed. A30a / I30a / C31a / W31a / L7-230 / L7-231
   unchanged.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**721 passed**, 1 skipped (62 files).
+
 Ask-user queue: clear.
 
 ## CI — macOS Electron e2e close hang
