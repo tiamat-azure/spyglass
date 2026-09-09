@@ -436,8 +436,7 @@ export class RefineEngine {
     sessionDir: string,
     file: RefinedRevisionFile
   ): Promise<
-    | { ok: true; protectExisting: boolean }
-    | { ok: false; error: string; protectExisting: boolean }
+    { ok: true; protectExisting: boolean } | { ok: false; error: string; protectExisting: boolean }
   > {
     const protectExisting = await generatedScenarioExists(sessionDir);
     try {
