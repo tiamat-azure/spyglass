@@ -342,7 +342,13 @@ export class RefineEngine {
     const before = await rawFingerprint(sessionDir);
     const generated = await this.writeGeneratedPackage(sessionDir, file);
     if (!generated.ok) {
-      return await this.abortFinalizeAfterGenerate(sessionDir, file, false, generated.error);
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        false,
+        generated.error,
+        !generated.protectExisting
+      );
     }
     if ((await rawFingerprint(sessionDir)) !== before) {
       return await this.abortFinalizeAfterGenerate(
@@ -395,7 +401,8 @@ export class RefineEngine {
     sessionDir: string,
     file: RefinedRevisionFile,
     persistReviewing: boolean,
-    error: string
+    error: string,
+    discardGenerated = true
   ): Promise<{ ok: false; error: string }> {
     file.status = 'reviewing';
     let combined = error;
@@ -409,7 +416,9 @@ export class RefineEngine {
       }
     }
     try {
-      await discardGeneratedPackage(sessionDir);
+      if (discardGenerated) {
+        await discardGeneratedPackage(sessionDir);
+      }
     } catch {
       // CLI generate still refuses leftover files without a finalized rev
     }
@@ -419,7 +428,7 @@ export class RefineEngine {
   private async writeGeneratedPackage(
     sessionDir: string,
     file: RefinedRevisionFile
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<{ ok: true } | { ok: false; error: string; protectExisting: boolean }> {
     const protectExisting = await generatedScenarioExists(sessionDir);
     try {
       if (this.deps.generate !== undefined) {
@@ -438,7 +447,8 @@ export class RefineEngine {
       }
       return {
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        protectExisting
       };
     }
   }
