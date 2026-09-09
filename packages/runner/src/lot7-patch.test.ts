@@ -16,13 +16,14 @@ import {
   assertAssistedApplyAllowed,
   confirmedDescriptor
 } from './assisted-apply.ts';
-import { descriptorHash } from './descriptor-hash.ts';
+import { descriptorHash, patchSetHash } from './descriptor-hash.ts';
 import {
   defaultGitExec,
   GIT_EXEC_TIMEOUT_MS,
   GitApplyError,
   isDefaultBranchName,
-  isGitApplyError
+  isGitApplyError,
+  patchBranchName
 } from './git-repo.ts';
 import {
   emptyHealth,
@@ -699,6 +700,69 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(second.prPrepared).toBe(false);
     expect(deletedRemote).toBe(true);
     expect(upstreamPushes).toBe(3);
+  });
+
+  it('restores the starting branch when dangling patch-branch delete fails (L7-099)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7099-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    await execFileAsync('git', ['checkout', '-b', 'feature'], { cwd: dir });
+    const setHash = patchSetHash([
+      { stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }
+    ]);
+    const stale = patchBranchName('ses_lot7', setHash);
+    await execFileAsync('git', ['checkout', '-b', stale], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'feature'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'branch' && args[1] === '-D') {
+        return { stdout: '', stderr: 'cannot lock ref', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('git-error');
+    }
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('feature');
+    expect(head).not.toBe('main');
+  });
+
+  it('names the patch branch from the full toApply set (L7-101)', async () => {
+    const one = [{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#a' }) }];
+    const two = [
+      { stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#a' }) },
+      { stepIndex: 1, hash: descriptorHash({ type: 'click', selector: '#b' }) }
+    ];
+    expect(patchSetHash(one)).not.toBe(patchSetHash(two));
+    expect(patchBranchName('ses_lot7', patchSetHash(one))).not.toBe(
+      patchBranchName('ses_lot7', patchSetHash(two))
+    );
+    const src = await readFile(
+      fileURLToPath(new URL('./assisted-apply.ts', import.meta.url)),
+      'utf8'
+    );
+    expect(src).toContain('patchSetHash(toApply)');
+    expect(src).not.toContain('toApply[0]?.hash');
+    expect(src).not.toContain('candidate.consecutiveRuns < policy.confirmRuns');
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {

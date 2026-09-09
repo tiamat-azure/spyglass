@@ -20,7 +20,7 @@ export {
   publicSiteScenario,
   waitStep
 } from './corpus.ts';
-export { descriptorHash } from './descriptor-hash.ts';
+export { descriptorHash, patchSetHash } from './descriptor-hash.ts';
 export type { PageDriver, PageSnapshot } from './driver.ts';
 export type { GeneratedPackagePaths, WriteGeneratedPackageInput } from './generate.ts';
 export {

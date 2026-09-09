@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (268 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **543 passed**, 1 skipped (59 files) |
+| `pnpm test` | **546 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (39), `lot7-parameters.test.ts` (34),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (41), `lot7-parameters.test.ts` (35),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -143,6 +143,7 @@ steps) is in `CHANGELOG.md`.
 Pass-13 (L7-091 … L7-098) is in `CHANGELOG.md`.
 Captain lock **D11a** (`generated/datasets/recorded.json` is local-only
 plaintext secrets; gitignored) is in `CHANGELOG.md`.
+Pass-14 (L7-099 … L7-102) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -162,3 +163,4 @@ plaintext secrets; gitignored) is in `CHANGELOG.md`.
   recoverable; they do not change the ok/prPrepared contract.
 - **P13** ask-user: strip proposed-side secret args in patches vs
   document residual (unchanged).
+- **P14** ask-user: remote force-delete vs gate on open PR (unchanged).

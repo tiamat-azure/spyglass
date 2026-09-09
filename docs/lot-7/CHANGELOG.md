@@ -383,6 +383,23 @@ Ask-user still held: **P12** (PR-prep `ok: false` vs `ok: true` +
 `prPrepared: false`), **P13** (strip proposed-side secret args in
 patches vs document residual).
 
+## Pass-14 adversarial fixes (L7-099 … L7-102)
+
+- **L7-099:** If a leftover `spyglass/patch-*` branch does not already
+  contain the confirmed patches and `git branch -D` fails after checkout
+  of the default branch, restore `startingBranch` before returning
+  `git-error` (do not leave HEAD on `main`/`master`).
+- **L7-100:** Drop the dead `consecutiveRuns < confirmRuns` filter in
+  `toApply` (already applied by `promotedCandidates()`).
+- **L7-101:** Patch branch names hash the full `toApply` set
+  (`patchSetHash`), not only `toApply[0].hash`.
+- **L7-102:** Dataset `values` maps are null-prototype own properties so
+  an explicit `parameterRef` of `__proto__` (or other prototype keys) is
+  extracted, parsed, exemplified, and applied.
+
+Ask-user still held: **P12**, **P13**, **P14** (remote force-delete vs
+gate on open PR).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

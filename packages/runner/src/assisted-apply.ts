@@ -8,7 +8,7 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
-import { descriptorHash } from './descriptor-hash.ts';
+import { descriptorHash, patchSetHash } from './descriptor-hash.ts';
 import {
   currentBranch,
   defaultGitExec,
@@ -222,9 +222,6 @@ export async function applyAssistedPatches(input: {
     if (hash !== candidate.descriptorHash) {
       continue;
     }
-    if (candidate.consecutiveRuns < policy.confirmRuns) {
-      continue;
-    }
     toApply.push({ stepIndex: candidate.stepIndex, suggested: patch.suggested, hash });
   }
   if (toApply.length === 0) {
@@ -242,7 +239,7 @@ export async function applyAssistedPatches(input: {
 
   const defaultBranch = await detectDefaultBranch(git, repoRoot);
   const startingBranch = await currentBranch(git, repoRoot);
-  const hash = toApply[0]?.hash ?? 'patch';
+  const hash = patchSetHash(toApply);
   const branch = patchBranchName(input.suggested.sessionId, hash);
 
   // L7-084: a prior ok:true / prPrepared:false attempt leaves spyglass/patch-* around.
@@ -268,11 +265,16 @@ export async function applyAssistedPatches(input: {
         }
         const deleted = await git(['branch', '-D', branch], repoRoot);
         if (deleted.code !== 0) {
-          return {
-            ok: false,
-            code: 'git-error',
-            reason: deleted.stderr.trim() || `git branch -D ${branch} failed`
-          };
+          const revertError = await restoreStartingBranch(git, repoRoot, startingBranch);
+          return refusalWithRestore(
+            {
+              ok: false,
+              code: 'git-error',
+              reason: deleted.stderr.trim() || `git branch -D ${branch} failed`
+            },
+            revertError,
+            startingBranch
+          );
         }
       }
     } catch (error) {

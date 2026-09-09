@@ -117,6 +117,38 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.dataset.secrets).toEqual(['password']);
   });
 
+  it('records and applies a __proto__ parameterRef as an own value (L7-102)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/login',
+      steps: [fillStep(0, '#odd', 'captured', '__proto__')]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(Object.getPrototypeOf(extracted.dataset.values)).toBeNull();
+    expect(Object.hasOwn(extracted.dataset.values, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(extracted.dataset.values, '__proto__')?.value).toBe(
+      'captured'
+    );
+    const example = exampleDataset(extracted.dataset);
+    expect(Object.hasOwn(example.values, '__proto__')).toBe(true);
+    const parsed = parseDataset(
+      JSON.parse(
+        JSON.stringify({
+          schemaVersion: 1,
+          name: 'live',
+          values: extracted.dataset.values,
+          secrets: []
+        })
+      )
+    );
+    expect(Object.getPrototypeOf(parsed.values)).toBeNull();
+    expect(Object.hasOwn(parsed.values, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(parsed.values, '__proto__')?.value).toBe('captured');
+    const applied = applyDataset(extracted.scenario, parsed);
+    expect(applied.steps[0]?.action.descriptor.arguments).toEqual(['captured']);
+  });
+
   it('still uniquifies generated selector-derived names (R4a)', () => {
     const scn: Scenario = {
       schemaVersion: 1,

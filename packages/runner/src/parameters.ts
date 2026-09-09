@@ -36,9 +36,9 @@ export function extractScenarioParameters(scenario: Scenario): {
   scenario: Scenario;
   dataset: ScenarioDataset;
 } {
-  const values: Record<string, string> = {};
-  const secrets: string[] = [];
   const used = new Set<string>();
+  const values = emptyStringMap();
+  const secrets: string[] = [];
   const steps = scenario.steps.map((step) => {
     if (!isParameterizedType(step.action.type)) {
       return step;
@@ -51,7 +51,7 @@ export function extractScenarioParameters(scenario: Scenario): {
     used.add(name);
     const value = recorded ?? '';
     // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
-    values[name] = value;
+    setOwnString(values, name, value);
     if (isSecretName(name) || looksMasked(value)) {
       if (!secrets.includes(name)) {
         secrets.push(name);
@@ -80,10 +80,10 @@ export function extractScenarioParameters(scenario: Scenario): {
 }
 
 export function exampleDataset(recorded: ScenarioDataset): ScenarioDataset {
-  const values: Record<string, string> = {};
+  const values = emptyStringMap();
   const secretSet = new Set(recorded.secrets);
   for (const [key, value] of Object.entries(recorded.values)) {
-    values[key] = secretSet.has(key) ? '' : distinctExampleValue(key, value);
+    setOwnString(values, key, secretSet.has(key) ? '' : distinctExampleValue(key, value));
   }
   return {
     schemaVersion: DATASET_SCHEMA_VERSION,
@@ -136,12 +136,12 @@ export function parseDataset(value: unknown): ScenarioDataset {
   if (typeof record.values !== 'object' || record.values === null || Array.isArray(record.values)) {
     throw new Error('dataset values must be an object');
   }
-  const values: Record<string, string> = {};
+  const values = emptyStringMap();
   for (const [key, item] of Object.entries(record.values as Record<string, unknown>)) {
     if (typeof item !== 'string') {
       throw new Error(`dataset value ${key} must be a string`);
     }
-    values[key] = item;
+    setOwnString(values, key, item);
   }
   if (!Array.isArray(record.secrets)) {
     throw new Error('dataset secrets must be an array of strings');
@@ -197,6 +197,20 @@ function slug(value: string): string {
     .replace(/[^a-z0-9]+/gu, '_')
     .replace(/^_+|_+$/gu, '');
   return cleaned.length > 0 ? cleaned : 'value';
+}
+
+function emptyStringMap(): Record<string, string> {
+  return Object.create(null) as Record<string, string>;
+}
+
+/** L7-102: own properties even when `key` is `__proto__` / `constructor`. */
+function setOwnString(record: Record<string, string>, key: string, value: string): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true
+  });
 }
 
 function uniqueName(base: string, used: Set<string>): string {
