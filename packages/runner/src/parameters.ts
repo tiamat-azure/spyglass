@@ -1,6 +1,6 @@
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RefinedStep, Scenario } from '@spyglass/contracts';
+import type { RefinedStep, ReplayDescriptor, Scenario } from '@spyglass/contracts';
 import { cloneDescriptor } from './scenario.ts';
 
 export const DATASET_SCHEMA_VERSION = 1 as const;
@@ -49,7 +49,7 @@ export function extractScenarioParameters(scenario: Scenario): {
       return step;
     }
     used.add(name);
-    const value = recorded ?? '';
+    const value = typeof recorded === 'string' ? recorded : '';
     // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
     setOwnString(values, name, value);
     if (isSecretName(name) || looksMasked(value)) {
@@ -58,7 +58,8 @@ export function extractScenarioParameters(scenario: Scenario): {
       }
     }
     const descriptor = cloneDescriptor(step.action.descriptor);
-    delete descriptor.arguments;
+    // A27b / L7-070: drop the parameterized slot; keep trailing args.
+    stripParameterizedArgument(descriptor);
     return {
       ...step,
       action: {
@@ -106,7 +107,7 @@ export function applyDataset(scenario: Scenario, dataset: ScenarioDataset): Scen
     }
     const value = dataset.values[ref] ?? '';
     const descriptor = cloneDescriptor(step.action.descriptor);
-    descriptor.arguments = [value];
+    applyParameterizedArgument(descriptor, value);
     return {
       ...step,
       action: {
@@ -132,13 +133,49 @@ export function assertParameterRefsResolved(scenario: Scenario): void {
     if (ref === undefined || ref.trim().length === 0) {
       continue;
     }
-    if (step.action.descriptor.arguments?.[0] === undefined) {
+    if (isUnresolvedParameterArg(step.action.descriptor.arguments?.[0])) {
       missing.push(ref.trim());
     }
   }
   if (missing.length > 0) {
     throwMissingParameterRefs(missing);
   }
+}
+
+/**
+ * A27b: parameterized fill/select uses arguments[0]; trailing slots stay put.
+ * L7-070: with no trailing args, omit `arguments` so the recorded secret is gone.
+ */
+export function stripParameterizedArgument(descriptor: ReplayDescriptor): void {
+  const trailing = trailingArguments(descriptor.arguments);
+  if (trailing.length === 0) {
+    delete descriptor.arguments;
+    return;
+  }
+  descriptor.arguments = unappliedArguments(trailing);
+}
+
+function applyParameterizedArgument(descriptor: ReplayDescriptor, value: string): void {
+  descriptor.arguments = [value, ...trailingArguments(descriptor.arguments)];
+}
+
+function trailingArguments(args: readonly unknown[] | undefined): string[] {
+  const trailing: string[] = [];
+  for (const item of (args ?? []).slice(1)) {
+    if (typeof item === 'string') {
+      trailing.push(item);
+    }
+  }
+  return trailing;
+}
+
+/** Vacant [0] so D20a still fails; JSON.stringify persists it as null. */
+function unappliedArguments(trailing: string[]): string[] {
+  return [undefined as unknown as string, ...trailing];
+}
+
+function isUnresolvedParameterArg(value: unknown): boolean {
+  return value === undefined || value === null;
 }
 
 function throwMissingParameterRefs(refs: string[]): never {

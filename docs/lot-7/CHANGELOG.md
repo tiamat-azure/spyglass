@@ -909,6 +909,16 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: A27, L27.
 
+## Captain lock A27b (preserve trailing fill/select arguments)
+
+- **A27b:** `extractScenarioParameters` / `applyDataset` keep the full
+  `arguments` array. Slot `[0]` is the dataset value (cleared on extract
+  so L7-070 secrets stay out of generated `scenario.json`); trailing
+  slots after `[0]` survive extract, JSON round-trip, and apply. D20a
+  still fails when `[0]` is vacant (`undefined` or JSON `null`) even if
+  trailing args remain. Replay still consumes `arguments[0]` only.
+  Held: **L27**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

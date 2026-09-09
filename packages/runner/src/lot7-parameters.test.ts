@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
-import { repoRoot } from '@spyglass/contracts';
+import { repoRoot, validateScenario } from '@spyglass/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeGeneratedPackage } from './generate.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
@@ -26,6 +26,7 @@ import {
 } from './parameters.ts';
 import type { Recoverer } from './recover.ts';
 import { runScenario } from './run.ts';
+import { asScenario } from './scenario.ts';
 import {
   exportSessionFolder,
   importSessionFolder,
@@ -64,6 +65,14 @@ function fillStep(index: number, selector: string, value: string, ref?: string):
   if (ref !== undefined) {
     step.action.parameterRef = ref;
   }
+  return step;
+}
+
+function selectStep(index: number, selector: string, value: string, ref?: string): RefinedStep {
+  const step = fillStep(index, selector, value, ref);
+  step.intent = 'Je sélectionne';
+  step.action.type = 'select';
+  step.action.descriptor = { ...step.action.descriptor, type: 'select' };
   return step;
 }
 
@@ -342,6 +351,112 @@ describe('Lot 7 F-48 parameterization', () => {
     for (const step of extracted.scenario.steps) {
       expect(step.action.descriptor.arguments).toBeUndefined();
     }
+  });
+
+  it('preserves trailing fill arguments through extract, JSON, and apply (A27b)', () => {
+    const step = fillStep(0, '#user', 'alice');
+    step.action.descriptor.arguments = ['alice', 'slowly', 'ltr'];
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/login',
+      steps: [step]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.dataset.values.user).toBe('alice');
+    expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('user');
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeUndefined();
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.slice(1)).toEqual([
+      'slowly',
+      'ltr'
+    ]);
+    expect(() => assertParameterRefsResolved(extracted.scenario)).toThrow(
+      /dataset is missing parameterRef: user/
+    );
+    const parsed = JSON.parse(JSON.stringify(extracted.scenario)) as unknown;
+    expect(validateScenario(parsed).valid).toBe(true);
+    const loaded = asScenario(parsed);
+    expect(loaded.steps[0]?.action.descriptor.arguments?.[0]).toBeNull();
+    expect(() => assertParameterRefsResolved(loaded)).toThrow(
+      /dataset is missing parameterRef: user/
+    );
+    expect(() =>
+      applyDataset(loaded, { schemaVersion: 1, name: 'incomplete', values: {}, secrets: [] })
+    ).toThrow(/dataset is missing parameterRef: user/);
+    const applied = applyDataset(loaded, {
+      schemaVersion: 1,
+      name: 'live',
+      values: { user: 'bob' },
+      secrets: []
+    });
+    expect(applied.steps[0]?.action.descriptor.arguments).toEqual(['bob', 'slowly', 'ltr']);
+    const again = applyDataset(applied, {
+      schemaVersion: 1,
+      name: 'live',
+      values: { user: 'carol' },
+      secrets: []
+    });
+    expect(again.steps[0]?.action.descriptor.arguments).toEqual(['carol', 'slowly', 'ltr']);
+  });
+
+  it('preserves trailing select arguments through extract and apply (A27b)', async () => {
+    const step = selectStep(0, '#country', 'fr');
+    step.action.descriptor.arguments = ['fr', 'exact'];
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/form',
+      steps: [step]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.dataset.values.country).toBe('fr');
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeUndefined();
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.slice(1)).toEqual(['exact']);
+    expect(() => assertParameterRefsResolved(extracted.scenario)).toThrow(
+      /dataset is missing parameterRef: country/
+    );
+    const applied = applyDataset(extracted.scenario, {
+      schemaVersion: 1,
+      name: 'live',
+      values: { country: 'be' },
+      secrets: []
+    });
+    expect(applied.steps[0]?.action.descriptor.arguments).toEqual(['be', 'exact']);
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/form',
+      elements: [{ selector: '#country', visible: true, value: '' }]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: undefined
+    });
+    expect(result.exitCode).toBe(1);
+    expect(driver.fills).toEqual([]);
+    const dir = await tempDir('spyglass-lot7-a27b-select-');
+    await writeFile(
+      join(dir, 'live.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'live', values: { country: 'be' }, secrets: [] }, null, 2)}\n`,
+      'utf8'
+    );
+    const driver2 = new MemoryPageDriver({
+      url: 'https://exemple.test/form',
+      elements: [{ selector: '#country', visible: true, value: '' }]
+    });
+    const replay = await runScenario(extracted.scenario, {
+      driver: driver2,
+      aiRecovery: false,
+      datasetPath: 'live.json',
+      scriptDir: dir
+    });
+    expect(replay.exitCode).toBe(0);
+    expect(driver2.fills).toEqual([{ selector: '#country', value: 'be' }]);
+  });
+
+  it('does not replace the full arguments array with only the dataset value (A27b)', async () => {
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/descriptor\.arguments = \[value\];/u);
+    expect(src).toContain('applyParameterizedArgument(descriptor, value)');
   });
 
   it('blanks otp/pin/cvv/apikey/ssn in the example dataset (L7-071)', () => {

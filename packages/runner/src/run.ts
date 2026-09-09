@@ -760,7 +760,7 @@ function collectParameterSecrets(
       }
     }
     for (const argument of step.action.descriptor.arguments ?? []) {
-      if (argument.length > 0) {
+      if (typeof argument === 'string' && argument.length > 0) {
         secrets.add(argument);
       }
     }

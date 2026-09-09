@@ -76,6 +76,50 @@ describe('P13a patch secret redaction', () => {
     expect(original.selector).toBe('#password');
   });
 
+  it('keeps trailing args when stripping parameterized original (A27b)', () => {
+    const step = fillStep('#user', 'alice', 'user');
+    step.action.descriptor.arguments = ['alice', 'slowly', 'ltr'];
+    const original = originalDescriptorForPatch(step);
+    expect(original.arguments?.[0]).toBeUndefined();
+    expect(original.arguments?.slice(1)).toEqual(['slowly', 'ltr']);
+    expect(JSON.stringify(original)).not.toMatch('alice');
+  });
+
+  it('redacts parameterized [0] but keeps trailing args (A27b / P13a)', () => {
+    const secret = 'dataset-secret';
+    const step = fillStep('#password', secret, 'password');
+    step.action.descriptor.arguments = [secret, 'slowly'];
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_p13a',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: { type: 'fill', selector: '#password', arguments: [secret, 'slowly'] },
+            suggested: { type: 'fill', selector: '#password-new', arguments: [secret, 'slowly'] },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      }
+    );
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.original.arguments?.[0]).toBeUndefined();
+    expect(redacted.patches[0]?.original.arguments?.slice(1)).toEqual(['slowly']);
+    expect(redacted.patches[0]?.suggested.arguments?.[0]).toBeUndefined();
+    expect(redacted.patches[0]?.suggested.arguments?.slice(1)).toEqual(['slowly']);
+  });
+
   it('strips proposed/after args when the recorded step has parameterRef', () => {
     const secret = 'dataset-secret';
     const redacted = redactSuggestedPatchForPersistence(leakyFillPatch(secret), {

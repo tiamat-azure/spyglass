@@ -5,6 +5,7 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
+import { stripParameterizedArgument } from './parameters.ts';
 import { cloneDescriptor } from './scenario.ts';
 
 export function hasParameterRef(step: RefinedStep | undefined): boolean {
@@ -30,7 +31,7 @@ export function findStepByIndex(
 export function originalDescriptorForPatch(step: RefinedStep): ReplayDescriptor {
   const descriptor = cloneDescriptor(step.action.descriptor);
   if (hasParameterRef(step)) {
-    delete descriptor.arguments;
+    stripParameterizedArgument(descriptor);
   }
   return descriptor;
 }
@@ -51,8 +52,8 @@ export function redactSuggestedPatchEntryForPersistence(
   const suggested = cloneDescriptor(patch.suggested);
   const secretType = isSecretArgType(original.type) || isSecretArgType(suggested.type);
   if (hasParameterRef(recordedStep)) {
-    delete original.arguments;
-    delete suggested.arguments;
+    stripParameterizedArgument(original);
+    stripParameterizedArgument(suggested);
   } else if (recordedStep === undefined && secretType) {
     // L7-106: missing/ambiguous recorded step — do not keep fill/select args.
     delete original.arguments;

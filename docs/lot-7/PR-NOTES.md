@@ -248,6 +248,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   `process.cwd()`. Breaking for cwd-relative `--dataset` when the
   scenario lives elsewhere; pass an absolute path or a scenario-relative
   one.
+- **A27b:** Parameterize/apply keeps trailing fill/select `arguments`
+  after `[0]`. Extract still strips the recorded dataset value (L7-070);
+  apply replaces `[0]` only. D20a still fails for a vacant `[0]` without
+  `--dataset`.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
@@ -274,4 +278,5 @@ descriptor identity allow-list, halt keeps next disabled, STT decide
 response type, `GH_PROMPT_DISABLED`, dest-lock same-promise cleanup,
 export staging symlink re-check, aligned large-fallback marker dirs.
 **D27a:** relative `--dataset` from `dirname(scenarioPath)`, not cwd
-(breaking for cwd-relative paths). Held: A27, L27.
+(breaking for cwd-relative paths). **A27b:** keep trailing fill/select
+`arguments` through parameterize/apply. Held: L27.
