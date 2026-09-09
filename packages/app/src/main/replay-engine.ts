@@ -91,15 +91,14 @@ export class ReplayEngine {
     if (sessionDir === undefined || sessionId === undefined) {
       return { ok: false, error: 'no session directory' };
     }
+    // L7-021: lock `running` before the first await so L7-004 queued next/stop
+    // still applies after load. B10b: beginReplay only after a successful load.
     this.running = true;
-    session.beginReplay();
+    let beganReplay = false;
     try {
-      let scenario: Scenario;
-      try {
-        scenario = await loadFinalizedScenario(sessionDir);
-      } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
-      }
+      const scenario = await loadFinalizedScenario(sessionDir);
+      session.beginReplay();
+      beganReplay = true;
       const env = this.deps.env ?? process.env;
       const aiRecovery = aiRecoveryEnabled({
         noAi: request.noAi === true,
@@ -159,7 +158,9 @@ export class ReplayEngine {
       this.waiting = undefined;
       this.pendingContinues = 0;
       this.pendingStop = false;
-      session.endReplay();
+      if (beganReplay) {
+        session.endReplay();
+      }
     }
   }
 }

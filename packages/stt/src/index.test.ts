@@ -18,7 +18,12 @@ import { resolveSttEngineName } from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
-import { createWhisperEngine, runWhisperCli, whisperAvailable } from './whisper-engine.ts';
+import {
+  createWhisperEngine,
+  isCancelledTranscription,
+  runWhisperCli,
+  whisperAvailable
+} from './whisper-engine.ts';
 import { isLoopbackWsHost } from './ws-localhost.ts';
 
 describe('@spyglass/stt', () => {
@@ -522,6 +527,47 @@ describe('@spyglass/stt', () => {
     } finally {
       engine.dispose?.();
     }
+  });
+
+  it('does not note first-use latency on abort or cancellation (F8a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-f8a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 400 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      engine.abort('u1');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(calls).toBe(0);
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await expect(engine.finalize('u2')).resolves.toBe('transcription locale');
+      expect(calls).toBe(1);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('treats AbortError as cancellation (F8a)', () => {
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+    expect(isCancelledTranscription(abort)).toBe(true);
+    const ac = new AbortController();
+    ac.abort();
+    expect(isCancelledTranscription(new Error('killed'), ac.signal)).toBe(true);
+    expect(isCancelledTranscription(new Error('whisper.cpp exceeded 80 ms'))).toBe(false);
   });
 
   it('rejects invalid client frames', () => {

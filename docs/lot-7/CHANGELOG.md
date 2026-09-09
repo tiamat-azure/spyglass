@@ -253,6 +253,26 @@ AbortError / cancellation vs first-use latency remains unchanged
 
 Ask-user F8 (AbortError / first-use latency) remains unchanged.
 
+## Pass-10 adversarial fixes (L7-074 … L7-075) + Captain locks F8a / B10b
+
+- **L7-074:** Session export/import buttons are disabled for the duration of
+  the IPC call (both buttons) so a double-click cannot start a second
+  export or import.
+- **L7-075:** `gitOk` / `gitOkOrThrow` throw tagged `GitApplyError`
+  (`tag: spyglass.git-apply`). `processSuggestedPatch` classifies with
+  `isGitApplyError` on that tag, not a stderr regex. Untagged throws
+  stay `internal-error` (L7-052).
+- **F8a:** Whisper `transcribe()` does not sample first-use latency and
+  does not set `firstUseNoted` on AbortError or AbortSignal cancellation
+  (F-39). Timeouts and other failures still sample.
+- **B10b:** `ReplayEngine.start` loads the scenario first and calls
+  `beginReplay()` only after a successful load. Invalid session / missing
+  scenario does not begin+end a replay cycle. `running` is still set
+  before the load await (L7-021 / L7-004).
+
+Ask-user still held: **R10** (shared `parameterRef` last-write-wins vs
+conflict).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

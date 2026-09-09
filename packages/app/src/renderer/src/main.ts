@@ -853,27 +853,43 @@ replayHaltBtn.addEventListener('click', () => {
 });
 
 sessionExportBtn.addEventListener('click', () => {
-  if (api === undefined) {
+  if (api === undefined || sessionExportBtn.disabled || sessionImportBtn.disabled) {
     return;
   }
-  void api.sessionBundle.exportSession().then((result) => {
-    if (!result.ok && result.error === 'cancelled') {
-      return;
-    }
-    replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
-  });
+  sessionExportBtn.disabled = true;
+  sessionImportBtn.disabled = true;
+  void api.sessionBundle
+    .exportSession()
+    .then((result) => {
+      if (!result.ok && result.error === 'cancelled') {
+        return;
+      }
+      replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
+    })
+    .finally(() => {
+      sessionExportBtn.disabled = false;
+      sessionImportBtn.disabled = false;
+    });
 });
 
 sessionImportBtn.addEventListener('click', () => {
-  if (api === undefined) {
+  if (api === undefined || sessionExportBtn.disabled || sessionImportBtn.disabled) {
     return;
   }
-  void api.sessionBundle.importSession().then((result) => {
-    if (!result.ok && result.error === 'cancelled') {
-      return;
-    }
-    replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
-  });
+  sessionExportBtn.disabled = true;
+  sessionImportBtn.disabled = true;
+  void api.sessionBundle
+    .importSession()
+    .then((result) => {
+      if (!result.ok && result.error === 'cancelled') {
+        return;
+      }
+      replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
+    })
+    .finally(() => {
+      sessionExportBtn.disabled = false;
+      sessionImportBtn.disabled = false;
+    });
 });
 
 sttUpgradeAccept.addEventListener('click', () => {

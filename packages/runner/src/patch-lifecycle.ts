@@ -6,7 +6,7 @@ import {
   applyAssistedPatches,
   type PreparePr
 } from './assisted-apply.ts';
-import type { GitExec } from './git-repo.ts';
+import { type GitExec, isGitApplyError } from './git-repo.ts';
 import { loadHealth, recordSuggestedPatches, resolveSessionDir, saveHealth } from './health.ts';
 import { type PatchPolicy, resolvePatchPolicy } from './patch-config.ts';
 
@@ -99,11 +99,6 @@ function resolveScenarioPath(
     return resolve(repo, scenarioPath);
   }
   return resolve(scenarioPath);
-}
-
-function isGitApplyError(error: unknown): boolean {
-  const reason = error instanceof Error ? error.message : String(error);
-  return /git |commit failed|checkout |fatal:/iu.test(reason);
 }
 
 export async function loadDatasetFile(path: string): Promise<unknown> {

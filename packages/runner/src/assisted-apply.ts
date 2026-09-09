@@ -13,8 +13,10 @@ import {
   currentBranch,
   defaultGitExec,
   detectDefaultBranch,
+  GitApplyError,
   type GitExec,
   isDefaultBranchName,
+  isGitApplyError,
   isWorktreeDirty,
   patchBranchName
 } from './git-repo.ts';
@@ -377,7 +379,8 @@ export async function applyAssistedPatches(input: {
       throw error;
     }
     const base = error instanceof Error ? error.message : String(error);
-    throw new Error(`${base}; also failed to restore ${startingBranch}: ${revertError}`);
+    const message = `${base}; also failed to restore ${startingBranch}: ${revertError}`;
+    throw isGitApplyError(error) ? new GitApplyError(message) : new Error(message);
   }
 }
 
@@ -446,7 +449,7 @@ function typeMismatchForApply(
 async function gitOkOrThrow(git: GitExec, cwd: string, args: readonly string[]): Promise<string> {
   const result = await git(args, cwd);
   if (result.code !== 0) {
-    throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
+    throw new GitApplyError(result.stderr.trim() || `git ${args.join(' ')} failed`);
   }
   return result.stdout;
 }

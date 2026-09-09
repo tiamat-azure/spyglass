@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (268 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **518 passed**, 1 skipped (59 files) |
+| `pnpm test` | **522 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (34), `lot7-parameters.test.ts` (25),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (35), `lot7-parameters.test.ts` (25),
 `upgrade.test.ts` (13), `stt-upgrade-store.test.ts` (5).
 
 ### Screenshots (illustrative fixtures)
@@ -131,11 +131,14 @@ Pass-8 (L7-060 … L7-064) is in `CHANGELOG.md`.
 macOS Electron e2e close hang (timeout + `SIGKILL`, popup `noWaitAfter`)
 is in `CHANGELOG.md`.
 Pass-9 (L7-066 … L7-073) is in `CHANGELOG.md`.
+Pass-10 (L7-074 … L7-075) plus Captain locks **F8a** (AbortError /
+cancellation excluded from first-use latency) and **B10b** (load scenario
+before `beginReplay`) are in `CHANGELOG.md`.
 
 ## Residuals
 
 - Live `gh pr create` against GitHub is optional; tests stub `preparePr`.
 - Live whisper `large-v3-turbo` first-use latency is not measured here (no
   575 Mo weights in CI).
-- Whisper `transcribe()` catch still records first-use latency on abort /
-  cancellation until Firstmate locks that ask-user.
+- Shared `parameterRef` last-write-wins on extract is unchanged (R10
+  ask-user).

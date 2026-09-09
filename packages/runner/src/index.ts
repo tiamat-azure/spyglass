@@ -47,6 +47,8 @@ export type { GitExec, GitExecResult } from './git-repo.ts';
 export {
   defaultGitExec,
   detectDefaultBranch,
+  GitApplyError,
+  isGitApplyError,
   isWorktreeDirty,
   patchBranchName
 } from './git-repo.ts';

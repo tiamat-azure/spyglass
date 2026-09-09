@@ -250,8 +250,14 @@ describe('packaged Observe', () => {
     const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
     expect(exportIdx).toBeGreaterThan(-1);
     expect(renderer.slice(exportIdx, exportIdx + 900)).not.toContain('window.prompt');
+    expect(renderer.slice(exportIdx, exportIdx + 900)).toContain(
+      'sessionExportBtn.disabled = true'
+    );
     const importIdx = renderer.indexOf('sessionImportBtn.addEventListener');
     expect(importIdx).toBeGreaterThan(-1);
     expect(renderer.slice(importIdx, importIdx + 900)).not.toContain('window.prompt');
+    expect(renderer.slice(importIdx, importIdx + 900)).toContain(
+      'sessionImportBtn.disabled = true'
+    );
   });
 });

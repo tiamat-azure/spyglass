@@ -13,6 +13,25 @@ export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecR
 
 export const DEFAULT_BRANCH_NAMES = ['main', 'master'] as const;
 
+/** Tagged so patch-lifecycle can classify without matching git stderr text (L7-075). */
+export const GIT_APPLY_ERROR_TAG = 'spyglass.git-apply' as const;
+
+export class GitApplyError extends Error {
+  readonly tag: typeof GIT_APPLY_ERROR_TAG = GIT_APPLY_ERROR_TAG;
+  constructor(message: string) {
+    super(message);
+    this.name = 'GitApplyError';
+  }
+}
+
+export function isGitApplyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { tag?: unknown }).tag === GIT_APPLY_ERROR_TAG
+  );
+}
+
 export async function defaultGitExec(args: readonly string[], cwd: string): Promise<GitExecResult> {
   try {
     const result = await execFileAsync('git', [...args], {
@@ -34,7 +53,7 @@ export async function defaultGitExec(args: readonly string[], cwd: string): Prom
 export async function gitOk(exec: GitExec, cwd: string, args: readonly string[]): Promise<string> {
   const result = await exec(args, cwd);
   if (result.code !== 0) {
-    throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
+    throw new GitApplyError(result.stderr.trim() || `git ${args.join(' ')} failed`);
   }
   return result.stdout;
 }
@@ -42,7 +61,7 @@ export async function gitOk(exec: GitExec, cwd: string, args: readonly string[])
 export async function isWorktreeDirty(exec: GitExec, cwd: string): Promise<boolean> {
   const result = await exec(['status', '--porcelain'], cwd);
   if (result.code !== 0) {
-    throw new Error(result.stderr.trim() || 'git status failed');
+    throw new GitApplyError(result.stderr.trim() || 'git status failed');
   }
   return result.stdout.trim().length > 0;
 }

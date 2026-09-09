@@ -16,7 +16,7 @@ import {
   confirmedDescriptor
 } from './assisted-apply.ts';
 import { descriptorHash } from './descriptor-hash.ts';
-import { defaultGitExec, isDefaultBranchName } from './git-repo.ts';
+import { defaultGitExec, GitApplyError, isDefaultBranchName, isGitApplyError } from './git-repo.ts';
 import {
   emptyHealth,
   healthStatus,
@@ -799,6 +799,45 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     }
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo });
     expect(branch.stdout.trim()).toBe('main');
+  });
+
+  it('classifies tagged GitApplyError as git-error without matching stderr (L7-075)', async () => {
+    const root = await tempDir('spyglass-lot7-git-tag-');
+    const repo = join(root, 'repo');
+    const sessionDir = join(root, 'session');
+    await mkdir(repo, { recursive: true });
+    await mkdir(sessionDir, { recursive: true });
+    await initGitRepo(repo);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(repo, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    let health = emptyHealth('ses_lot7');
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    await saveHealth(sessionDir, health);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'commit') {
+        return { stdout: '', stderr: 'index.lock held', code: 128 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await processSuggestedPatch({
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      policy,
+      scenarioPath,
+      sessionDir,
+      git
+    });
+    expect(result.assistedApply?.ok).toBe(false);
+    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
+      expect(result.assistedApply.code).toBe('git-error');
+      expect(result.assistedApply.reason).toMatch(/index\.lock held/);
+    }
+    expect(isGitApplyError(new GitApplyError('index.lock held'))).toBe(true);
+    expect(isGitApplyError(new Error('git commit failed'))).toBe(false);
   });
 
   it('folds DEFAULT_BRANCH_NAMES into isDefaultBranchName (L7-031)', () => {

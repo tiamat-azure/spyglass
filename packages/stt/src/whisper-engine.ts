@@ -339,12 +339,24 @@ export async function notifyFirstUseLatency(
   }
 }
 
+/** F8a: AbortError and AbortSignal cancellation are not first-use samples. */
+export function isCancelledTranscription(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted === true) {
+    return true;
+  }
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 export function createWhisperEngine(options: {
   bin: string;
   model: string;
   language?: string;
   timeoutMs?: number;
-  /** F-39: first successful or failed transcription latency (large model). */
+  /** F-39: first completed (success or failure) large-model latency. F8a: not abort. */
   onFirstUseLatency?: (latencyMs: number) => void | Promise<void>;
 }): SttEngine {
   const language = options.language ?? 'fr';
@@ -427,10 +439,14 @@ export function createWhisperEngine(options: {
           });
         }
       });
-      await noteFirstUse(Date.now() - started);
+      if (!controller.signal.aborted) {
+        await noteFirstUse(Date.now() - started);
+      }
       return text;
     } catch (error) {
-      await noteFirstUse(Date.now() - started);
+      if (!isCancelledTranscription(error, controller.signal)) {
+        await noteFirstUse(Date.now() - started);
+      }
       throw error;
     } finally {
       controllers.delete(utteranceId);

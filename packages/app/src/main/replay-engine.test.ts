@@ -103,6 +103,57 @@ describe('ReplayEngine', () => {
     expect(refused.ok).toBe(false);
   });
 
+  it('does not beginReplay when scenario load fails (B10b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-b10b-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    let begins = 0;
+    let ends = 0;
+    const session = {
+      snapshot: () => ({ state: 'finalized', since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        begins += 1;
+      },
+      endReplay: () => {
+        ends += 1;
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () => new MemoryPageDriver({ elements: [{ selector: '#go', visible: true }] }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = await engine.start({ noAi: true });
+    expect(started.ok).toBe(false);
+    if (!started.ok) {
+      expect(started.error).toMatch(/no finalized revision/);
+    }
+    expect(begins).toBe(0);
+    expect(ends).toBe(0);
+  });
+
   it('ignores leftover generated unless the latest rev is finalized (G56a / L6-056)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-g56a-'));
     await mkdir(join(dir, 'refined'), { recursive: true });
@@ -353,14 +404,18 @@ describe('ReplayEngine', () => {
     await expect(loadFinalizedScenario(dir)).rejects.toThrow(/invalid scenario/i);
 
     let state = 'finalized';
+    let begins = 0;
+    let ends = 0;
     const session = {
       snapshot: () => ({ state, since: 0 }),
       currentSessionDir: () => dir,
       currentSessionId: () => 'ses_r',
       beginReplay: () => {
+        begins += 1;
         state = 'replaying';
       },
       endReplay: () => {
+        ends += 1;
         state = 'finalized';
       }
     };
@@ -391,6 +446,8 @@ describe('ReplayEngine', () => {
       expect(started.error).toMatch(/invalid scenario/i);
     }
     expect(state).toBe('finalized');
+    expect(begins).toBe(0);
+    expect(ends).toBe(0);
   });
 
   it('picks the highest-numbered finalized rev when generated is missing (L6-022)', async () => {
