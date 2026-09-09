@@ -114,9 +114,7 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   const files = await listRefinedRevisionNames(refinedDir);
   const latestName = files.at(-1);
   const latest =
-    latestName !== undefined
-      ? await readRevisionFile(refinedDir, latestName, true)
-      : undefined;
+    latestName !== undefined ? await readRevisionFile(refinedDir, latestName, true) : undefined;
   // G56a: leftover generated/ from generate-first is not authoritative unless
   // the latest rev-N is already finalized.
   if (latest?.status === 'finalized' && latest.steps.length > 0) {
