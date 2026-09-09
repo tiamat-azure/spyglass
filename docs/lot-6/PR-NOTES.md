@@ -694,6 +694,20 @@ Applied on tip `8a56a8c28ba5b3d5448b9ed70fb9197ea4cb8fa3`. Product decisions
 Unit tests after this pass: **423 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 24 (Copilot auto-fix)
+
+Applied on tip `4fa1a5370db4aaf6c926059f0c6196eb9b887c16`. Product decisions
+1–19 and prior locks (incl. O34a, L6-028, L6-069) are unchanged.
+
+- **L6-075** Corpus `--out` writes through the jailed real path.
+  `resolveCorpusOutPath` returns `realpath` of the validated target.
+  `runCorpusCli` re-realpaths immediately before `mkdir` and `writeFile`
+  and rejects if the target diverges, so a missing ancestor swapped for
+  an escaping symlink cannot TOCTOU the jail.
+
+Unit tests after this pass: **425 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
