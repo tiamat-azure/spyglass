@@ -63,7 +63,7 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (267 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **510 passed**, 1 skipped (59 files) |
+| `pnpm test` | **513 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
