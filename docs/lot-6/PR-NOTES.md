@@ -136,6 +136,11 @@ Lots 0–6) on this branch. CI uses the mock LLM transport (no live keys) for
 14. **O57a / L6-057.** Corpus `--out` must resolve under `docs/lot-6/` as a
     `.json` file (realpath jail). Whole-repo O34a is not enough; fail
     closed outside that tree.
+15. **V59a / L6-059.** Generated `scenario.ts` (`generatedScenarioTsSource`)
+    calls `asScenario(...)` after `JSON.parse` of `scenario.json` and
+    before `runScenario`, so a hand-edited or missing `startUrl` fails
+    with the schema error (same as L6-024 / L6-028). Do not skip
+    validation on the generated-script path.
 
 ## Adversarial pass 1 (auto-fix)
 
@@ -529,6 +534,16 @@ Applied on tip `981c737782233c043f46ada43943a4c84c8e47a3`. Product decisions
 
 Unit tests after this pass: **407 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 19 (V59a lock)
+
+Applied on tip `9d6e8a6ae6d0fbfca3ad98bc09fa562a69dcfca9`. Product decisions
+1–14 and prior locks (incl. L6-058) are unchanged. Locks **V59a**.
+
+- **L6-059 / V59a** `generatedScenarioTsSource` imports `asScenario` from
+  `@spyglass/runner` and validates `JSON.parse` of `scenario.json` before
+  `runScenario`. Hand-edited/missing `startUrl` fails with the schema
+  error (align L6-024 / L6-028).
 
 ## Residuals
 

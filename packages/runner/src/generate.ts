@@ -174,7 +174,7 @@ export function generatedScenarioTsSource(): string {
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generatedHelpText, runScenario } from '${RUNNER_PACKAGE}';
+import { asScenario, generatedHelpText, runScenario } from '${RUNNER_PACKAGE}';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -183,7 +183,7 @@ try {
     process.stdout.write(generatedHelpText());
     process.exit(0);
   }
-  const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
+  const scenario = asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8')));
   const result = await runScenario(scenario, {
     headless: argv.includes('--headless'),
     argv,

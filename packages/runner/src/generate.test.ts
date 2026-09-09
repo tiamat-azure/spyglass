@@ -68,7 +68,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(ts).toContain('runScenario');
     expect(ts.startsWith('#!/usr/bin/env -S node --experimental-transform-types\n')).toBe(true);
     expect(ts).not.toMatch(/^#!\/usr\/bin\/env node$/m);
-    expect(ts).toMatch(/import \{ generatedHelpText, runScenario \} from '@spyglass\/runner'/);
+    expect(ts).toMatch(
+      /import \{ asScenario, generatedHelpText, runScenario \} from '@spyglass\/runner'/
+    );
     expect(ts).not.toContain('runGeneratedScript');
     expect(ts).toContain('scenario.json');
     expect(ts.replaceAll('\\n', '')).not.toMatch(/[\\]/);
@@ -509,6 +511,9 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     const genSrc = await readFile(join(repoRoot(), 'packages/runner/src/generated-run.ts'), 'utf8');
     expect(genSrc).toContain('asScenario(scenarioInput)');
     expect(genSrc).not.toContain('asScenario(scenarioInput, parsed.baseUrl)');
+    const generatedTs = generatedScenarioTsSource();
+    expect(generatedTs).toContain('asScenario(JSON.parse');
+    expect(generatedTs.indexOf('asScenario(')).toBeLessThan(generatedTs.indexOf('await runScenario('));
     const chunks: string[] = [];
     const write = process.stderr.write.bind(process.stderr);
     process.stderr.write = ((chunk: string | Uint8Array) => {
@@ -523,6 +528,44 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
       expect(chunks.join('')).toMatch(/missing startUrl/);
     } finally {
       process.stderr.write = write;
+    }
+  });
+
+  it('generated scenario.ts validates JSON.parse with asScenario before runScenario (V59a / L6-059)', async () => {
+    const source = generatedScenarioTsSource();
+    expect(source).toMatch(
+      /import \{ asScenario, generatedHelpText, runScenario \} from '@spyglass\/runner'/
+    );
+    expect(source).toContain("asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'))");
+    expect(source.indexOf('asScenario(')).toBeLessThan(source.indexOf('await runScenario('));
+
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-v59a-'));
+    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+    await writeFile(
+      paths.scenarioJson,
+      JSON.stringify({ schemaVersion: 1, sessionId: 'ses_x', steps: scenario().steps }),
+      'utf8'
+    );
+    const { mkdir, symlink } = await import('node:fs/promises');
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
+    await symlink(
+      join(repoRoot(), 'packages/runner'),
+      join(paths.dir, 'node_modules', '@spyglass', 'runner')
+    );
+    const execFileAsync = promisify(execFile);
+    try {
+      await execFileAsync(
+        process.execPath,
+        ['--experimental-transform-types', 'scenario.ts', '--headless', '--no-ai'],
+        { cwd: paths.dir, timeout: 15_000 }
+      );
+      throw new Error('hand-edited scenario.json without startUrl must fail closed');
+    } catch (error) {
+      const failed = error as NodeJS.ErrnoException & { stderr?: string; code?: number };
+      expect(failed.code).toBe(1);
+      expect(String(failed.stderr ?? '')).toMatch(/missing startUrl/);
     }
   });
 });
