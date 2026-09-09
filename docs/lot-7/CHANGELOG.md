@@ -963,6 +963,9 @@ Ask-user still held: R28, G28, P28, S28, X28, F28, W28.
   `health.json`. Duplicate `runIds` still fail (L7-180); migrate does not
   unique them.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**680 passed**, 1 skipped (62 files). `validate.test.ts` 10, `lot7-patch.test.ts` 80.
+
 Ask-user still held: G28, P28, S28, X28, F28, W28.
 
 ## CI — macOS Electron e2e close hang
