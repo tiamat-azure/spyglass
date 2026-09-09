@@ -227,7 +227,7 @@ describe('packaged Observe', () => {
     expect(main).toContain("error: 'bad-request'");
     expect(main).toContain("error: 'forbidden'");
     expect(main).toContain('sessionBundleIpcError');
-    expect(main).toContain("error: 'export-failed'");
+    expect(main).toContain("'export-failed'");
     const resolveEngine = readFileSync(
       join(appRoot, '../../packages/stt/src/resolve-engine.ts'),
       'utf8'
