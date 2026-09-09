@@ -69,7 +69,8 @@ for each step. Chat follows `replay.step`. **Arrêter** aborts.
 
 Buttons **Exporter la session** / **Importer une session** copy the
 autonomous folder (`meta.json`, `raw.jsonl`, refined, generated, health,
-runs).
+runs). Export refuses a non-empty destination (O7a). Import refuses when
+a session with the same `sessionId` already exists (I7a).
 
 ## 6. STT upgrade (F-38 / F-39)
 

@@ -111,35 +111,46 @@ export async function resolveScenarioInRepo(
   repoRoot: string,
   scenarioPath: string
 ): Promise<{ gitCwd: string; repoReal: string; scenarioReal: string } | undefined> {
-  const gitCwd = resolve(repoRoot);
-  let repoReal: string;
   try {
-    repoReal = await realpath(gitCwd);
+    const gitCwd = resolve(repoRoot);
+    let repoReal: string;
+    try {
+      repoReal = await realpath(gitCwd);
+    } catch {
+      return undefined;
+    }
+    const requested = isAbsolute(scenarioPath)
+      ? resolve(scenarioPath)
+      : resolve(repoRoot, scenarioPath);
+    const scenarioReal = await realpathExisting(requested);
+    if (scenarioReal === undefined) {
+      return undefined;
+    }
+    let parentReal: string;
+    try {
+      parentReal = await realpath(dirname(requested));
+    } catch {
+      parentReal = dirname(scenarioReal);
+    }
+    if (!isPathInside(repoReal, scenarioReal) || !isSameOrInside(repoReal, parentReal)) {
+      return undefined;
+    }
+    return { gitCwd, repoReal, scenarioReal };
   } catch {
     return undefined;
   }
-  const requested = isAbsolute(scenarioPath)
-    ? resolve(scenarioPath)
-    : resolve(repoRoot, scenarioPath);
-  const scenarioReal = await realpathExisting(requested);
-  let parentReal: string;
-  try {
-    parentReal = await realpath(dirname(requested));
-  } catch {
-    parentReal = dirname(scenarioReal);
-  }
-  if (!isPathInside(repoReal, scenarioReal) || !isSameOrInside(repoReal, parentReal)) {
-    return undefined;
-  }
-  return { gitCwd, repoReal, scenarioReal };
 }
 
-async function realpathExisting(path: string): Promise<string> {
+async function realpathExisting(path: string): Promise<string | undefined> {
   try {
     return await realpath(path);
   } catch {
-    const parent = await realpath(dirname(path));
-    return join(parent, basename(path));
+    try {
+      const parent = await realpath(dirname(path));
+      return join(parent, basename(path));
+    } catch {
+      return undefined;
+    }
   }
 }
 

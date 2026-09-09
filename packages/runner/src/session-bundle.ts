@@ -28,15 +28,25 @@ export type SessionExportResult = {
   manifestPath: string;
 };
 
+export type SessionExportOptions = {
+  now?: Date;
+  overwrite?: boolean;
+};
+
 export async function exportSessionFolder(
   sessionDir: string,
   destDir: string,
-  now = new Date()
+  options: SessionExportOptions = {}
 ): Promise<SessionExportResult> {
+  const now = options.now ?? new Date();
+  const overwrite = options.overwrite === true;
   const meta = await readSessionMeta(sessionDir);
   const source = resolve(sessionDir);
   const dest = resolve(destDir);
   await assertNoCopyOverlap(source, dest);
+  if (!overwrite) {
+    await assertExportDestAvailable(dest);
+  }
   const parent = dirname(dest);
   await mkdir(parent, { recursive: true });
   const staging = await mkdtemp(join(parent, '.spyglass-export-'));
@@ -74,6 +84,9 @@ export async function importSessionFolder(
     throw new Error('import refused: invalid sessionId');
   }
   await assertNoCopyOverlap(source, dest);
+  if (await pathExists(dest)) {
+    throw new Error('import refused: session already exists');
+  }
   await assertNoSymlinks(source);
   await mkdir(root, { recursive: true });
   const staging = await mkdtemp(join(root, '.spyglass-import-'));
@@ -111,6 +124,40 @@ function isSafeSessionId(sessionId: string): boolean {
 function isInsideSessionsRoot(sessionsRoot: string, dest: string): boolean {
   const rel = relative(sessionsRoot, dest);
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return false;
+    }
+    throw err;
+  }
+}
+
+/** O7a: do not silently destroy a non-empty folder the user picked. */
+async function assertExportDestAvailable(dest: string): Promise<void> {
+  let st: Awaited<ReturnType<typeof lstat>>;
+  try {
+    st = await lstat(dest);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return;
+    }
+    throw err;
+  }
+  if (!st.isDirectory()) {
+    throw new Error('export refused: destination already exists');
+  }
+  const names = await readdir(dest);
+  if (names.length > 0) {
+    throw new Error('export refused: destination is not empty');
+  }
 }
 
 /**
@@ -187,13 +234,23 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
       return;
     }
   }
-  const [first, ...rest] = orphans;
-  if (first === undefined) {
+  const ranked: Array<{ path: string; mtimeMs: number }> = [];
+  for (const path of orphans) {
+    try {
+      const st = await lstat(path);
+      ranked.push({ path, mtimeMs: st.mtimeMs });
+    } catch {
+      // skip unreadable orphans
+    }
+  }
+  ranked.sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path));
+  const newest = ranked[0];
+  if (newest === undefined) {
     return;
   }
-  await rename(first, dest);
-  for (const extra of rest) {
-    await rm(extra, { recursive: true, force: true }).catch(() => undefined);
+  await rename(newest.path, dest);
+  for (const extra of ranked.slice(1)) {
+    await rm(extra.path, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 

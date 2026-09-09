@@ -76,6 +76,7 @@ export async function downloadResponseToFileAtomic(input: {
   minBytes?: number;
 }): Promise<{ bytes: number; sha256: string }> {
   if (!input.response.ok) {
+    await input.response.body?.cancel()?.catch(() => undefined);
     throw new Error(
       `download failed: HTTP ${String(input.response.status)} ${input.response.statusText}`.trim()
     );

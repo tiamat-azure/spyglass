@@ -651,6 +651,7 @@ if (api !== undefined) {
   });
 
   api.sttUpgrade.onOffer((payload) => {
+    sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
     sttUpgrade.hidden = !payload.propose;
   });
   void api.sttUpgrade.status().then((status) => {
@@ -884,11 +885,10 @@ sttUpgradeAccept.addEventListener('click', () => {
   void api.sttUpgrade
     .decide('accept')
     .then((result) => {
+      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
       if (result.ok) {
         sttUpgrade.hidden = true;
-        return;
       }
-      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
     })
     .catch(() => {
       sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;

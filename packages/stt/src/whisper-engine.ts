@@ -353,6 +353,7 @@ export function createWhisperEngine(options: {
   const controllers = new Map<string, AbortController>();
   const jobs = new Set<WhisperJob>();
   let firstUseNoted = false;
+  let firstUsePending: Promise<void> | undefined;
 
   const killJobs = (utteranceId?: string): void => {
     for (const job of [...jobs]) {
@@ -380,12 +381,24 @@ export function createWhisperEngine(options: {
   };
 
   const noteFirstUse = async (latencyMs: number): Promise<void> => {
-    if (firstUseNoted || options.onFirstUseLatency === undefined) {
+    const hook = options.onFirstUseLatency;
+    if (firstUseNoted || hook === undefined) {
       return;
     }
-    const noted = await notifyFirstUseLatency(options.onFirstUseLatency, latencyMs);
-    if (noted) {
-      firstUseNoted = true;
+    if (firstUsePending !== undefined) {
+      await firstUsePending;
+      return;
+    }
+    firstUsePending = (async () => {
+      const noted = await notifyFirstUseLatency(hook, latencyMs);
+      if (noted) {
+        firstUseNoted = true;
+      }
+    })();
+    try {
+      await firstUsePending;
+    } finally {
+      firstUsePending = undefined;
     }
   };
 

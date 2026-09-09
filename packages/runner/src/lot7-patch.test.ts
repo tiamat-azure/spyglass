@@ -450,6 +450,30 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
   });
 
+  it('refuses when the scenario parent cannot be realpath-ed (L7-056)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-missing-parent-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'nope', 'nested', 'scenario.json');
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('scenario-outside-repo');
+    }
+  });
+
   it('resolves a relative scenario path against the repo root (L7-036)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-relpath-'));
     await initGitRepo(dir);

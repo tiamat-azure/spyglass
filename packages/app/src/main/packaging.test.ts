@@ -212,6 +212,21 @@ describe('packaged Observe', () => {
     expect(renderer).toContain('exportSession');
     expect(renderer).toContain('importSession');
     expect(renderer).toContain('sttUpgradeCopyDefault');
+    expect(renderer).toContain('sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault');
+    expect(main).toContain('function resolveSttModelDir');
+    expect(whisper).toContain('firstUsePending');
+    const downloadModel = readFileSync(
+      join(appRoot, '../../packages/stt/src/download-model.ts'),
+      'utf8'
+    );
+    expect(downloadModel).toContain('body?.cancel()');
+    const sessionBundle = readFileSync(
+      join(appRoot, '../../packages/runner/src/session-bundle.ts'),
+      'utf8'
+    );
+    expect(sessionBundle).toContain('destination is not empty');
+    expect(sessionBundle).toContain('session already exists');
+    expect(sessionBundle).toContain('mtimeMs');
     const ipcValidate = readFileSync(join(appRoot, 'src/main/ipc-validate.ts'), 'utf8');
     expect(ipcValidate).not.toContain('parsePathPayload');
     expect(inProcess).toContain('export function createInProcessStt(');

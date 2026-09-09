@@ -117,7 +117,7 @@ export { writeRunArtifacts } from './report.ts';
 export type { ReplayProgress, StepGate } from './run.ts';
 export { newRunId, runScenario } from './run.ts';
 export { asScenario, loadScenarioFile, scenarioFromRevision } from './scenario.ts';
-export type { SessionExportResult } from './session-bundle.ts';
+export type { SessionExportOptions, SessionExportResult } from './session-bundle.ts';
 export {
   exportSessionFolder,
   importSessionFolder,

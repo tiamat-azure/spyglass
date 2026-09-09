@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rename, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -324,7 +324,7 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(await readFile(keep, 'utf8')).toBe('alive\n');
   });
 
-  it('replaces an existing dest so stale files are not kept (L7-020)', async () => {
+  it('replaces an existing dest when overwrite is set so stale files are not kept (L7-020)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-reexport-'));
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
@@ -337,7 +337,7 @@ describe('Lot 7 F-47 session export/import', () => {
     const dest = join(root, 'bundle');
     await exportSessionFolder(sessionDir, dest);
     await writeFile(join(dest, 'stale.txt'), 'old\n', 'utf8');
-    await exportSessionFolder(sessionDir, dest);
+    await exportSessionFolder(sessionDir, dest, { overwrite: true });
     await expect(readFile(join(dest, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
     await expect(readFile(join(root, 'bundle.spyglass-prev', 'stale.txt'))).rejects.toMatchObject({
@@ -345,8 +345,25 @@ describe('Lot 7 F-47 session export/import', () => {
     });
   });
 
-  it('replaces an existing import dest and does not leave a spyglass-prev backup (L7-030)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-import-replace-'));
+  it('refuses export to a non-empty destination without overwrite (O7a)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-export-busy-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    await writeFile(join(dest, 'keep.txt'), 'alive\n', 'utf8');
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/destination is not empty/);
+    expect(await readFile(join(dest, 'keep.txt'), 'utf8')).toBe('alive\n');
+  });
+
+  it('refuses import when a session with the same id already exists (I7a)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-import-exists-'));
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -361,13 +378,8 @@ describe('Lot 7 F-47 session export/import', () => {
     const existing = join(sessionsRoot, 'ses_export');
     await mkdir(existing, { recursive: true });
     await writeFile(join(existing, 'stale.txt'), 'old\n', 'utf8');
-    const imported = await importSessionFolder(dest, sessionsRoot);
-    expect(imported.sessionDir).toBe(existing);
-    await expect(readFile(join(existing, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(await readFile(join(existing, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
-    await expect(
-      readFile(join(sessionsRoot, 'ses_export.spyglass-prev', 'stale.txt'))
-    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(importSessionFolder(dest, sessionsRoot)).rejects.toThrow(/session already exists/);
+    expect(await readFile(join(existing, 'stale.txt'), 'utf8')).toBe('old\n');
   });
 
   it('refuses import when the bundle contains a symlink (L7-039)', async () => {
@@ -402,6 +414,41 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest);
     expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
     await expect(readFile(join(orphan, 'raw.jsonl'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('restores the newest orphaned backup when dest is missing (L7-058)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-orphan-mtime-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const older = `${dest}.spyglass-prev-aaaa`;
+    const newer = `${dest}.spyglass-prev-zzzz`;
+    await rename(dest, older);
+    await writeFile(join(older, 'which.txt'), 'old\n', 'utf8');
+    await mkdir(newer, { recursive: true });
+    await writeFile(
+      join(newer, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(newer, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    await writeFile(join(newer, 'which.txt'), 'new\n', 'utf8');
+    const past = new Date(Date.now() - 120_000);
+    const recent = new Date();
+    await utimes(older, past, past);
+    await utimes(newer, recent, recent);
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1,"fresh":true}\n', 'utf8');
+    await exportSessionFolder(sessionDir, dest);
+    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toContain('fresh');
+    await expect(readFile(join(older, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(join(newer, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

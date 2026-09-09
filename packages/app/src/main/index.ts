@@ -293,6 +293,14 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
   }
 }
 
+function resolveSttModelDir(): string {
+  const fromEnv = process.env.STT_MODEL_DIR;
+  if (fromEnv !== undefined && fromEnv.trim().length > 0) {
+    return fromEnv;
+  }
+  return join(app.getPath('userData'), 'whisper');
+}
+
 async function pickSessionDirectory(
   win: BrowserWindow | undefined,
   title: string,
@@ -827,7 +835,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       try {
         const store = await ensureSttUpgradeStore();
         await store.recordCorrection();
-        const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+        const modelDir = resolveSttModelDir();
         const snap = store.snapshot(modelDir);
         const win = winRef.current;
         if (win !== undefined && snap.decision === 'propose') {
@@ -1012,7 +1020,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     try {
       const store = await ensureSttUpgradeStore();
-      const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+      const modelDir = resolveSttModelDir();
       const snap = store.snapshot(modelDir);
       let fallback = false;
       try {
@@ -1056,14 +1064,14 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     } catch {
       return { ok: false, error: 'store-unavailable' };
     }
-    const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
-    await mkdir(modelDir, { recursive: true });
-    const dest = largeModelPath(modelDir);
-    if (process.env.SPYGLASS_STT_UPGRADE_FAKE === '1') {
-      await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
-      return { ok: true };
-    }
+    const modelDir = resolveSttModelDir();
     try {
+      await mkdir(modelDir, { recursive: true });
+      const dest = largeModelPath(modelDir);
+      if (process.env.SPYGLASS_STT_UPGRADE_FAKE === '1') {
+        await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
+        return { ok: true };
+      }
       const fromEnv = process.env.STT_LARGE_SHA256;
       const digest =
         fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : STT_LARGE_SHA256;

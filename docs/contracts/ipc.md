@@ -83,8 +83,8 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:replay:start` | invoke | `{ forceAi?, noAi?, stepByStep? }` → `{ ok: true, runId }` or `{ ok: false, error }` (F-59, F-60) |
 | `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt, message }` |
 | `spyglass:replay:next` / `:stop` | invoke | `{}` — pas à pas (F-59) |
-| `spyglass:session:export` | invoke | `{}` → main `dialog.showOpenDialog` (directory, may create) then `{ ok, dest, sessionId }` or `{ ok: false, error }` (`cancelled` if dismissed) (F-47, E4a) |
-| `spyglass:session:import` | invoke | `{}` → main `dialog.showOpenDialog` (existing directory only) then `{ ok, sessionId, sessionDir }` or `{ ok: false, error }` (F-47, E4a) |
+| `spyglass:session:export` | invoke | `{}` → main `dialog.showOpenDialog` (directory, may create) then `{ ok, dest, sessionId }` or `{ ok: false, error }` (`cancelled` if dismissed; refuses a non-empty dest, O7a) (F-47, E4a) |
+| `spyglass:session:import` | invoke | `{}` → main `dialog.showOpenDialog` (existing directory only) then `{ ok, sessionId, sessionDir }` or `{ ok: false, error }` (refuses if `sessionId` already exists, I7a) (F-47, E4a) |
 | `spyglass:stt:upgrade-status` | invoke | `{}` → proposition large-v3-turbo (F-38) |
 | `spyglass:stt:upgrade-decide` | invoke | `{ action: 'accept' \| 'refuse' }` (refus définitif) |
 | `spyglass:stt:upgrade-offer` | emit | `{ propose: true }` |

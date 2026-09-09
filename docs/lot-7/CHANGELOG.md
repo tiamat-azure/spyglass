@@ -186,3 +186,27 @@
   `type-mismatch`. `processSuggestedPatch` maps thrown apply failures
   with `isGitApplyError` vs `internal-error`.
 
+## Pass-7 adversarial fixes (L7-053 … L7-059) + Captain locks
+
+- **O7a:** Export refuses a non-empty existing destination unless
+  `overwrite: true` is passed. The in-app F-47 picker never sets that
+  flag, so a user-picked folder is not silently replaced.
+- **I7a:** Import refuses when `sessionsRoot/<sessionId>` already exists.
+  The existing session is not replaced or destroyed.
+- **L7-053:** `sttUpgradeDecide` wraps `mkdir` / fake-write / download in
+  try/catch and returns `{ ok: false, error }` (never throws to IPC).
+- **L7-054:** Shared `resolveSttModelDir()` for the three userData/whisper
+  defaults in main.
+- **L7-055:** Accept success restores `sttUpgradeCopy` default HTML before
+  hiding; `onOffer` also restores so a later banner is not stuck on
+  “Téléchargement en cours…”.
+- **L7-056:** `resolveScenarioInRepo` / `realpathExisting` catch parent
+  `realpath` failure and return a structured `scenario-outside-repo`
+  refusal instead of an unhandled throw.
+- **L7-057:** Non-2xx downloads `cancel()` the response body before
+  throwing.
+- **L7-058:** Orphaned `.spyglass-prev-*` recovery restores the newest
+  backup by mtime, then removes the rest.
+- **L7-059:** Whisper first-use latency hook is gated by an in-flight
+  promise so concurrent finals cannot double-record.
+

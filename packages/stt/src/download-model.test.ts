@@ -66,6 +66,25 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('cancels the response body before throwing on non-2xx (L7-057)', async () => {
+    const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-cancel-')), 'model.bin');
+    let cancelled = false;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    const response = new Response(stream, { status: 503, statusText: 'Unavailable' });
+    await expect(downloadResponseToFileAtomic({ dest, response, minBytes: 1 })).rejects.toThrow(
+      /HTTP 503/
+    );
+    expect(cancelled).toBe(true);
+    await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('aborts a hung URL download (L7-018)', async () => {
     const server = createServer(() => undefined);
     await new Promise<void>((resolve) => {

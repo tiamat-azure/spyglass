@@ -495,6 +495,35 @@ describe('@spyglass/stt', () => {
     }
   });
 
+  it('runs the first-use latency hook once when two finals overlap (L7-059)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-firstuse-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 150 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const first = engine.finalize('u1');
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      const second = engine.finalize('u2');
+      await Promise.all([first, second]);
+      expect(calls).toBe(1);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
   it('rejects invalid client frames', () => {
     expect(parseClientMessage({ type: 'start' })).toBeUndefined();
     expect(parseClientMessage({ type: 'hello', sampleRate: 16000 })?.type).toBe('hello');

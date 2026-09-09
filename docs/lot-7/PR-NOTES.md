@@ -105,7 +105,9 @@ NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 4. **Export/import** copies the session folder (plus
    `spyglass-session.json` manifest). In-app F-47 picks the folder with
    a main-process directory dialog (E4a). Path-traversal session ids and
-   `.` / `..` are refused (L7-007).
+   `.` / `..` are refused (L7-007). Export refuses a non-empty dest
+   unless an explicit overwrite flag is set (O7a). Import refuses when
+   the same `sessionId` already exists (I7a).
 
 Pass-1 adversarial (L7-001 … L7-008) is recorded in `CHANGELOG.md`.
 Pass-2 (L7-009 … L7-016) and Captain lock **P2a** (dataset missing
@@ -122,6 +124,9 @@ Pass-6 (L7-044 … L7-052) plus Captain locks **A5b** (sync
 increment only when `prPrepared`), **P6a** (`STT_MODEL_PATH` over
 `STT_MODEL_DIR` conventional discovery), and **C6a** (capture screenshots
 are illustrative fixtures) are in `CHANGELOG.md`.
+Pass-7 (L7-053 … L7-059) plus Captain locks **O7a** (export refuses
+non-empty dest) and **I7a** (import refuses existing same `sessionId`)
+are in `CHANGELOG.md`.
 
 ## Residuals
 
