@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -78,21 +79,6 @@ async function latestSessionDir(sessionsDir: string): Promise<string> {
     throw new Error('No sessions written');
   }
   return join(sessionsDir, sessionId);
-}
-
-async function closeElectron(
-  electronApp: Awaited<ReturnType<typeof electron.launch>>
-): Promise<void> {
-  try {
-    await Promise.race([
-      electronApp.close(),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('electron close timeout')), 12_000);
-      })
-    ]);
-  } catch {
-    electronApp.process()?.kill('SIGKILL');
-  }
 }
 
 async function holdMic(chrome: Page, ms: number): Promise<void> {

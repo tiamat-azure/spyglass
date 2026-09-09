@@ -128,6 +128,8 @@ Pass-7 (L7-053 … L7-059) plus Captain locks **O7a** (export refuses
 non-empty dest) and **I7a** (import refuses existing same `sessionId`)
 are in `CHANGELOG.md`.
 Pass-8 (L7-060 … L7-064) is in `CHANGELOG.md`.
+macOS Electron e2e close hang (timeout + `SIGKILL`, popup `noWaitAfter`)
+is in `CHANGELOG.md`.
 
 ## Residuals
 

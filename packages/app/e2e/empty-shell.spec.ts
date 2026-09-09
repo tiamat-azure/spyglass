@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron } from './close-electron.ts';
 
 /** @spyglass/app package root; `package.json` `"main"` is `./out/main/index.js`. */
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,7 +100,7 @@ test.describe('Lot 0 two-zone shell', () => {
         });
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -117,9 +118,15 @@ test.describe('Lot 0 two-zone shell', () => {
       const chrome = await chromeWindow(electronApp);
       const guest = await guestWindow(electronApp);
 
-      await guest.locator('#popup-link').click();
-      await expect(chrome.locator('#log')).toContainText('nav.popup-redirected');
-      await expect(guest.locator('#popup-target')).toBeVisible();
+      // App denies the popup and loads in the same WebContentsView. Without
+      // noWaitAfter, Playwright waits for a new window that never appears
+      // (macOS CI: full test timeout, then hung electronApp.close()).
+      await guest.locator('#popup-link').click({ noWaitAfter: true });
+      await expect(chrome.locator('#log')).toContainText('nav.popup-redirected', {
+        timeout: 15_000
+      });
+      const redirected = await guestWindow(electronApp);
+      await expect(redirected.locator('#popup-target')).toBeVisible({ timeout: 15_000 });
 
       await chrome.locator('#url').fill('https://example.com');
       await chrome.locator('#url-form').evaluate((form) => {
@@ -142,18 +149,21 @@ test.describe('Lot 0 two-zone shell', () => {
       const infoPath = env.SPYGLASS_CDP_INFO;
       if (infoPath !== undefined) {
         await expect
-          .poll(async () => {
-            try {
-              const raw = await readFile(infoPath, 'utf8');
-              return raw.includes('example.com');
-            } catch {
-              return false;
-            }
-          })
+          .poll(
+            async () => {
+              try {
+                const raw = await readFile(infoPath, 'utf8');
+                return raw.includes('example.com');
+              } catch {
+                return false;
+              }
+            },
+            { timeout: 15_000 }
+          )
           .toBe(true);
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -181,7 +191,7 @@ test.describe('Lot 0 two-zone shell', () => {
         });
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

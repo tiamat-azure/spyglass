@@ -231,3 +231,13 @@
 AbortError / cancellation vs first-use latency remains unchanged
 (ask-user).
 
+## CI — macOS Electron e2e close hang
+
+- Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
+  spec. Playwright `close()` waits for `app.quit()`; after a guest
+  `target=_blank` redirect or `example.com` navigation that can hang until
+  the 60s worker teardown (macOS `verify` only; Ubuntu/Windows were green).
+- Popup click uses `noWaitAfter` so Playwright does not wait for a window
+  the app denies. Locator `actionTimeout` is 15s so a hung click cannot
+  consume the whole test budget.
+

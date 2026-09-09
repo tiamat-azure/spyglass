@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -185,7 +186,7 @@ test.describe('Lot 4 refine', () => {
       expect(rev2.aggressiveness).toBe('aggressive');
       expect(rev2.steps[0]?.sourceEvents[0]).toMatch(/^evt_/);
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -221,7 +222,7 @@ test.describe('Lot 4 refine', () => {
         }
       );
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

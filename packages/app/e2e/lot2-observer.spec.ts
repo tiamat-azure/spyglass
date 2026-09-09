@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -114,7 +115,7 @@ test.describe('Lot 2 observer', () => {
       await chrome.locator('#record-btn').click();
       await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -157,7 +158,7 @@ test.describe('Lot 2 observer', () => {
       expect(jsonl).toContain('record.stop');
       expect(jsonl).not.toContain('"mode": "llm"');
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
@@ -202,7 +203,7 @@ test.describe('Lot 2 observer', () => {
       await chrome.locator('#record-btn').click();
       await expect(chrome.locator('#record-btn')).toHaveText(/Record/i, { timeout: 15_000 });
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });
