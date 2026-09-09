@@ -282,6 +282,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   success.
 - **N29a:** Vacant parameterized `[0]` is JSON `null` in
   `unappliedArguments` (indices preserved; not omitted, not `""`).
+- **D29a:** Explicit `parameterRef` is not unique-ified against
+  selector-derived names. Last-write-wins on `dataset.values` (R10a);
+  `uniqueName` remains selector-derived only (R4a).
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -350,5 +353,6 @@ large skip, existing explicit large only, refuse special files,
 consecutiveRuns max 32, skip duplicate large download, nested descriptor
 canonicalize. Pass-30 (L7-223 … L7-225): git exec maxBuffer 32 MiB,
 JSON-serializable trailing args, whisper-cli size check after extract.
-**N29a:** vacant parameterized `[0]` is JSON `null`. Held: D29, O29, A30,
-I30.
+**N29a:** vacant parameterized `[0]` is JSON `null`. **D29a:** explicit
+`parameterRef` is not unique-ified against selector-derived names
+(R10a last-write-wins). Held: O29, A30, I30.

@@ -183,6 +183,33 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('email_2');
   });
 
+  it('does not unique-ify explicit parameterRef against a selector-derived name (D29a)', async () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/form',
+      steps: [
+        fillStep(0, '#email', 'first@example.com'),
+        fillStep(1, '#other', 'second@example.com', 'email')
+      ]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('email');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('email');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).not.toBe('email_2');
+    expect(extracted.dataset.values.email).toBe('second@example.com');
+    expect(Object.hasOwn(extracted.dataset.values, 'email_2')).toBe(false);
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('export function parameterNameFromStep'),
+      src.indexOf('export function isParameterizedType')
+    );
+    const explicitBranch = fn.slice(0, fn.indexOf('if (!isParameterizedType'));
+    expect(explicitBranch).toContain('return step.action.parameterRef.trim()');
+    expect(explicitBranch).not.toContain('uniqueName');
+    expect(fn).toContain('return uniqueName(fromSelector, used)');
+  });
+
   it('replays the same scenario with distinct datasets', async () => {
     const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
     const datasetA = {

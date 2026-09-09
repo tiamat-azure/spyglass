@@ -17,7 +17,8 @@ const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp|otp|pin|cvv|apikey|api
 
 export function parameterNameFromStep(step: RefinedStep, used: Set<string>): string | undefined {
   if (step.action.parameterRef !== undefined && step.action.parameterRef.trim().length > 0) {
-    // R4a / R10a: preserve duplicate explicit refs as a shared dataset variable
+    // R4a / R10a / D29a: explicit parameterRef is not unique-ified against
+    // selector-derived names. Duplicate refs share one dataset variable
     // (extract last-write-wins; no conflict warn/error).
     return step.action.parameterRef.trim();
   }

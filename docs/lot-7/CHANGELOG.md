@@ -1103,6 +1103,17 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: D29, O29, A30, I30.
 
+## Captain lock D29a (explicit parameterRef is not unique-ified)
+
+- **D29a:** Keep last-write-wins **R10a**. An explicit `parameterRef` is
+  **not** unique-ified / de-duplicated against a selector-derived name
+  already in `used`. `parameterNameFromStep` returns the trimmed explicit
+  string as-is; `uniqueName` stays on the selector-derived path only
+  (R4a `email` / `email_2`). Mixed collision: derived `email` then
+  explicit `email` stays `email` (not `email_2`); the later recorded
+  value wins on `dataset.values`. No unique-ify logic, conflict
+  warn/error, or second name for the explicit step.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
