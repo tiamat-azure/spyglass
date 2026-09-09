@@ -721,6 +721,20 @@ Applied on tip `2c87b8c37502479d8f551e4902232eb3c6568975`. Product decisions
 Unit tests after this pass: **425 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 25 (CI flake / L6-077)
+
+Applied on tip `e8283740a43a88506a27e2751eebc9a9afa62f5e`. Product decisions
+1–19 and prior locks (incl. A19a, L6-071, L6-076) are unchanged.
+
+- **L6-077** Headless `runGeneratedScript` fixture test drops inherited
+  `SPYGLASS_PROOF_SCREENSHOT` (L6-071), uses `--timeout` and vitest budget
+  ≥30s on win32, retries once on non-zero, and includes the exit JSON /
+  stderr in the assertion message. Sibling spawned `scenario.ts` gets the
+  same env delete and win32 timeouts.
+
+Unit tests after this pass: **425 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

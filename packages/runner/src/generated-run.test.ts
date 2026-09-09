@@ -94,91 +94,103 @@ function lastExitLine(stdout: string): string {
 }
 
 describe('Lot 6 generated script outside Electron (CA-10 / CA-11)', () => {
-  it('runs --headless --no-ai without API keys on a local fixture', async () => {
-    const server = await startFixtureServer();
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-headless-'));
-    const capture = attachStdioCapture();
-    try {
-      const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
-      const paths = await writeGeneratedPackage({ sessionDir, scenario });
-      const env = generatedScriptEnv({ CI: '1' });
-      const argv = ['--headless', '--no-ai', '--timeout', String(generatedRunTimeoutMs)];
-      let code = await runGeneratedScript(scenario, argv, env, paths.dir);
-      if (code !== 0) {
-        code = await runGeneratedScript(scenario, argv, env, paths.dir);
+  it(
+    'runs --headless --no-ai without API keys on a local fixture',
+    async () => {
+      const server = await startFixtureServer();
+      const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-headless-'));
+      const capture = attachStdioCapture();
+      try {
+        const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
+        const paths = await writeGeneratedPackage({ sessionDir, scenario });
+        const env = generatedScriptEnv({ CI: '1' });
+        const argv = ['--headless', '--no-ai', '--timeout', String(generatedRunTimeoutMs)];
+        let code = await runGeneratedScript(scenario, argv, env, paths.dir);
+        if (code !== 0) {
+          code = await runGeneratedScript(scenario, argv, env, paths.dir);
+        }
+        const stdout = capture.stdout();
+        const stderr = capture.stderr();
+        const exitLine = lastExitLine(stdout);
+        expect(
+          code,
+          `headless runGeneratedScript exit ${String(code)} line=${exitLine} stderr=${stderr}`
+        ).toBe(0);
+      } finally {
+        capture.restore();
+        await server.close();
       }
-      const stdout = capture.stdout();
-      const stderr = capture.stderr();
-      const exitLine = lastExitLine(stdout);
-      expect(
-        code,
-        `headless runGeneratedScript exit ${String(code)} line=${exitLine} stderr=${stderr}`
-      ).toBe(0);
-    } finally {
-      capture.restore();
-      await server.close();
-    }
-  }, generatedRunTestBudgetMs);
+    },
+    generatedRunTestBudgetMs
+  );
 
-  it('runs headed (visible) --no-ai when a display is available', async () => {
-    if (!headedAvailable()) {
-      return;
-    }
-    const server = await startFixtureServer();
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-headed-'));
-    try {
-      const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
-      const paths = await writeGeneratedPackage({ sessionDir, scenario });
-      const env = generatedScriptEnv();
-      delete env.CI;
-      if (process.env.SPYGLASS_LOT6_HEADED_SHOT !== undefined) {
-        env.SPYGLASS_PROOF_SCREENSHOT = process.env.SPYGLASS_LOT6_HEADED_SHOT;
+  it(
+    'runs headed (visible) --no-ai when a display is available',
+    async () => {
+      if (!headedAvailable()) {
+        return;
       }
-      const code = await runGeneratedScript(
-        scenario,
-        ['--no-ai', '--timeout', String(generatedRunTimeoutMs)],
-        env,
-        paths.dir
-      );
-      expect(code).toBe(0);
-    } finally {
-      await server.close();
-    }
-  }, generatedRunTestBudgetMs);
+      const server = await startFixtureServer();
+      const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-headed-'));
+      try {
+        const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
+        const paths = await writeGeneratedPackage({ sessionDir, scenario });
+        const env = generatedScriptEnv();
+        delete env.CI;
+        if (process.env.SPYGLASS_LOT6_HEADED_SHOT !== undefined) {
+          env.SPYGLASS_PROOF_SCREENSHOT = process.env.SPYGLASS_LOT6_HEADED_SHOT;
+        }
+        const code = await runGeneratedScript(
+          scenario,
+          ['--no-ai', '--timeout', String(generatedRunTimeoutMs)],
+          env,
+          paths.dir
+        );
+        expect(code).toBe(0);
+      } finally {
+        await server.close();
+      }
+    },
+    generatedRunTestBudgetMs
+  );
 
-  it('executes generated scenario.ts as a subprocess that imports runScenario', async () => {
-    const server = await startFixtureServer();
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-spawn-'));
-    try {
-      const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
-      const paths = await writeGeneratedPackage({ sessionDir, scenario });
-      expect(await readFile(paths.scenarioTs, 'utf8')).toContain('runScenario');
-      await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
-      await symlink(
-        join(repoRoot(), 'packages/runner'),
-        join(paths.dir, 'node_modules', '@spyglass', 'runner')
-      );
-      const env = generatedScriptEnv({ CI: '1' });
-      const { stdout, stderr } = await execFileAsync(
-        process.execPath,
-        [
-          '--experimental-transform-types',
-          'scenario.ts',
-          '--headless',
-          '--no-ai',
-          '--timeout',
-          String(generatedRunTimeoutMs)
-        ],
-        { cwd: paths.dir, env, timeout: isWin ? 90_000 : 45_000 }
-      );
-      const line = lastExitLine(stdout);
-      const parsed = JSON.parse(line) as { exitCode: number; runDir?: string };
-      expect(
-        parsed.exitCode,
-        `spawned scenario.ts exit ${String(parsed.exitCode)} runDir=${parsed.runDir ?? ''} stderr=${stderr}`
-      ).toBe(0);
-    } finally {
-      await server.close();
-    }
-  }, generatedRunTestBudgetMs);
+  it(
+    'executes generated scenario.ts as a subprocess that imports runScenario',
+    async () => {
+      const server = await startFixtureServer();
+      const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-spawn-'));
+      try {
+        const scenario = lot6Scenario(`${server.origin}/lot6-fixture.html`);
+        const paths = await writeGeneratedPackage({ sessionDir, scenario });
+        expect(await readFile(paths.scenarioTs, 'utf8')).toContain('runScenario');
+        await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
+        await symlink(
+          join(repoRoot(), 'packages/runner'),
+          join(paths.dir, 'node_modules', '@spyglass', 'runner')
+        );
+        const env = generatedScriptEnv({ CI: '1' });
+        const { stdout, stderr } = await execFileAsync(
+          process.execPath,
+          [
+            '--experimental-transform-types',
+            'scenario.ts',
+            '--headless',
+            '--no-ai',
+            '--timeout',
+            String(generatedRunTimeoutMs)
+          ],
+          { cwd: paths.dir, env, timeout: isWin ? 90_000 : 45_000 }
+        );
+        const line = lastExitLine(stdout);
+        const parsed = JSON.parse(line) as { exitCode: number; runDir?: string };
+        expect(
+          parsed.exitCode,
+          `spawned scenario.ts exit ${String(parsed.exitCode)} runDir=${parsed.runDir ?? ''} stderr=${stderr}`
+        ).toBe(0);
+      } finally {
+        await server.close();
+      }
+    },
+    generatedRunTestBudgetMs
+  );
 });
