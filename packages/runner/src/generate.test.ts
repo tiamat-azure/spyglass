@@ -166,6 +166,15 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(capture).not.toMatch(/file:\/\/\$\{join/);
   });
 
+  it('Lot 6 capture rms mkdtemp sessionDir in finally (L6-060)', async () => {
+    const capture = await readFile(join(repoRoot(), 'scripts/capture-lot-6.mjs'), 'utf8');
+    expect(capture).toContain('} finally {');
+    expect(capture).toContain('rm(sessionDir, { recursive: true, force: true })');
+    expect(capture).toContain('await server.close()');
+    expect(capture).toContain('await driver.close()');
+    expect(capture).toContain('unlink(join(shotDir, name))');
+  });
+
   it('is visible by default and wires F-58 flags; CI does not force headless', () => {
     const headed = parseGeneratedArgv(['--no-ai', '--timeout', '5000'], { CI: '1' });
     expect(headed.headless).toBe(false);

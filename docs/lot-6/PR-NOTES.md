@@ -548,6 +548,16 @@ Applied on tip `9d6e8a6ae6d0fbfca3ad98bc09fa562a69dcfca9`. Product decisions
 Unit tests after this pass: **408 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 19 (Copilot auto-fix)
+
+Applied on tip `1fffddf9718a1acec538f21f2c56be4ddda54eb5`. Product decisions
+1–15 and prior locks (incl. V59a) are unchanged.
+
+- **L6-060** `scripts/capture-lot-6.mjs` `rm`s the mkdtemp `sessionDir` in
+  `finally` (plus fixture-server and Playwright driver close), matching e2e
+  L6-050. Intermediate `{tree,headless,protocol}.html` is unlinked in the
+  same `finally`.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
