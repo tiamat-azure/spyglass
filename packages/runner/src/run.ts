@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import type {
   ExecutionReport,
   ExecutionStepReport,
@@ -568,8 +568,8 @@ async function recoverStep(input: {
       step: input.step,
       attempt,
       error: redactTextWithSecrets(lastError, secrets),
-      beforeDom: redactSnapshotForRecovery(input.beforeDom, redactFrom),
-      afterDom: redactSnapshotForRecovery(afterDom, redactFrom),
+      beforeDom: redactSnapshotForRecovery(input.beforeDom, redactFrom, secrets),
+      afterDom: redactSnapshotForRecovery(afterDom, redactFrom, secrets),
       multimodal: input.multimodal,
       ...(screenshotRef !== undefined ? { screenshotPath: screenshotRef } : {})
     };
@@ -728,12 +728,12 @@ function stepForRecovery(step: RefinedStep): RefinedStep {
 
 function redactSnapshotForRecovery(
   snapshot: { url: string; title: string; text: string; values: Record<string, string> },
-  scenario: Scenario
+  scenario: Scenario,
+  secrets: readonly string[]
 ): { url: string; title: string; text: string; values: Record<string, string> } {
   if (!scenario.steps.some(hasParameterRef)) {
     return snapshot;
   }
-  const secrets = collectParameterSecrets(scenario, [snapshot]);
   const text = redactTextWithSecrets(snapshot.text, secrets);
   const url = redactTextWithSecrets(snapshot.url, secrets);
   const title = redactTextWithSecrets(snapshot.title, secrets);
@@ -794,6 +794,11 @@ function redactSecretFromText(text: string, secret: string): string {
   return text.replace(pattern, '');
 }
 
+/** L7-256: dataset-load failure uses the same per-run folder as success. */
+function runArtifactsDir(reportDir: string, runId: string): string {
+  return basename(reportDir) === runId ? reportDir : runPath(reportDir, runId);
+}
+
 async function datasetLoadFailure(input: {
   scenario: Scenario;
   resolved: ReturnType<typeof resolveRunnerOptions>;
@@ -824,8 +829,8 @@ async function datasetLoadFailure(input: {
   };
   let runDir: string | undefined;
   if (input.resolved.reportDir !== undefined) {
-    runDir = input.resolved.reportDir;
-    await writeRunArtifacts({ runDir, report });
+    runDir = runArtifactsDir(input.resolved.reportDir, input.runId);
+    await writeRunArtifacts({ runDir, report, scenario: input.scenario });
   }
   if (input.options.closeDriver === true) {
     await input.options.driver.close();

@@ -138,16 +138,30 @@ function scrubKnownValuesFromDescriptor(
   }
   const trailing = scrubbed.slice(1);
   const head = scrubbed[0];
-  const keepHead = typeof head === 'string' && head.length > 0;
-  if (!keepHead && trailing.length === 0) {
-    delete descriptor.arguments;
+  // L7-254: vacant-string/blank rules apply to string heads and to a vacant
+  // JSON `null` after scrub. Object/number/boolean slot 0 must stay.
+  if (typeof head === 'string') {
+    const keepHead = head.length > 0;
+    if (!keepHead && trailing.length === 0) {
+      delete descriptor.arguments;
+      return;
+    }
+    if (keepHead) {
+      descriptor.arguments = scrubbed as string[];
+      return;
+    }
+    descriptor.arguments = unappliedArguments(trailing);
     return;
   }
-  if (keepHead) {
-    descriptor.arguments = scrubbed as string[];
+  if (head === undefined || head === null) {
+    if (trailing.length === 0) {
+      delete descriptor.arguments;
+      return;
+    }
+    descriptor.arguments = unappliedArguments(trailing);
     return;
   }
-  descriptor.arguments = unappliedArguments(trailing);
+  descriptor.arguments = scrubbed as string[];
 }
 
 function knownValuesForPatch(

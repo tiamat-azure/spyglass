@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './download-model.ts';
@@ -88,6 +88,15 @@ export function shouldProposeUpgrade(input: {
   return input.correctionCount >= after ? 'propose' : 'silent';
 }
 
+/** L7-261 / L7-245: a directory named like a model must not count as available. */
+function isExistingRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * F-39: small is never deleted. Prefer large only when present and first-use
  * latency stayed within budget; otherwise fall back to small.
@@ -100,7 +109,7 @@ export function chooseWhisperModel(input: {
 }): SttModelChoice {
   if (input.largePath !== undefined && input.largePath.length > 0 && !input.largeFallback) {
     // L7-239: do not return a non-existent largePath (same existence check as resolveWhisperPaths).
-    if (existsSync(input.largePath)) {
+    if (isExistingRegularFile(input.largePath)) {
       return { file: input.largePath, kind: 'large', fallback: false };
     }
   }
@@ -194,7 +203,7 @@ export function smallModelPath(modelDir: string): string {
 }
 
 export function largeModelPresent(modelDir: string): boolean {
-  return existsSync(largeModelPath(modelDir));
+  return isExistingRegularFile(largeModelPath(modelDir));
 }
 
 export async function recordFirstUseLatency(input: {

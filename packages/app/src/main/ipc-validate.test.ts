@@ -104,7 +104,10 @@ describe('session payload validation', () => {
     });
     expect(parseReplayStartPayload({ forceAi: true })).toEqual({ forceAi: true });
     expect(parseReplayStartPayload({ noAi: true })).toEqual({ noAi: true });
-    expect(parseReplayStartPayload(null)).toEqual({});
+    expect(parseReplayStartPayload(undefined)).toEqual({});
+    expect(parseReplayStartPayload(null)).toBeUndefined();
+    expect(parseReplayStartPayload('nope')).toBeUndefined();
+    expect(parseReplayStartPayload(['stepByStep'])).toBeUndefined();
     expect(parseReplayStartPayload({ datasetPath: '/tmp/ds.json', stepByStep: true })).toEqual({
       stepByStep: true,
       datasetPath: '/tmp/ds.json'
@@ -134,6 +137,7 @@ describe('session payload validation', () => {
     expect(fnStart).toBeGreaterThan(-1);
     expect(fnEnd).toBeGreaterThan(fnStart);
     const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('input === null');
     expect(body).toContain('datasetPath');
     expect(body).toContain('result.datasetPath');
     expect(body).not.toMatch(/datasetPath \(renderer does not expose it\)/);
@@ -294,6 +298,18 @@ describe('sessionBundleIpcError (L7-088)', () => {
         'import-failed'
       )
     ).toBe('session-exists');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('invalid-meta', 'import refused: missing spyglass-session.json'),
+        'import-failed'
+      )
+    ).toBe('invalid-meta');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('symlink', 'export refused: special files are not allowed'),
+        'export-failed'
+      )
+    ).toBe('symlink');
   });
 
   it('returns the fallback when the rejection is null, undefined, or not an object (L7-092)', () => {

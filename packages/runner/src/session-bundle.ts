@@ -155,9 +155,29 @@ export async function importSessionFolder(
 }
 
 export async function readSessionMeta(sessionDir: string): Promise<{ sessionId: string }> {
-  const raw = JSON.parse(await readFile(join(sessionDir, 'meta.json'), 'utf8')) as {
-    sessionId?: unknown;
-  };
+  let rawText: string;
+  try {
+    rawText = await readFile(join(sessionDir, 'meta.json'), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new SessionBundleError('invalid-meta', 'session meta.json is missing');
+    }
+    throw new SessionBundleError(
+      'invalid-meta',
+      `session meta.json is unreadable: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new SessionBundleError('invalid-meta', 'session meta.json is invalid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new SessionBundleError('invalid-meta', 'session meta.json is not an object');
+  }
+  const raw = parsed as { sessionId?: unknown };
   if (typeof raw.sessionId !== 'string' || raw.sessionId.trim().length === 0) {
     throw new SessionBundleError('invalid-meta', 'session meta.json is missing sessionId');
   }
@@ -172,28 +192,40 @@ async function assertBundleManifestAgrees(dir: string, sessionId: string): Promi
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
-      throw new Error('import refused: missing spyglass-session.json');
+      throw new SessionBundleError(
+        'invalid-meta',
+        'import refused: missing spyglass-session.json'
+      );
     }
-    throw err;
+    throw new SessionBundleError(
+      'invalid-meta',
+      'import refused: unreadable spyglass-session.json'
+    );
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
   } catch {
-    throw new Error('import refused: invalid spyglass-session.json');
+    throw new SessionBundleError('invalid-meta', 'import refused: invalid spyglass-session.json');
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('import refused: invalid spyglass-session.json');
+    throw new SessionBundleError('invalid-meta', 'import refused: invalid spyglass-session.json');
   }
   const record = parsed as { schemaVersion?: unknown; kind?: unknown; sessionId?: unknown };
   if (record.schemaVersion !== 1) {
-    throw new Error('import refused: spyglass-session.json schemaVersion');
+    throw new SessionBundleError(
+      'invalid-meta',
+      'import refused: spyglass-session.json schemaVersion'
+    );
   }
   if (record.kind !== 'spyglass-session') {
-    throw new Error('import refused: spyglass-session.json kind');
+    throw new SessionBundleError('invalid-meta', 'import refused: spyglass-session.json kind');
   }
   if (typeof record.sessionId !== 'string' || record.sessionId !== sessionId) {
-    throw new Error('import refused: spyglass-session.json sessionId does not match meta.json');
+    throw new SessionBundleError(
+      'invalid-meta',
+      'import refused: spyglass-session.json sessionId does not match meta.json'
+    );
   }
 }
 
@@ -263,7 +295,10 @@ async function unlinkIfPresent(path: string): Promise<void> {
       await unlink(path);
       return;
     }
-    throw new Error('export refused: spyglass-session.json is not a regular file');
+    throw new SessionBundleError(
+      'symlink',
+      'export refused: spyglass-session.json is not a regular file'
+    );
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
@@ -353,7 +388,7 @@ async function assertNoSymlinks(root: string, action: 'import' | 'export'): Prom
       continue;
     }
     if (!st.isFile()) {
-      throw new Error(`${action} refused: special files are not allowed`);
+      throw new SessionBundleError('symlink', `${action} refused: special files are not allowed`);
     }
   }
 }
@@ -417,8 +452,10 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
   } catch {
     return;
   }
+  const ownedPrefix = `${base}.spyglass-prev-`;
+  const ownedExact = `${base}.spyglass-prev`;
   const orphans = names
-    .filter((name) => name === `${base}.spyglass-prev` || name.startsWith(`${base}.spyglass-prev-`))
+    .filter((name) => name === ownedExact || name.startsWith(ownedPrefix))
     .map((name) => join(parent, name));
   if (orphans.length === 0) {
     return;
@@ -436,6 +473,10 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
   for (const path of orphans) {
     try {
       const st = await lstat(path);
+      // L7-260: only resurrect a directory this dest uniquely owns.
+      if (!st.isDirectory()) {
+        continue;
+      }
       ranked.push({ path, mtimeMs: st.mtimeMs });
     } catch {
       // skip unreadable orphans
@@ -446,7 +487,11 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
   if (newest === undefined) {
     return;
   }
-  await rename(newest.path, dest);
+  try {
+    await rename(newest.path, dest);
+  } catch {
+    return;
+  }
   for (const extra of ranked.slice(1)) {
     await rm(extra.path, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -470,24 +515,13 @@ async function replaceDirectory(
     if (options.allowEmptyDest === true) {
       await vacateEmptyDirectory(dest);
     }
-    try {
-      await rename(staging, dest);
-      return;
-    } catch (err) {
-      // W26a: Windows rename onto an existing empty dest fails (EPERM/EEXIST).
-      if (options.allowEmptyDest === true && (await vacateEmptyDirectory(dest))) {
-        await rename(staging, dest);
-        return;
-      }
-      const code = (err as NodeJS.ErrnoException).code;
-      // L7-195: EPERM is not "already exists" (permissions / Windows rename).
-      if (code === 'EEXIST' || code === 'ENOTEMPTY') {
-        if (await pathExists(dest)) {
-          throw new SessionBundleError(options.existsCode, options.existsError);
-        }
-      }
-      throw err;
+    // L7-259: do not rely on POSIX rename replacing an existing dest (empty or
+    // not). Vacate empty dirs explicitly (W26a), then refuse if dest still exists.
+    if (await pathExists(dest)) {
+      throw new SessionBundleError(options.existsCode, options.existsError);
     }
+    await rename(staging, dest);
+    return;
   }
   // O29b: never rename/rm a non-directory dest (file-at-dest), even with overwrite.
   try {

@@ -122,6 +122,44 @@ describe('P13a patch secret redaction', () => {
     expect(redacted.patches[0]?.suggested.arguments?.slice(1)).toEqual(['slowly']);
   });
 
+  it('keeps a non-string head when scrubbing known values (L7-254)', () => {
+    const step = fillStep('#user', 'alice');
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_l7254',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: {
+              type: 'fill',
+              selector: '#user',
+              arguments: [{ delay: 1 }, 'ltr'] as unknown as string[]
+            },
+            suggested: {
+              type: 'fill',
+              selector: '#user-new',
+              arguments: [12, { dir: 'rtl' }] as unknown as string[]
+            },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      }
+    );
+    expect(redacted.patches[0]?.original.arguments).toEqual([{ delay: 1 }, 'ltr']);
+    expect(redacted.patches[0]?.suggested.arguments).toEqual([12, { dir: 'rtl' }]);
+  });
+
   it('strips proposed/after args when the recorded step has parameterRef', () => {
     const secret = 'dataset-secret';
     const redacted = redactSuggestedPatchForPersistence(leakyFillPatch(secret), {

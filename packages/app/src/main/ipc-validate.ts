@@ -272,12 +272,14 @@ export function parseRefineEditPayload(input: unknown): RefineEditRequest | unde
   return result;
 }
 
-export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
-  if (input === undefined || input === null) {
+export function parseReplayStartPayload(input: unknown): ReplayStartRequest | undefined {
+  // L7-247: omitted payload is `{}`; `null` is typeof object and must not
+  // coerce (that would TypeError on property access, or silently look valid).
+  if (input === undefined) {
     return {};
   }
-  if (typeof input !== 'object') {
-    return {};
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return undefined;
   }
   const record = input as {
     forceAi?: unknown;

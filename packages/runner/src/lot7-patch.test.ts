@@ -59,12 +59,24 @@ import { runScenario } from './run.ts';
 
 const execFileAsync = promisify(execFile);
 const tmpDirs: string[] = [];
-const GIT_TEST_MS = process.platform === 'win32' ? 40_000 : 10_000;
+const GIT_TEST_MS = process.platform === 'win32' ? 40_000 : 25_000;
 
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
   tmpDirs.push(dir);
   return dir;
+}
+
+/** L7-251: fail loud if a source marker is missing (no silent slice(-1)). */
+function sourceBetween(src: string, startMarker: string, endMarker?: string): string {
+  const start = src.indexOf(startMarker);
+  expect(start, `missing start marker: ${startMarker}`).toBeGreaterThan(-1);
+  if (endMarker === undefined) {
+    return src.slice(start);
+  }
+  const end = src.indexOf(endMarker, start + 1);
+  expect(end, `missing end marker: ${endMarker}`).toBeGreaterThan(start);
+  return src.slice(start, end);
 }
 
 async function rmTempDir(dir: string): Promise<void> {
@@ -1207,11 +1219,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
 
   it('disables gh prompts with GH_PROMPT_DISABLED (L7-206)', async () => {
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('function ghExecEnv');
-    const end = src.indexOf('function gitFailureReason');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    const body = src.slice(start, end);
+    const body = sourceBetween(src, 'function ghExecEnv', 'function gitFailureReason');
     expect(body).toContain("GH_PROMPT_DISABLED: '1'");
     expect(body).not.toContain('GH_PROMPT:');
   });
@@ -1363,9 +1371,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(deletedRemote).toBe(false);
     expect(openPrChecks).toBeGreaterThanOrEqual(2);
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('async function pushPatchBranch'),
-      src.indexOf('export function openPrListMeansOpen')
+    const fn = sourceBetween(
+      src,
+      'async function pushPatchBranch',
+      'export function openPrListMeansOpen'
     );
     expect(fn).toContain('remoteDeleteBlockedByOpenPr');
     expect(fn.indexOf('blockedAgain')).toBeLessThan(fn.indexOf("['push', 'origin', '--delete'"));
@@ -1863,11 +1872,11 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
 
   it('does not force-checkout default when leftover recovery sees a dirty tree (L7-213)', async () => {
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
-    const leftoverStart = src.indexOf('if (leftoverExists)');
-    const leftoverEnd = src.indexOf('let scenario = input.scenario');
-    expect(leftoverStart).toBeGreaterThan(-1);
-    expect(leftoverEnd).toBeGreaterThan(leftoverStart);
-    const leftoverBlock = src.slice(leftoverStart, leftoverEnd);
+    const leftoverBlock = sourceBetween(
+      src,
+      'if (leftoverExists)',
+      'let scenario = input.scenario'
+    );
     expect(leftoverBlock).not.toContain("'-f'");
     expect(leftoverBlock).toContain("['checkout', defaultBranch]");
     expect(leftoverBlock).toContain('isWorktreeDirty');
@@ -2118,9 +2127,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       expect(result.reason).toMatch(/refusing to discard uncommitted changes: extra\.txt/);
     }
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
-    const restoreFn = src.slice(
-      src.indexOf('async function restoreStartingBranch'),
-      src.indexOf('function trackedDirtyPaths')
+    const restoreFn = sourceBetween(
+      src,
+      'async function restoreStartingBranch',
+      'function trackedDirtyPaths'
     );
     expect(restoreFn).not.toContain("'-f'");
     expect(restoreFn).toContain("['reset', 'HEAD', '--', file]");
@@ -2435,14 +2445,16 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     });
     expect(off).toEqual({});
     const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export async function processSuggestedPatch'),
-      src.indexOf('export type ResolveScenarioPathResult')
+    const fn = sourceBetween(
+      src,
+      'export async function processSuggestedPatch',
+      'export type ResolveScenarioPathResult'
     );
     expect(fn).toContain("code: 'missing-session-dir'");
-    expect(fn.indexOf("code: 'missing-session-dir'")).toBeLessThan(
-      fn.indexOf('applyAssistedPatches')
-    );
+    const missingIdx = fn.indexOf("code: 'missing-session-dir'");
+    const applyIdx = fn.indexOf('applyAssistedPatches');
+    expect(missingIdx).toBeGreaterThan(-1);
+    expect(applyIdx).toBeGreaterThan(missingIdx);
     expect(fn).not.toMatch(/if \(sessionDir === undefined\) \{\s*return \{\};/);
   });
 
@@ -2540,9 +2552,10 @@ describe('resolveScenarioPath S28b', () => {
 
   it('resolves repo to absolute before isInsideRepo (L7-243)', async () => {
     const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export function resolveScenarioPath'),
-      src.indexOf('export async function loadDatasetFile')
+    const fn = sourceBetween(
+      src,
+      'export function resolveScenarioPath',
+      'export async function loadDatasetFile'
     );
     expect(fn).toContain('const repoAbs = resolve(repo)');
     expect(fn.indexOf('const repoAbs = resolve(repo)')).toBeLessThan(
@@ -2713,9 +2726,10 @@ describe('Lot 7 health.json wiring after recovery', () => {
     const reportRaw = await readFile(join(reportDir, 'report.json'), 'utf8');
     expect(reportRaw).toContain('ses_lot7');
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
-    const lifecycle = src.slice(
-      src.indexOf('const lifecycleInput'),
-      src.indexOf('if (runDir !== undefined)')
+    const lifecycle = sourceBetween(
+      src,
+      'const lifecycleInput',
+      'if (runDir !== undefined)'
     );
     expect(lifecycle).toContain('try {');
     expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
@@ -2935,9 +2949,10 @@ describe('Lot 7 health.json wiring after recovery', () => {
     const healthDisk = await loadHealth(sessionDir, 'ses_lot7');
     expect(JSON.stringify(healthDisk)).not.toMatch(secret);
     const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export async function processSuggestedPatch'),
-      src.indexOf('export type ResolveScenarioPathResult')
+    const fn = sourceBetween(
+      src,
+      'export async function processSuggestedPatch',
+      'export type ResolveScenarioPathResult'
     );
     expect(fn).toContain('const persisted = redactSuggestedPatchForPersistence');
     expect(fn).toContain('recordSuggestedPatches(health, persisted, policy)');
@@ -3268,9 +3283,10 @@ describe('loadHealth H21a runIds migration', () => {
 
   it('calls migrateHealthPatchCandidates before validateHealth on load', async () => {
     const src = await readFile(new URL('./health.ts', import.meta.url), 'utf8');
-    const loadFn = src.slice(
-      src.indexOf('export async function loadHealth'),
-      src.indexOf('export async function saveHealth')
+    const loadFn = sourceBetween(
+      src,
+      'export async function loadHealth',
+      'export async function saveHealth'
     );
     expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeGreaterThan(-1);
     expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeLessThan(

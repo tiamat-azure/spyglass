@@ -162,16 +162,15 @@ function applyParameterizedArgument(descriptor: ReplayDescriptor, value: string)
 }
 
 /**
- * A27b / L7-224: keep trailing slots (not only strings). JSON-serializable
- * values round-trip; functions/undefined are dropped.
+ * A27b / L7-224 / L7-255 / N29a: keep trailing slots (not only strings).
+ * JSON-serializable values round-trip; functions/undefined become vacant
+ * `null` so later indices do not shift.
  */
 function trailingArguments(args: readonly unknown[] | undefined): unknown[] {
   const trailing: unknown[] = [];
   for (const item of (args ?? []).slice(1)) {
     const kept = cloneJsonArg(item);
-    if (kept !== undefined) {
-      trailing.push(kept);
-    }
+    trailing.push(kept === undefined ? null : kept);
   }
   return trailing;
 }

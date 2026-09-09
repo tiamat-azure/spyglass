@@ -247,10 +247,13 @@ describe('W3a fetch-whisper --large', () => {
     const largeBlock = src.slice(largeStart, largeEnd);
     expect(largeBlock).toContain('await ensureWhisperCli()');
     expect(largeBlock.indexOf('await ensureWhisperCli()')).toBeLessThan(
-      largeBlock.lastIndexOf('return')
+      largeBlock.indexOf('await fetch(STT_LARGE_MODEL_URL')
     );
-    expect(largeBlock.indexOf('await ensureSmallFallback(')).toBeLessThan(
-      largeBlock.indexOf('await ensureWhisperCli()')
+    expect(largeBlock.indexOf('await ensureWhisperCli()')).toBeLessThan(
+      largeBlock.indexOf('await ensureSmallFallback(')
+    );
+    expect(largeBlock.indexOf('await ensureWhisperCli()')).toBeLessThan(
+      largeBlock.lastIndexOf('return')
     );
     const fnStart = src.indexOf('async function ensureWhisperCli');
     const fnEnd = src.indexOf('const SMALL_MIN_BYTES');

@@ -138,6 +138,10 @@ export class ReplayEngine {
               return 'continue';
             }
             return await new Promise<'continue' | 'stop'>((resolve) => {
+              // L7-249: at most one waiter. A second wait must not orphan the first.
+              if (this.waiting !== undefined) {
+                this.waiting('stop');
+              }
               this.waiting = resolve;
             });
           }

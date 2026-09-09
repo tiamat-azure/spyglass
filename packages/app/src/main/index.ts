@@ -969,6 +969,9 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: false, error: 'replay engine missing' };
     }
     const payload = parseReplayStartPayload(raw);
+    if (payload === undefined) {
+      return { ok: false, error: 'invalid payload' };
+    }
     return await activeReplay.start(payload);
   });
 

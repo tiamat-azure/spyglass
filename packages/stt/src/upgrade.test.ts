@@ -11,6 +11,7 @@ import {
 import {
   chooseWhisperModel,
   isLargeFallbackError,
+  largeModelPresent,
   LARGE_FALLBACK_ERROR_TAG,
   largeFallbackMarkerDirs,
   parseMaxLatencyMs,
@@ -85,6 +86,37 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
     expect(choice.kind).toBe('large');
     expect(choice.file).toBe(largePath);
     expect(choice.file).toContain('large-v3-turbo');
+  });
+
+  it('does not treat a directory as a present large model (L7-261)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-up-dirlarge-'));
+    const largePath = join(dir, STT_LARGE_MODEL_FILE);
+    const smallPath = join(dir, STT_SMALL_MODEL_FILE);
+    await mkdir(largePath, { recursive: true });
+    await writeFile(smallPath, 'stub-small-weights\n', 'utf8');
+    const choice = chooseWhisperModel({
+      largePath,
+      smallPath,
+      largeFallback: false
+    });
+    expect(choice.kind).toBe('small');
+    expect(choice.file).toBe(smallPath);
+    expect(largeModelPresent(dir)).toBe(false);
+    const src = await readFile(new URL('./upgrade.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export function chooseWhisperModel');
+    const end = src.indexOf('export function shouldFallbackToSmall');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('isExistingRegularFile');
+    expect(body).not.toContain('existsSync');
+    const presentStart = src.indexOf('export function largeModelPresent');
+    const presentEnd = src.indexOf('export async function recordFirstUseLatency');
+    expect(presentStart).toBeGreaterThan(-1);
+    expect(presentEnd).toBeGreaterThan(presentStart);
+    const present = src.slice(presentStart, presentEnd);
+    expect(present).toContain('isExistingRegularFile');
+    expect(present).not.toContain('existsSync');
   });
 
   it('does not return a missing largePath (L7-239)', async () => {

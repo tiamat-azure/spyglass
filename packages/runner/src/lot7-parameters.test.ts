@@ -32,7 +32,9 @@ import { asScenario } from './scenario.ts';
 import {
   exportSessionFolder,
   importSessionFolder,
-  SESSION_BUNDLE_MANIFEST
+  isSessionBundleError,
+  SESSION_BUNDLE_MANIFEST,
+  SessionBundleError
 } from './session-bundle.ts';
 
 const tmpDirs: string[] = [];
@@ -41,6 +43,18 @@ async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
   tmpDirs.push(dir);
   return dir;
+}
+
+/** L7-251: fail loud if a source marker is missing (no silent slice(-1)). */
+function sourceBetween(src: string, startMarker: string, endMarker?: string): string {
+  const start = src.indexOf(startMarker);
+  expect(start, `missing start marker: ${startMarker}`).toBeGreaterThan(-1);
+  if (endMarker === undefined) {
+    return src.slice(start);
+  }
+  const end = src.indexOf(endMarker, start + 1);
+  expect(end, `missing end marker: ${endMarker}`).toBeGreaterThan(start);
+  return src.slice(start, end);
 }
 
 afterEach(async () => {
@@ -200,11 +214,14 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.dataset.values.email).toBe('second@example.com');
     expect(Object.hasOwn(extracted.dataset.values, 'email_2')).toBe(false);
     const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export function parameterNameFromStep'),
-      src.indexOf('export function isParameterizedType')
+    const fn = sourceBetween(
+      src,
+      'export function parameterNameFromStep',
+      'export function isParameterizedType'
     );
-    const explicitBranch = fn.slice(0, fn.indexOf('if (!isParameterizedType'));
+    const explicitCut = fn.indexOf('if (!isParameterizedType');
+    expect(explicitCut).toBeGreaterThan(-1);
+    const explicitBranch = fn.slice(0, explicitCut);
     expect(explicitBranch).toContain('return step.action.parameterRef.trim()');
     expect(explicitBranch).not.toContain('uniqueName');
     expect(fn).toContain('return uniqueName(fromSelector, used)');
@@ -308,9 +325,10 @@ describe('Lot 7 F-48 parameterization', () => {
 
   it('writes recorded.json via chmod 0o600 temp then rename (L7-226)', async () => {
     const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export async function writeGeneratedDatasets'),
-      src.indexOf('function nameFromSelector')
+    const fn = sourceBetween(
+      src,
+      'export async function writeGeneratedDatasets',
+      'function nameFromSelector'
     );
     expect(fn).toContain('await chmod(tmp, 0o600)');
     expect(fn).toContain('await rename(tmp, recordedPath)');
@@ -455,9 +473,10 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(unappliedArguments(['slowly', 'ltr'])[0]).not.toBe('');
     expect(JSON.stringify(unappliedArguments(['slowly', 'ltr']))).toBe('[null,"slowly","ltr"]');
     const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('export function unappliedArguments'),
-      src.indexOf('function isUnresolvedParameterArg')
+    const fn = sourceBetween(
+      src,
+      'export function unappliedArguments',
+      'function isUnresolvedParameterArg'
     );
     expect(fn).toContain('null');
     expect(fn).not.toContain('undefined');
@@ -503,12 +522,30 @@ describe('Lot 7 F-48 parameterization', () => {
       { dir: 'ltr' }
     ]);
     const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('function trailingArguments'),
-      src.indexOf('function cloneJsonArg')
-    );
+    const fn = sourceBetween(src, 'function trailingArguments', 'function cloneJsonArg');
+    expect(fn).toContain('kept === undefined ? null : kept');
     expect(fn).not.toContain("typeof item === 'string'");
     expect(src).toContain('cloneJsonArg');
+  });
+
+  it('keeps vacant trailing slots when cloneJsonArg yields undefined (L7-255)', () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 'two'));
+    const user = extracted.scenario.steps[0];
+    expect(user).toBeDefined();
+    if (user !== undefined) {
+      user.action.descriptor.arguments = [null, undefined, { dir: 'ltr' }] as unknown as string[];
+    }
+    const appliedSlots = applyDataset(extracted.scenario, {
+      schemaVersion: 1,
+      name: 'live',
+      values: { user: 'bob', password: 'two' },
+      secrets: []
+    });
+    expect(appliedSlots.steps[0]?.action.descriptor.arguments).toEqual([
+      'bob',
+      null,
+      { dir: 'ltr' }
+    ]);
   });
 
   it('preserves trailing select arguments through extract and apply (A27b)', async () => {
@@ -677,8 +714,8 @@ describe('Lot 7 F-48 parameterization', () => {
       ]
     });
     const previous = process.cwd();
-    process.chdir(cwdDir);
     try {
+      process.chdir(cwdDir);
       const result = await runScenario(extracted.scenario, {
         driver,
         aiRecovery: false,
@@ -709,8 +746,8 @@ describe('Lot 7 F-48 parameterization', () => {
       ]
     });
     const previous = process.cwd();
-    process.chdir(cwdDir);
     try {
+      process.chdir(cwdDir);
       const result = await runScenario(extracted.scenario, {
         driver,
         aiRecovery: false,
@@ -766,6 +803,60 @@ describe('Lot 7 F-48 parameterization', () => {
       expect(snap.values['#password']).toBe('');
       expect(snap.text).not.toContain(secret);
     }
+  });
+
+  it('redacts recovery snapshots with the combined before+after secret set (L7-257)', async () => {
+    const secret = 'live-only-after';
+    const step = fillStep(0, '#password', secret, 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ before: string; after: string }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        captured.push({
+          before: context.beforeDom?.text ?? '',
+          after: context.afterDom?.text ?? ''
+        });
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: `token ${secret} in both snapshots`,
+      elements: [
+        { selector: '#password', visible: true, value: '' },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.before).not.toContain(secret);
+      expect(snap.after).not.toContain(secret);
+    }
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    const fn = sourceBetween(
+      src,
+      'function redactSnapshotForRecovery',
+      'const PARAMETER_SECRET_MIN_LENGTH'
+    );
+    expect(fn).toContain('secrets: readonly string[]');
+    expect(fn).not.toContain('collectParameterSecrets(scenario, [snapshot])');
   });
 
   it('fails parameterized recovery when recorded step indexes are ambiguous (L7-131)', async () => {
@@ -1159,9 +1250,10 @@ describe('Lot 7 F-48 parameterization', () => {
       expect(snap.text).toContain('step 1 of 9');
     }
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
-    const fn = src.slice(
-      src.indexOf('function collectParameterSecrets'),
-      src.indexOf('function redactTextWithSecrets')
+    const fn = sourceBetween(
+      src,
+      'function collectParameterSecrets',
+      'function redactTextWithSecrets'
     );
     expect(fn).toContain('PARAMETER_SECRET_MIN_LENGTH');
     expect(fn).not.toMatch(/live\.length > 0/);
@@ -1174,9 +1266,10 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(src).not.toMatch(/JSON\.parse\(await readFile\(absolute/);
     expect(src).toContain('return scenario.steps.some(hasParameterRef)');
     expect(src).not.toContain('hasParameterRef(step) ||');
-    expect(src.indexOf('skipParameterizedScreenshots(executable)')).toBeLessThan(
-      src.indexOf('for (let index = 0; index < executable.steps.length')
-    );
+    const skipIdx = src.indexOf('skipParameterizedScreenshots(executable)');
+    const loopIdx = src.indexOf('for (let index = 0; index < executable.steps.length');
+    expect(skipIdx).toBeGreaterThan(-1);
+    expect(loopIdx).toBeGreaterThan(skipIdx);
     expect(src).toContain('assertParameterRefsResolved(scenario)');
   });
 
@@ -1286,6 +1379,40 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(result.report.steps).toEqual([]);
     expect(result.report.warnings.join('\n')).toMatch(/dataset:/);
     expect(driver.fills).toEqual([]);
+  });
+
+  it('writes dataset-load failure artifacts under runPath(reportDir, runId) (L7-256)', async () => {
+    const reportDir = await tempDir('spyglass-lot7-l7256-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const runId = 'run_l7256';
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: join(reportDir, 'missing.json'),
+      reportDir,
+      runId
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.runDir).toBe(join(reportDir, runId));
+    const disk = JSON.parse(await readFile(join(reportDir, runId, 'report.json'), 'utf8')) as {
+      runId: string;
+      sessionId: string;
+      warnings: string[];
+    };
+    expect(disk.runId).toBe(runId);
+    expect(disk.sessionId).toBe(extracted.scenario.sessionId);
+    expect(disk.warnings.join('\n')).toMatch(/dataset:/);
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    const fn = sourceBetween(src, 'async function datasetLoadFailure', 'async function scenarioWithDataset');
+    expect(fn).toContain('runArtifactsDir');
+    expect(fn).toContain('scenario: input.scenario');
   });
 
   it('returns a failed ExecutionReport when the dataset JSON is malformed (L7-080)', async () => {
@@ -1468,18 +1595,22 @@ describe('Lot 7 F-47 session export/import', () => {
     );
     expect(await readFile(dest, 'utf8')).toBe('not-a-dir\n');
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const exportFn = src.slice(
-      src.indexOf('export async function exportSessionFolder'),
-      src.indexOf('export async function importSessionFolder')
+    const exportFn = sourceBetween(
+      src,
+      'export async function exportSessionFolder',
+      'export async function importSessionFolder'
     );
     expect(exportFn).toContain('assertExportDestIsDirectoryIfPresent');
-    expect(exportFn.indexOf('assertExportDestIsDirectoryIfPresent')).toBeLessThan(
-      exportFn.indexOf('if (!overwrite)')
-    );
-    const replaceFn = src.slice(src.indexOf('async function replaceDirectory'));
-    const overwrite = replaceFn.slice(replaceFn.indexOf('const backup'));
+    const destCheck = exportFn.indexOf('assertExportDestIsDirectoryIfPresent');
+    const overwriteIdx = exportFn.indexOf('if (!overwrite)');
+    expect(destCheck).toBeGreaterThan(-1);
+    expect(overwriteIdx).toBeGreaterThan(destCheck);
+    const replaceFn = sourceBetween(src, 'async function replaceDirectory');
+    const backupIdx = replaceFn.indexOf('const backup');
+    expect(backupIdx).toBeGreaterThan(-1);
+    const overwrite = replaceFn.slice(backupIdx);
     expect(replaceFn.indexOf('isDirectory()')).toBeGreaterThan(-1);
-    expect(replaceFn.indexOf('isDirectory()')).toBeLessThan(replaceFn.indexOf('const backup'));
+    expect(replaceFn.indexOf('isDirectory()')).toBeLessThan(backupIdx);
     expect(overwrite).toContain('await rename(dest, backup)');
   });
 
@@ -1554,33 +1685,43 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(await readFile(join(existing, 'stale.txt'), 'utf8')).toBe('old\n');
   });
 
-  it('refuses FIFO/socket/device files on export (L7-219)', async () => {
+  it('refuses special files in assertNoSymlinks (L7-219)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('async function assertNoSymlinks');
-    expect(start).toBeGreaterThan(-1);
-    const body = src.slice(start, src.indexOf('async function realpathExisting'));
+    const body = sourceBetween(
+      src,
+      'async function assertNoSymlinks',
+      'async function realpathExisting'
+    );
     expect(body).toContain('st.isFile()');
     expect(body).toContain('special files are not allowed');
-    if (process.platform === 'win32') {
-      return;
-    }
-    const root = await tempDir('spyglass-lot7-l7219-');
-    const sessionDir = join(root, 'ses_export');
-    await mkdir(sessionDir, { recursive: true });
-    await writeFile(
-      join(sessionDir, 'meta.json'),
-      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
-      'utf8'
-    );
-    const fifo = join(sessionDir, 'pipe');
-    const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
-    if (made.status !== 0) {
-      return;
-    }
-    await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toThrow(
-      /export refused: special files/
-    );
+    expect(body).toContain('SessionBundleError');
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses FIFO/socket/device files on export (L7-219)',
+    async (ctx) => {
+      const root = await tempDir('spyglass-lot7-l7219-');
+      const sessionDir = join(root, 'ses_export');
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'meta.json'),
+        `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+        'utf8'
+      );
+      const fifo = join(sessionDir, 'pipe');
+      const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+      if (made.status !== 0) {
+        ctx.skip();
+        return;
+      }
+      await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toSatisfy(
+        (err: unknown) =>
+          err instanceof SessionBundleError &&
+          err.bundleCode === 'symlink' &&
+          /export refused: special files/.test(err.message)
+      );
+    }
+  );
 
   it('refuses import when the bundle contains a symlink (L7-039)', async () => {
     const root = await tempDir('spyglass-lot7-symlink-import-');
@@ -1601,11 +1742,11 @@ describe('Lot 7 F-47 session export/import', () => {
 
   it('does not swallow permission errors in realpathExisting overlap guards (L7-177)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('async function realpathExisting');
-    const end = src.indexOf('async function recoverOrphanedBackup');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    const body = src.slice(start, end);
+    const body = sourceBetween(
+      src,
+      'async function realpathExisting',
+      'async function recoverOrphanedBackup'
+    );
     expect(body).toContain('isMissingPathError');
     expect(body).toContain("code === 'ENOENT'");
     expect(body).not.toMatch(/catch \{/);
@@ -1613,30 +1754,37 @@ describe('Lot 7 F-47 session export/import', () => {
 
   it('does not map EPERM to destination already exists (L7-195)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('async function replaceDirectory');
-    expect(start).toBeGreaterThan(-1);
-    const body = src.slice(start);
-    const noOverwrite = body.slice(0, body.indexOf('const backup'));
-    expect(noOverwrite).toContain("code === 'EEXIST'");
-    expect(noOverwrite).toContain("code === 'ENOTEMPTY'");
-    expect(noOverwrite).not.toContain("code === 'EPERM'");
+    const body = sourceBetween(src, 'async function replaceDirectory');
+    const backupIdx = body.indexOf('const backup');
+    expect(backupIdx).toBeGreaterThan(-1);
+    const noOverwrite = body.slice(0, backupIdx);
     expect(noOverwrite).toContain('pathExists(dest)');
+    expect(noOverwrite).not.toContain("code === 'EPERM'");
+    const existsIdx = noOverwrite.indexOf('pathExists(dest)');
+    const renameIdx = noOverwrite.indexOf('await rename(staging, dest)');
+    expect(existsIdx).toBeGreaterThan(-1);
+    expect(renameIdx).toBeGreaterThan(existsIdx);
   });
 
   it('vacates an empty dest before no-replace rename so Windows folder pickers work (W26a)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('async function replaceDirectory');
-    expect(start).toBeGreaterThan(-1);
-    const body = src.slice(start);
-    const noOverwrite = body.slice(0, body.indexOf('const backup'));
+    const body = sourceBetween(src, 'async function replaceDirectory');
+    const backupIdx = body.indexOf('const backup');
+    expect(backupIdx).toBeGreaterThan(-1);
+    const noOverwrite = body.slice(0, backupIdx);
     expect(noOverwrite).toContain('allowEmptyDest');
     expect(noOverwrite).toContain('vacateEmptyDirectory(dest)');
-    expect(noOverwrite.indexOf('vacateEmptyDirectory(dest)')).toBeLessThan(
-      noOverwrite.indexOf('await rename(staging, dest)')
+    const vacateIdx = noOverwrite.indexOf('vacateEmptyDirectory(dest)');
+    const existsIdx = noOverwrite.indexOf('pathExists(dest)');
+    const renameIdx = noOverwrite.indexOf('await rename(staging, dest)');
+    expect(vacateIdx).toBeGreaterThan(-1);
+    expect(existsIdx).toBeGreaterThan(vacateIdx);
+    expect(renameIdx).toBeGreaterThan(existsIdx);
+    const vacate = sourceBetween(
+      src,
+      'async function vacateEmptyDirectory',
+      'async function recoverOrphanedBackup'
     );
-    const vacateStart = src.indexOf('async function vacateEmptyDirectory');
-    expect(vacateStart).toBeGreaterThan(-1);
-    const vacate = src.slice(vacateStart, src.indexOf('async function recoverOrphanedBackup'));
     expect(vacate).toContain('names.length > 0');
     expect(vacate).toContain('await rmdir(dest)');
     expect(vacate).not.toContain('recursive: true');
@@ -1645,12 +1793,12 @@ describe('Lot 7 F-47 session export/import', () => {
   it('documents withDestLock as single-process in-memory only (X28a)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
     const map = src.indexOf('const destLocks = new Map<string, Promise<void>>()');
-    const start = src.indexOf('async function withDestLock');
-    const end = src.indexOf('function isSafeSessionId');
     expect(map).toBeGreaterThan(-1);
-    expect(start).toBeGreaterThan(map);
-    expect(end).toBeGreaterThan(start);
-    const header = src.slice(src.lastIndexOf('/**', map), end);
+    const end = src.indexOf('function isSafeSessionId');
+    expect(end).toBeGreaterThan(map);
+    const headerStart = src.lastIndexOf('/**', map);
+    expect(headerStart).toBeGreaterThan(-1);
+    const header = src.slice(headerStart, end);
     expect(header).toMatch(/in-memory|single-process|this process/iu);
     expect(header).toMatch(/not a\s+cross-process lockfile|no lockfile/iu);
     expect(header).not.toMatch(/so concurrent import\/export cannot clobber\./u);
@@ -1658,11 +1806,7 @@ describe('Lot 7 F-47 session export/import', () => {
 
   it('cleans destLocks using the same queued promise that was stored (L7-207)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('async function withDestLock');
-    const end = src.indexOf('function isSafeSessionId');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    const body = src.slice(start, end);
+    const body = sourceBetween(src, 'async function withDestLock', 'function isSafeSessionId');
     expect(body).toContain('const queued = previous.then(() => held)');
     expect(body).toContain('destLocks.set(key, queued)');
     expect(body).toContain('destLocks.get(key) === queued');
@@ -1671,11 +1815,11 @@ describe('Lot 7 F-47 session export/import', () => {
 
   it('re-checks export staging for symlinks after copy (L7-208)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
-    const start = src.indexOf('export async function exportSessionFolder');
-    const end = src.indexOf('export async function importSessionFolder');
-    expect(start).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(start);
-    const body = src.slice(start, end);
+    const body = sourceBetween(
+      src,
+      'export async function exportSessionFolder',
+      'export async function importSessionFolder'
+    );
     expect(body).toContain("assertNoSymlinks(source, 'export')");
     expect(body).toContain("assertNoSymlinks(staging, 'export')");
     expect(body.indexOf('await cp(source, staging')).toBeGreaterThan(-1);
@@ -1735,8 +1879,55 @@ describe('Lot 7 F-47 session export/import', () => {
       `${JSON.stringify({ schemaVersion: 1, kind: 'spyglass-session', sessionId: 'ses_other', exportedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`,
       'utf8'
     );
-    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(
-      /sessionId does not match meta.json/
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof SessionBundleError &&
+        err.bundleCode === 'invalid-meta' &&
+        /sessionId does not match meta.json/.test(err.message)
+    );
+  });
+
+  it('tags missing/invalid bundle manifest as SessionBundleError invalid-meta (L7-258)', async () => {
+    const root = await tempDir('spyglass-lot7-l7258-manifest-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    await rm(join(dest, SESSION_BUNDLE_MANIFEST));
+    await expect(importSessionFolder(dest, join(root, 'imported-missing'))).rejects.toSatisfy(
+      (err: unknown) =>
+        isSessionBundleError(err) &&
+        err.bundleCode === 'invalid-meta' &&
+        /missing spyglass-session.json/.test(err.message)
+    );
+    await writeFile(join(dest, SESSION_BUNDLE_MANIFEST), '{not json\n', 'utf8');
+    await expect(importSessionFolder(dest, join(root, 'imported-bad'))).rejects.toSatisfy(
+      (err: unknown) =>
+        isSessionBundleError(err) &&
+        err.bundleCode === 'invalid-meta' &&
+        /invalid spyglass-session.json/.test(err.message)
+    );
+    const noMeta = join(root, 'no-meta');
+    await mkdir(noMeta, { recursive: true });
+    await expect(exportSessionFolder(noMeta, join(root, 'out'))).rejects.toSatisfy(
+      (err: unknown) =>
+        isSessionBundleError(err) &&
+        err.bundleCode === 'invalid-meta' &&
+        /meta.json is missing/.test(err.message)
+    );
+    const badMeta = join(root, 'bad-meta-dir');
+    await mkdir(badMeta, { recursive: true });
+    await writeFile(join(badMeta, 'meta.json'), '{not json\n', 'utf8');
+    await expect(exportSessionFolder(badMeta, join(root, 'out-bad'))).rejects.toSatisfy(
+      (err: unknown) =>
+        isSessionBundleError(err) &&
+        err.bundleCode === 'invalid-meta' &&
+        /invalid JSON/.test(err.message)
     );
   });
 
@@ -1839,6 +2030,36 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(await readFile(join(dest, 'which.txt'), 'utf8')).toBe('new\n');
     await expect(readFile(join(older, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(join(newer, 'which.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('does not resurrect an unrelated .spyglass-prev backup (L7-260)', async () => {
+    const root = await tempDir('spyglass-lot7-l7260-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    const unrelated = join(root, 'other.spyglass-prev-deadbeef');
+    await mkdir(unrelated, { recursive: true });
+    await writeFile(join(unrelated, 'keep.txt'), 'unrelated\n', 'utf8');
+    const result = await exportSessionFolder(sessionDir, dest);
+    expect(result.dest).toBe(dest);
+    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+    expect(await readFile(join(unrelated, 'keep.txt'), 'utf8')).toBe('unrelated\n');
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const fn = sourceBetween(
+      src,
+      'async function recoverOrphanedBackup',
+      'async function replaceDirectory'
+    );
+    expect(fn).toContain('try {');
+    expect(fn).toContain('await rename(newest.path, dest)');
+    expect(fn).toContain('st.isDirectory()');
+    expect(fn).toContain('ownedPrefix');
   });
 });
 

@@ -223,7 +223,12 @@ export class VoiceBridge {
   private async connect(): Promise<VoiceBridgeStatus> {
     await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
-      this.inProcess = await createInProcessSttFromEnv(this.env);
+      try {
+        this.inProcess = await createInProcessSttFromEnv(this.env);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`STT in-process engine failed: ${detail}`);
+      }
       this.status = {
         engine: this.inProcess.engine === 'whisper' ? 'whisper' : 'mock',
         model: this.inProcess.model,

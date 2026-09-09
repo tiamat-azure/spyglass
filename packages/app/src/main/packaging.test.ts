@@ -211,6 +211,11 @@ describe('packaged Observe', () => {
     const replayNextHandler = main.slice(replayNextIdx, replayStopIdx);
     expect(replayNextHandler).not.toContain('activeReplay?.next()');
     expect(replayNextHandler).toContain('activeReplay.next()');
+    const replayStartIdx = main.indexOf('IPC.replayStart');
+    expect(replayStartIdx).toBeGreaterThan(-1);
+    const replayStartHandler = main.slice(replayStartIdx, replayNextIdx);
+    expect(replayStartHandler).toContain('parseReplayStartPayload');
+    expect(replayStartHandler).toContain("error: 'invalid payload'");
     expect(replayNextHandler).toContain('try {');
     expect(replayNextHandler).toContain('catch (error)');
     expect(preload).toContain('payload.datasetPath');
@@ -362,10 +367,8 @@ describe('packaged Observe', () => {
     expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
     expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
     const noOverwritePublish = replaceFn.slice(0, replaceFn.indexOf('const backup'));
-    expect(noOverwritePublish).toContain("code === 'EEXIST'");
-    expect(noOverwritePublish).toContain("code === 'ENOTEMPTY'");
-    expect(noOverwritePublish).not.toContain("code === 'EPERM'");
     expect(noOverwritePublish).toContain('pathExists(dest)');
+    expect(noOverwritePublish).not.toContain("code === 'EPERM'");
     expect(noOverwritePublish).toContain('allowEmptyDest');
     expect(noOverwritePublish).toContain('vacateEmptyDirectory(dest)');
     const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
@@ -402,6 +405,7 @@ describe('packaged Observe', () => {
     expect(inProcess).not.toContain('createMockEngine');
     expect(bridge).toContain('createInProcessSttFromEnv');
     expect(bridge).toContain('await createInProcessSttFromEnv');
+    expect(bridge).toContain('STT in-process engine failed');
     expect(bridge).not.toMatch(/createInProcessStt\(/);
     const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
     expect(exportIdx).toBeGreaterThan(-1);

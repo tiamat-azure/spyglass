@@ -356,6 +356,7 @@ async function main() {
       '../packages/stt/src/upgrade.ts'
     );
     const largePath = join(outDir, STT_LARGE_MODEL_FILE);
+    await ensureWhisperCli();
     if (
       existingLargeOk(largePath, STT_LARGE_MIN_BYTES) &&
       (await fileSha256(largePath)) === STT_LARGE_SHA256
@@ -379,7 +380,6 @@ async function main() {
       process.stdout.write(`Wrote ${largePath}\n`);
     }
     await ensureSmallFallback(downloadResponseToFileAtomic);
-    await ensureWhisperCli();
     return;
   }
   const modelPath = join(outDir, MODEL_NAME);

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep } from '@spyglass/contracts';
@@ -813,6 +813,18 @@ describe('ReplayEngine', () => {
     if (!halted.ok) {
       expect(halted.error).toMatch(/stopped by user/);
     }
+  });
+
+  it('does not orphan a prior stepGate waiter (L7-249)', async () => {
+    const src = await readFile(new URL('./replay-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('stepGate: {');
+    const end = src.indexOf('if (result.exitCode !== 0)');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const wait = src.slice(start, end);
+    expect(wait).toContain('at most one waiter');
+    expect(wait).toContain('this.waiting !== undefined');
+    expect(wait).toContain("this.waiting('stop')");
   });
 
   it('ignores idle stop/next so the next stepwise run is not aborted at step 0 (L7-021)', async () => {
