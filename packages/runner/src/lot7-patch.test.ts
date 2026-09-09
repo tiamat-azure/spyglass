@@ -1897,7 +1897,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const git = async (args: readonly string[], cwd: string) => {
       if (args[0] === 'status' && args.includes('--porcelain')) {
         statusCalls += 1;
-        if (statusCalls > 1) {
+        if (statusCalls > 2) {
           return { stdout: ' M extra.txt\n', stderr: '', code: 0 };
         }
       }
