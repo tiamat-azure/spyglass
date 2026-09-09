@@ -97,7 +97,7 @@ function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildCo
   const paths = resolveWhisperPaths(env);
   if (paths === undefined) {
     throw new Error(
-      'STT_ENGINE=whisper but whisper-cli and/or ggml-small-q5_1.bin are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.'
+      `STT_ENGINE=whisper but whisper-cli and/or ${STT_SMALL_MODEL_FILE} are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.`
     );
   }
   const language =

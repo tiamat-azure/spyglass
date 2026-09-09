@@ -937,6 +937,19 @@ Ask-user still held: L27.
 Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 **678 passed**, 1 skipped (62 files). `upgrade.test.ts` 31.
 
+## Pass-28 adversarial fixes (L7-210 … L7-212)
+
+- **L7-210:** Assisted apply re-checks worktree cleanliness immediately
+  before `writeFile` / commit so concurrent edits during checkout cannot
+  be overwritten or committed unnoticed.
+- **L7-211:** Capping `runIds` at 32 also sets `consecutiveRuns` to the
+  retained window length, so an evicted then recycled `runId` cannot
+  inflate the counter. Schema documents `maxItems: 32`.
+- **L7-212:** Hung-git SIGKILL test drops the brittle ≥300ms wall-clock
+  floor; kill + 15s upper bound remain.
+
+Ask-user still held: R28, G28, P28, S28, X28, F28, W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

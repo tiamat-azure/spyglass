@@ -443,6 +443,16 @@ export async function applyAssistedPatches(input: {
     }
 
     try {
+      // L7-210: re-check immediately before write/commit so concurrent edits
+      // during checkout cannot be overwritten or committed unnoticed.
+      if (await isWorktreeDirty(git, repoRoot)) {
+        const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, []);
+        return refusalWithRestore(
+          { ok: false, reason: 'F-64: refusing dirty worktree', code: 'dirty-worktree' },
+          revertError,
+          starting
+        );
+      }
       const patched = applyDescriptorsToScenario(scenario, toApply, {
         runId: input.suggested.runId,
         date: (input.now ?? new Date()).toISOString(),

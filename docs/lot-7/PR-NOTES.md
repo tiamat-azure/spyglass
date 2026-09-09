@@ -285,3 +285,6 @@ export staging symlink re-check, aligned large-fallback marker dirs.
 (breaking for cwd-relative paths). **A27b:** keep trailing fill/select
 `arguments` through parameterize/apply. **L27b:** split
 `STT_WHISPER_TIMEOUT_MS` (process) from `STT_MAX_LATENCY_MS` (first-use).
+Pass-28 (L7-210 … L7-212): re-check dirty worktree before write/commit,
+`consecutiveRuns` matches capped `runIds` window, looser hung-git
+SIGKILL bound. Held: R28, G28, P28, S28, X28, F28, W28.

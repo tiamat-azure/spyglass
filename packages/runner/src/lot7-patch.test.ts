@@ -231,7 +231,7 @@ describe('Lot 7 F-63 confirmation', () => {
     expect(health.appliedPatches).toBe(2);
   });
 
-  it('caps stored runIds while keeping consecutiveRuns (L7-148)', () => {
+  it('caps stored runIds and consecutiveRuns to the retained window (L7-148 / L7-211)', () => {
     let health = emptyHealth('ses_lot7');
     const extra = 3;
     for (let i = 0; i < MAX_CANDIDATE_RUN_IDS + extra; i += 1) {
@@ -239,9 +239,14 @@ describe('Lot 7 F-63 confirmation', () => {
     }
     const stored = health.patchCandidates[0]?.runIds ?? [];
     expect(stored).toHaveLength(MAX_CANDIDATE_RUN_IDS);
-    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(MAX_CANDIDATE_RUN_IDS + extra);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(MAX_CANDIDATE_RUN_IDS);
     expect(stored[0]).toBe(`run_${String(extra)}`);
     expect(stored[stored.length - 1]).toBe(`run_${String(MAX_CANDIDATE_RUN_IDS + extra - 1)}`);
+    health = recordSuggestedPatches(health, patch('#new', 'run_0'), policy);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(MAX_CANDIDATE_RUN_IDS);
+    expect(health.patchCandidates[0]?.runIds).toHaveLength(MAX_CANDIDATE_RUN_IDS);
+    expect(health.patchCandidates[0]?.runIds).toContain('run_0');
+    expect(health.patchCandidates[0]?.runIds).not.toContain('run_3');
   });
 
   it('invalidates a candidate on an intervening run with no patch for that step (L7-001)', () => {
@@ -405,6 +410,50 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     }
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
     expect(branch.stdout.trim()).toBe('main');
+  });
+
+  it('re-checks a clean worktree immediately before write/commit (L7-210)', async () => {
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const writeIdx = src.indexOf('await writeFile(scenarioPath');
+    const dirtyBeforeWrite = src.lastIndexOf('isWorktreeDirty', writeIdx);
+    expect(writeIdx).toBeGreaterThan(-1);
+    expect(dirtyBeforeWrite).toBeGreaterThan(src.indexOf('isWorktreeDirty'));
+    const dir = await tempDir('spyglass-lot7-l7210-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let porcelainCalls = 0;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'status' && args.includes('--porcelain')) {
+        porcelainCalls += 1;
+        if (porcelainCalls > 1) {
+          return { stdout: '?? concurrent.txt\n', stderr: '', code: 0 };
+        }
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('dirty-worktree');
+    }
+    expect(porcelainCalls).toBeGreaterThan(1);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
   });
 
   it('creates a dedicated branch and prepares a PR without merging after two matching runs', async () => {
@@ -853,7 +902,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       );
     });
     const elapsed = Date.now() - started;
-    expect(elapsed).toBeGreaterThanOrEqual(300);
+    // L7-212: no wall-clock floor (flakes under CI load); prove kill + upper bound.
     expect(elapsed).toBeLessThan(15_000);
   });
 

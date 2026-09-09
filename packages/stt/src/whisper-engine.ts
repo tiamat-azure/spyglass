@@ -63,7 +63,7 @@ export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): st
   const explicit = env.STT_MODEL_PATH;
   const dir = env.STT_MODEL_DIR;
   const resources = env.SPYGLASS_STT_RESOURCES;
-  const file = configuredSttModelFile(env) ?? 'ggml-small-q5_1.bin';
+  const file = configuredSttModelFile(env) ?? STT_SMALL_MODEL_FILE;
   const candidates: string[] = [];
   if (explicit !== undefined && explicit.length > 0) {
     candidates.push(explicit);
@@ -72,20 +72,20 @@ export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): st
     candidates.push(
       join(dir, file),
       join(dir, STT_LARGE_MODEL_FILE),
-      join(dir, 'ggml-small-q5_1.bin')
+      join(dir, STT_SMALL_MODEL_FILE)
     );
   }
   if (resources !== undefined && resources.length > 0) {
     candidates.push(
       join(resources, file),
       join(resources, STT_LARGE_MODEL_FILE),
-      join(resources, 'ggml-small-q5_1.bin')
+      join(resources, STT_SMALL_MODEL_FILE)
     );
   }
   candidates.push(
     join(process.cwd(), 'vendor/whisper', file),
     join(process.cwd(), 'vendor/whisper', STT_LARGE_MODEL_FILE),
-    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin')
+    join(process.cwd(), 'vendor/whisper', STT_SMALL_MODEL_FILE)
   );
   return candidates;
 }
@@ -119,6 +119,16 @@ export function pickPreferredWhisperModel(
   if (existing.length === 0) {
     return undefined;
   }
+  const skipByPath = new Map<string, boolean>();
+  const skipLargePath = (path: string): boolean => {
+    const cached = skipByPath.get(path);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const skip = preferSmallAfterLargeFallback(path, env);
+    skipByPath.set(path, skip);
+    return skip;
+  };
   const explicit = env.STT_MODEL_PATH;
   if (explicit !== undefined && explicit.length > 0) {
     const hit = existing.find((path) => path === explicit);
@@ -126,7 +136,7 @@ export function pickPreferredWhisperModel(
       // L7-189 / F-39 / F23b: explicit large is skipped when permanent fallback is on.
       // Custom non-large STT_MODEL_PATH still wins (M4a / P6a).
       const hitIsLarge = basename(hit) === STT_LARGE_MODEL_FILE;
-      if (!hitIsLarge || !preferSmallAfterLargeFallback(hit, env)) {
+      if (!hitIsLarge || !skipLargePath(hit)) {
         return hit;
       }
     }
@@ -140,7 +150,7 @@ export function pickPreferredWhisperModel(
     }
   }
   const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
-  const skipLarge = large !== undefined && preferSmallAfterLargeFallback(large, env);
+  const skipLarge = large !== undefined && skipLargePath(large);
   if (large !== undefined && !skipLarge) {
     return large;
   }

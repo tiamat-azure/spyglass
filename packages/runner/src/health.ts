@@ -7,7 +7,7 @@ import { descriptorHash } from './descriptor-hash.ts';
 import type { PatchPolicy } from './patch-config.ts';
 
 export const HEALTH_FILE = 'health.json';
-/** L7-148: bound stored runIds on never-applied candidates. consecutiveRuns stays uncapped. */
+/** L7-148 / L7-211: bound stored runIds; consecutiveRuns matches that window. */
 export const MAX_CANDIDATE_RUN_IDS = 32;
 
 export type PatchCandidate = ScenarioHealth['patchCandidates'][number];
@@ -166,7 +166,8 @@ export async function saveHealth(sessionDir: string, health: ScenarioHealth): Pr
  * same descriptor. Re-processing the same suggested-patch (same runId) is a
  * no-op. A run that produces a different descriptor, or no descriptor patch
  * for that step, resets/invalidates the candidate. Isolated success never
- * reaches confirmRuns.
+ * reaches confirmRuns. L7-211: consecutiveRuns equals the retained `runIds`
+ * window after the cap (recycled evicted ids cannot inflate the counter).
  */
 export function recordSuggestedPatches(
   health: ScenarioHealth,
@@ -197,12 +198,13 @@ export function recordSuggestedPatches(
       continue;
     }
     runIds.push(suggested.runId);
+    const retained = capRunIds(runIds);
     byStep.set(patch.stepIndex, {
       stepIndex: patch.stepIndex,
       descriptorHash: hash,
-      consecutiveRuns: previous.consecutiveRuns + 1,
+      consecutiveRuns: retained.length,
       lastRunId: suggested.runId,
-      runIds: capRunIds(runIds)
+      runIds: retained
     });
   }
   for (const stepIndex of [...byStep.keys()]) {
