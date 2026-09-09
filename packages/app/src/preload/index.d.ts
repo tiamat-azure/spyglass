@@ -108,7 +108,8 @@ export type SpyglassPreloadApi = {
     start: (
       forceAi?: boolean,
       noAi?: boolean,
-      stepByStep?: boolean
+      stepByStep?: boolean,
+      datasetPath?: string
     ) => Promise<ReplayStartResponse>;
     next: () => Promise<ReplayControlResponse>;
     stop: () => Promise<ReplayControlResponse>;

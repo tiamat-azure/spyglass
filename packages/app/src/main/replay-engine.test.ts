@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep } from '@spyglass/contracts';
 import { createMockTransport, LlmGateway } from '@spyglass/llm';
-import { MemoryPageDriver } from '@spyglass/runner';
+import { extractScenarioParameters, MemoryPageDriver } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
 import {
   loadFinalizedScenario,
@@ -346,6 +346,108 @@ describe('ReplayEngine', () => {
     const started = await engine.start({ noAi: true });
     expect(started.ok).toBe(true);
     expect(state).toBe('finalized');
+  });
+
+  it('applies replay-start datasetPath to parameterized fills (R32b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-r32b-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    const extracted = extractScenarioParameters({
+      schemaVersion: 1,
+      sessionId: 'ses_r',
+      startUrl: 'https://exemple.test/login',
+      steps: [
+        {
+          index: 0,
+          intent: 'Je saisis',
+          action: {
+            type: 'fill',
+            descriptor: { type: 'fill', selector: '#user', arguments: ['alice'] }
+          },
+          verification: {
+            type: 'elementVisible',
+            expected: '#user',
+            strength: 'strong',
+            confirmedByUser: true
+          },
+          sourceEvents: ['evt_000001']
+        }
+      ]
+    });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/login' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      `${JSON.stringify(extracted.scenario, null, 2)}\n`,
+      'utf8'
+    );
+    const datasetPath = join(dir, 'bob.json');
+    await writeFile(
+      datasetPath,
+      `${JSON.stringify({ schemaVersion: 1, name: 'bob', values: { user: 'bob' }, secrets: [] }, null, 2)}\n`,
+      'utf8'
+    );
+    let state = 'finalized';
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [{ selector: '#user', visible: true, value: '' }]
+    });
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () => driver,
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = await engine.start({ noAi: true, datasetPath });
+    expect(started.ok).toBe(true);
+    expect(driver.fills.map((row) => row.value)).toEqual(['bob']);
   });
 
   it('returns ok:false when the run exits non-zero (L5-ADV-04)', async () => {

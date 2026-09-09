@@ -750,6 +750,25 @@ h1 {
   text-transform: uppercase;
 }
 
+.replay-dataset-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sg-space-2);
+  font-size: var(--sg-text-sm);
+  color: var(--sg-text-muted);
+}
+
+.replay-dataset-row input[type="text"] {
+  height: 28px;
+  padding: 0 var(--sg-space-4);
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-sm);
+  background: var(--sg-bg);
+  color: var(--sg-text);
+  font-family: var(--sg-font-mono);
+  font-size: var(--sg-text-sm);
+}
+
 .replay-steps {
   margin: 0;
   padding-left: 1.2rem;

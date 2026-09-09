@@ -312,6 +312,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **W31a:** `pickPreferredWhisperModel` does not fall back to large when
   `skipLarge` / prefer-small and small is missing (only-large stays
   unavailable).
+- **R32b:** Replay-start IPC accepts/forwards `datasetPath` (not
+  silently dropped). Preload + `#replay-dataset` wire it into
+  `ReplayEngine` / `runScenario`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -391,4 +394,5 @@ only); replay next/stop IPC try/catch. **A30a:** assisted apply requires
 sessionDir (structured `missing-session-dir` refusal). **I30a:**
 whisper-cli download SHA-256 after extract, before chmod (fail closed).
 **C31a:** closeElectron SIGKILL timeout-only. **W31a:** skipLarge does
-not fall back to large when small is missing. Held: R32.
+not fall back to large when small is missing. **R32b:** replay-start
+forwards `datasetPath` for parameterized in-app replay. Held: none.

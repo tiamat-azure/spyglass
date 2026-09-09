@@ -495,6 +495,7 @@ const replayPanel = requireEl<HTMLElement>('replay-panel');
 const replayStatus = requireEl<HTMLElement>('replay-status');
 const replayAi = requireEl<HTMLInputElement>('replay-ai');
 const replayStepwise = requireEl<HTMLInputElement>('replay-stepwise');
+const replayDataset = requireEl<HTMLInputElement>('replay-dataset');
 const replayRunBtn = requireEl<HTMLButtonElement>('replay-run');
 const replayNextBtn = requireEl<HTMLButtonElement>('replay-next');
 const replayHaltBtn = requireEl<HTMLButtonElement>('replay-halt');
@@ -833,11 +834,13 @@ replayRunBtn.addEventListener('click', () => {
   replaySteps.replaceChildren();
   const forceAi = replayAi.checked;
   const stepByStep = replayStepwise.checked;
+  const datasetRaw = replayDataset.value.trim();
+  const datasetPath = datasetRaw.length > 0 ? datasetRaw : undefined;
   replayHalted = false;
   replayNextBtn.disabled = !stepByStep;
   replayHaltBtn.disabled = !stepByStep;
   void api.replay
-    .start(forceAi, !forceAi, stepByStep)
+    .start(forceAi, !forceAi, stepByStep, datasetPath)
     .then((result) => {
       if (!result.ok) {
         replayStatus.textContent = result.error;

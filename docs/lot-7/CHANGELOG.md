@@ -1216,6 +1216,18 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: R32.
 
+## Captain lock R32b (replay-start datasetPath)
+
+- **R32b:** `parseReplayStartPayload` accepts a non-empty `datasetPath`
+  and forwards it on `ReplayStartRequest` (shared IPC, preload, renderer
+  `#replay-dataset`). `ReplayEngine.start` still passes it to
+  `runScenario` so parameterized in-app replay can use the dataset (F-48).
+  Empty/non-string values are omitted, not forwarded as junk. L7-035
+  silent drop is reversed. A30a / I30a / C31a / W31a / L7-230 / L7-231
+  unchanged.
+
+Ask-user queue: clear.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

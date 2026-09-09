@@ -416,6 +416,8 @@ export type ReplayStartRequest = {
   forceAi?: boolean;
   noAi?: boolean;
   stepByStep?: boolean;
+  /** F-48 / R32b: dataset JSON for parameterized in-app replay. */
+  datasetPath?: string;
 };
 
 export type ReplayStartResponse =

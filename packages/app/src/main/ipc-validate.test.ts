@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { refineSourceBanner } from '../shared/ipc.ts';
 import {
@@ -104,8 +105,37 @@ describe('session payload validation', () => {
     expect(parseReplayStartPayload({ noAi: true })).toEqual({ noAi: true });
     expect(parseReplayStartPayload(null)).toEqual({});
     expect(parseReplayStartPayload({ datasetPath: '/tmp/ds.json', stepByStep: true })).toEqual({
+      stepByStep: true,
+      datasetPath: '/tmp/ds.json'
+    });
+    expect(parseReplayStartPayload({ datasetPath: '  datasets/example.json  ' })).toEqual({
+      datasetPath: 'datasets/example.json'
+    });
+    expect(parseReplayStartPayload({ datasetPath: '   ', stepByStep: true })).toEqual({
       stepByStep: true
     });
+    expect(parseReplayStartPayload({ datasetPath: 12, stepByStep: true })).toEqual({
+      stepByStep: true
+    });
+  });
+
+  it('forwards datasetPath on replay-start instead of dropping it (R32b)', () => {
+    expect(
+      parseReplayStartPayload({ datasetPath: '/tmp/ds.json', forceAi: true, stepByStep: true })
+    ).toEqual({
+      forceAi: true,
+      stepByStep: true,
+      datasetPath: '/tmp/ds.json'
+    });
+    const src = readFileSync(new URL('./ipc-validate.ts', import.meta.url), 'utf8');
+    const fnStart = src.indexOf('export function parseReplayStartPayload');
+    const fnEnd = src.indexOf('export function asPcmFrame');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('datasetPath');
+    expect(body).toContain('result.datasetPath');
+    expect(body).not.toMatch(/datasetPath \(renderer does not expose it\)/);
   });
 });
 

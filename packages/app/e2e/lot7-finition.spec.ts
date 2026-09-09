@@ -30,6 +30,7 @@ test.describe('Lot 7 chrome (F-47 / F-59 / F-38)', () => {
       const chrome = await waitForChrome(electronApp);
       await expect(chrome.locator('.tagline')).toContainText('Lot 7');
       await expect(chrome.locator('#replay-stepwise')).toHaveCount(1);
+      await expect(chrome.locator('#replay-dataset')).toHaveCount(1);
       await expect(chrome.locator('#replay-next')).toHaveCount(1);
       await expect(chrome.locator('#replay-halt')).toHaveCount(1);
       await expect(chrome.locator('#session-export')).toHaveCount(1);

@@ -282,6 +282,7 @@ export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
     forceAi?: unknown;
     noAi?: unknown;
     stepByStep?: unknown;
+    datasetPath?: unknown;
   };
   const result: ReplayStartRequest = {};
   if (record.forceAi === true) {
@@ -292,6 +293,13 @@ export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
   }
   if (record.stepByStep === true) {
     result.stepByStep = true;
+  }
+  // R32b: do not silently drop datasetPath (L7-035). Empty/non-string is omitted.
+  if (typeof record.datasetPath === 'string') {
+    const datasetPath = record.datasetPath.trim();
+    if (datasetPath.length > 0) {
+      result.datasetPath = datasetPath;
+    }
   }
   return result;
 }

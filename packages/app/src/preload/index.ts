@@ -18,6 +18,7 @@ import type {
   RefineStatePayload,
   ReplayControlResponse,
   ReplayProgressPayload,
+  ReplayStartRequest,
   ReplayStartResponse,
   SessionStatePayload,
   StagehandActResponse,
@@ -251,8 +252,13 @@ const spyglass = {
     }
   },
   replay: {
-    start: async (forceAi?: boolean, noAi?: boolean, stepByStep?: boolean) => {
-      const payload: { forceAi?: boolean; noAi?: boolean; stepByStep?: boolean } = {};
+    start: async (
+      forceAi?: boolean,
+      noAi?: boolean,
+      stepByStep?: boolean,
+      datasetPath?: string
+    ) => {
+      const payload: ReplayStartRequest = {};
       if (forceAi === true) {
         payload.forceAi = true;
       }
@@ -261,6 +267,12 @@ const spyglass = {
       }
       if (stepByStep === true) {
         payload.stepByStep = true;
+      }
+      if (typeof datasetPath === 'string') {
+        const trimmed = datasetPath.trim();
+        if (trimmed.length > 0) {
+          payload.datasetPath = trimmed;
+        }
       }
       return ipcRenderer.invoke(IPC.replayStart, payload) as Promise<ReplayStartResponse>;
     },

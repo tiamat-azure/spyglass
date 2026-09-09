@@ -212,6 +212,10 @@ describe('packaged Observe', () => {
     expect(replayNextHandler).toContain('activeReplay.next()');
     expect(replayNextHandler).toContain('try {');
     expect(replayNextHandler).toContain('catch (error)');
+    expect(preload).toContain('payload.datasetPath');
+    expect(renderer).toContain("requireEl<HTMLInputElement>('replay-dataset')");
+    expect(renderer).toContain('api.replay');
+    expect(renderer).toContain('.start(forceAi, !forceAi, stepByStep, datasetPath)');
     const replayStopHandler = main.slice(replayStopIdx, main.indexOf('IPC.sessionExport'));
     expect(replayStopHandler).toContain('activeReplay.stop()');
     expect(replayStopHandler).toContain('try {');
@@ -220,6 +224,7 @@ describe('packaged Observe', () => {
     const ipcShared = readFileSync(join(appRoot, 'src/shared/ipc.ts'), 'utf8');
     expect(ipcShared).toContain('export type SttUpgradeDecideResponse');
     expect(ipcShared).toContain('{ ok: true } | { ok: false; error: string }');
+    expect(ipcShared).toContain('datasetPath?: string');
     expect(preload).toContain('SttUpgradeDecideResponse');
     expect(bridge).toContain('VOICE_FLUSH_MS');
     expect(bridge).not.toContain('sleep(4_000)');

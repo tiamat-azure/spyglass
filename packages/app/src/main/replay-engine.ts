@@ -14,17 +14,10 @@ import {
   runScenario,
   scenarioFromRevision
 } from '@spyglass/runner';
+import type { ReplayStartRequest } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { RefinedRevisionFile } from './refine-engine.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
-
-export type ReplayStartRequest = {
-  forceAi?: boolean;
-  noAi?: boolean;
-  /** F-59: pause before each step until next()/stop(). */
-  stepByStep?: boolean;
-  datasetPath?: string;
-};
 
 export type ReplayStartResponse =
   | { ok: true; runId: string }
@@ -128,6 +121,7 @@ export class ReplayEngine {
         closeDriver: false,
         sessionDir,
         scenarioPath: loaded.scenarioPath,
+        // R32b: in-app replay forwards IPC datasetPath into runScenario (F-48).
         ...(request.datasetPath !== undefined ? { datasetPath: request.datasetPath } : {}),
         ...(recoverer !== undefined ? { recoverer } : {}),
         onProgress: this.deps.onProgress,
