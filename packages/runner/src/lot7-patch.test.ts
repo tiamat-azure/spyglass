@@ -2394,7 +2394,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
 
   it('refuses assisted apply when sessionDir cannot be resolved (A30a)', async () => {
     const scn = scenario([clickStep(0, '#old')]);
-    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: '/tmp/spyglass-a30a' });
+    const policy = resolvePatchPolicy(
+      { PATCH_ASSISTED_APPLY: 'true' },
+      { repo: '/tmp/spyglass-a30a' }
+    );
     const result = await processSuggestedPatch({
       suggested: patch('#new', 'run_b'),
       scenario: scn,
@@ -2418,7 +2421,9 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       src.indexOf('export type ResolveScenarioPathResult')
     );
     expect(fn).toContain("code: 'missing-session-dir'");
-    expect(fn.indexOf("code: 'missing-session-dir'")).toBeLessThan(fn.indexOf('applyAssistedPatches'));
+    expect(fn.indexOf("code: 'missing-session-dir'")).toBeLessThan(
+      fn.indexOf('applyAssistedPatches')
+    );
     expect(fn).not.toMatch(/if \(sessionDir === undefined\) \{\s*return \{\};/);
   });
 

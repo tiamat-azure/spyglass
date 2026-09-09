@@ -1180,6 +1180,11 @@ Ask-user still held: A30, I30, C31, W31, R32.
   recording still needs a resolved sessionDir. Off-path without
   sessionDir remains `{}`.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**716 passed**, 1 skipped (62 files).
+
+Ask-user still held: I30, C31, W31, R32.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
