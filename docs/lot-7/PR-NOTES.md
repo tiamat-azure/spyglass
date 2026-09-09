@@ -236,7 +236,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   `runIds` get them from existing string items or `lastRunId`.
   `schemaVersion` stays 1. Schema still requires `runIds` (L7-128);
   load no longer fails solely for that omission.
+- **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
+  `large-fallback.json` so existence-only large preference cannot bypass
+  F-39 fallback-to-small.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
-diff check, log failed publish restore). Ask-user still held: **F23**.
+diff check, log failed publish restore).

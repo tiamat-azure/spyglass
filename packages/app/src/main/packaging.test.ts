@@ -183,6 +183,8 @@ describe('packaged Observe', () => {
     expect(pickBody.indexOf('configuredSttModelFile')).toBeLessThan(
       pickBody.indexOf('basename(path) === STT_LARGE_MODEL_FILE')
     );
+    expect(pickBody).toContain('preferSmallAfterLargeFallback');
+    expect(pickBody).toContain('readLargeFallbackSync');
     expect(preload).toContain('IPC.voiceSetMode');
     expect(bridge).toContain('VOICE_FLUSH_MS');
     expect(bridge).not.toContain('sleep(4_000)');

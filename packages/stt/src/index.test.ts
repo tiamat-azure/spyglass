@@ -114,6 +114,39 @@ describe('@spyglass/stt', () => {
     ).toBe(small);
   });
 
+  it('does not prefer large by existence when large-fallback.json is set (F23b)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-f23b-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await writeFile(join(dir, 'large-fallback.json'), `${JSON.stringify({ fallback: true })}\n`);
+    const paths = resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir });
+    expect(paths?.model).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })).toBe(small);
+    const viaModelDir = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_DIR: dir
+    });
+    expect(viaModelDir?.model).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], { STT_LARGE_FALLBACK: '1' })).toBe(small);
+    const otherDir = join(tmpdir(), `spyglass-whisper-f23b-dir-${String(Date.now())}`);
+    await mkdir(otherDir, { recursive: true });
+    await writeFile(
+      join(otherDir, 'large-fallback.json'),
+      `${JSON.stringify({ fallback: true })}\n`
+    );
+    expect(pickPreferredWhisperModel([small, large], { STT_MODEL_DIR: otherDir })).toBe(small);
+    const explicit = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_PATH: large
+    });
+    expect(explicit?.model).toBe(large);
+  });
+
   it('correlates dictation before and after a DOM step', () => {
     const before = correlateVoiceSegment(1000, 2000, undefined, 0, 8000);
     expect(before.relation).toBe('before');

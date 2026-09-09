@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
-import { STT_LARGE_MODEL_FILE } from './upgrade.ts';
+import {
+  readLargeFallbackSync,
+  resolveSttModelDir,
+  STT_LARGE_MODEL_FILE,
+  STT_SMALL_MODEL_FILE
+} from './upgrade.ts';
 import { pcm16ToWav } from './wav.ts';
 
 export type WhisperPaths = {
@@ -101,7 +106,9 @@ export function resolveWhisperPaths(
  * L7-125: when small and large both exist under resources/vendor, prefer large.
  * Explicit STT_MODEL_PATH still wins (M4a / P6a). M18a: an existing
  * STT_MODEL_FILE / STT_MODEL match is chosen before that large basename
- * search. F-39 fallback stays in createEngineFromEnv via chooseWhisperModel.
+ * search. F23b / F-39: existence-only large preference honours
+ * `large-fallback.json` (and `STT_LARGE_FALLBACK=1`) so callers of
+ * {@link resolveWhisperPaths} cannot bypass permanent fallback-to-small.
  */
 export function pickPreferredWhisperModel(
   existing: string[],
@@ -126,10 +133,36 @@ export function pickPreferredWhisperModel(
     }
   }
   const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
-  if (large !== undefined) {
+  if (large !== undefined && !preferSmallAfterLargeFallback(large, env)) {
     return large;
   }
-  return existing[0];
+  const small = existing.find((path) => basename(path) === STT_SMALL_MODEL_FILE);
+  if (small !== undefined) {
+    return small;
+  }
+  return existing.find((path) => basename(path) !== STT_LARGE_MODEL_FILE) ?? existing[0];
+}
+
+/** F23b: skip L7-125 large preference when F-39 fallback-to-small is permanent. */
+function preferSmallAfterLargeFallback(largePath: string, env: NodeJS.ProcessEnv): boolean {
+  if (env.STT_LARGE_FALLBACK === '1') {
+    return true;
+  }
+  const dirs: string[] = [];
+  const modelDir = resolveSttModelDir(env);
+  if (modelDir !== undefined && modelDir.length > 0) {
+    dirs.push(modelDir);
+  }
+  const largeDir = dirname(largePath);
+  if (!dirs.includes(largeDir)) {
+    dirs.push(largeDir);
+  }
+  for (const dir of dirs) {
+    if (readLargeFallbackSync(dir)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {

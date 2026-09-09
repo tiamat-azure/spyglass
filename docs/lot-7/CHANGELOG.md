@@ -742,6 +742,17 @@ Ask-user still held: none for these captain locks.
 
 Ask-user still held: **F23** (`pickPreferredWhisperModel` fallback-awareness).
 
+## Captain lock F23b (Whisper path pick honours large-fallback.json)
+
+- **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` skip
+  L7-125 existence-only large preference when `large-fallback.json` is
+  true (or `STT_LARGE_FALLBACK=1`). Permanent F-39 fallback-to-small
+  cannot be bypassed by callers that only look at which weight files
+  exist. `STT_MODEL_PATH` and an existing `STT_MODEL_FILE` match stay
+  first (M4a / P6a / M18a).
+
+Ask-user still held: none for these captain locks.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
