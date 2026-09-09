@@ -917,7 +917,12 @@ Ask-user still held: A27, L27.
   slots after `[0]` survive extract, JSON round-trip, and apply. D20a
   still fails when `[0]` is vacant (`undefined` or JSON `null`) even if
   trailing args remain. Replay still consumes `arguments[0]` only.
-  Held: **L27**.
+
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**677 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 62,
+`lot7-patch.test.ts` 79, `patch-redact.test.ts` 12.
+
+Ask-user still held: L27.
 
 ## CI — macOS Electron e2e close hang
 
