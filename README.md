@@ -57,6 +57,67 @@ corepack prepare pnpm@10.33.3 --activate
 pnpm install
 ```
 
+## Make
+
+`make` is a thin, stable surface over the pnpm scripts below. It never
+duplicates build logic: every target delegates to a `package.json` script, which
+stays the single source of truth. It adds only what pnpm does not provide -
+running the app detached, with a pidfile and captured logs.
+
+```bash
+make               # or `make help`: list every target
+make install       # corepack + pnpm install + doctor
+make test          # check + unit + e2e, sequential, stops on first failure
+make start         # build and launch the app in the background
+make status        # process, CDP endpoint, current log, build artefacts
+make log           # follow the current run log (make log N=200 for a plain tail)
+make restart       # stop, wait for the exit, start again
+make stop          # terminate the app started by `make start`
+make package       # unsigned installer for the current OS
+make clean         # remove out/, release/, coverage/ and .spyglass/
+```
+
+### What each target runs
+
+| Target | pnpm scripts |
+| --- | --- |
+| `make install` | `corepack prepare pnpm@10.33.3 --activate`, `pnpm install`, `pnpm doctor` |
+| `make check` | `pnpm lint`, `pnpm typecheck` |
+| `make test-unit` | `pnpm test`, `pnpm test:schemas`, `pnpm test:coverage` |
+| `make test-e2e` | `pnpm test:e2e` |
+| `make test` | `check` then `test-unit` then `test-e2e` |
+| `make start` | `pnpm start` (its `prestart` runs `doctor`, and `electron-vite preview` rebuilds before launching) |
+| `make package` | `pnpm package` |
+
+`check`, `test-unit` and `test-e2e` stay callable on their own for a faster
+loop; `make test` is the gate that chains all three.
+
+On a Linux box with no usable display, wrap the e2e target the way CI does:
+`xvfb-run --auto-servernum make test-e2e`.
+
+### Runtime state
+
+`make start` detaches the app in its own process group and records:
+
+- `.spyglass/run/app.pid` - the process group killed by `make stop`, SIGTERM
+  first, SIGKILL after 5 s.
+- `.spyglass/logs/app-<timestamp>.log` - one file per run, with
+  `.spyglass/logs/current.log` symlinked to the latest. `make log` follows it.
+
+The app has no file logger: these logs are the Electron process stdout and
+stderr. `.spyglass/` is git-ignored and removed by `make clean`.
+
+`make status` reads the CDP endpoint from the `cdp.json` the main process
+writes in its `userData` directory. That directory differs between an unpackaged
+run (`~/.config/@spyglass/app/`) and a packaged one (`~/.config/Spyglass/`), so
+both are probed and the most recent file wins; `SPYGLASS_CDP_INFO` overrides the
+lookup. An endpoint left behind by a finished run is reported as
+`[stale, app stopped]`.
+
+There is no `make build`: `pnpm start` already rebuilds through
+`electron-vite preview`, and `pnpm package` runs its own `electron-vite build`.
+`make build` would only be a slower way to reach the same `out/`.
+
 ## Commands
 
 ```bash
