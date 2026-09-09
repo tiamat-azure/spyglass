@@ -301,6 +301,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   recorded/redacted fill/select args (`persisted.suggested`), not live
   dataset secrets. Lifecycle still passes the live suggested patch to
   `applyAssistedPatches` for F-63 matching.
+- **L36b-bound:** `SECRET_NAME` matches identifier tokens (word/camelCase
+  boundaries), not substrings. `#shipping_address` / `#spinner` are not
+  `pin`.
 - **L7-231:** Replay next/stop IPC returns a structured error instead of
   an unhandled rejection.
 - **A30a:** Assisted apply requires a resolved `sessionDir`. Missing dir
@@ -433,5 +436,6 @@ structured bundle errors; refuse existing dest unless overwrite; owned
 backup recovery only; regular-file model paths; ensure CLI before large
 download. **D34a** locked (Darwin skips Unix `whisper-cli` ensure).
 **L36a-scrub** locked (patch-branch `scenario.json` is recorded/redacted,
-not live secrets). Held: **L36b** SECRET_NAME matching; **L36c**
+not live secrets). **L36b-bound** locked (`SECRET_NAME` token boundaries;
+`#shipping_address` / `#spinner` are not `pin`). Held: **L36c**
 user-stop status.

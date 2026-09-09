@@ -22,6 +22,8 @@ import {
   assertParameterRefsResolved,
   exampleDataset,
   extractScenarioParameters,
+  isSecretParameterName,
+  isSecretSelector,
   parseDataset,
   unappliedArguments,
   writeGeneratedDatasets
@@ -629,6 +631,79 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(example.values.cvv).toBe('');
     expect(example.values.apikey).toBe('');
     expect(example.values.ssn).toBe('');
+  });
+
+  it('does not treat pin as a substring of shipping/spinner names (L36b-bound)', async () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/shop',
+      steps: [
+        fillStep(0, '#shipping_address', '1 Main St'),
+        fillStep(1, '#spinner', 'loading'),
+        fillStep(2, '#shopping', 'cart')
+      ]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.dataset.secrets).toEqual([]);
+    expect(extracted.dataset.values.shipping_address).toBe('1 Main St');
+    expect(exampleDataset(extracted.dataset).values.shipping_address).toBe(
+      'example_shipping_address'
+    );
+    expect(isSecretParameterName('shipping_address')).toBe(false);
+    expect(isSecretParameterName('spinner')).toBe(false);
+    expect(isSecretParameterName('shopping')).toBe(false);
+    expect(isSecretSelector('#shipping_address')).toBe(false);
+    expect(isSecretSelector('#spinner')).toBe(false);
+    expect(isSecretSelector('#shopping')).toBe(false);
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    expect(src).toContain('L36b-bound');
+    expect(src).toContain('function identifierTokens');
+    expect(src).toContain('SECRET_NAME.test(token)');
+  });
+
+  it('still classifies real secret-ish names as secrets (L36b-bound)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/pay',
+      steps: [
+        fillStep(0, '#password', 's3cret'),
+        fillStep(1, '#user-pin', '4321'),
+        fillStep(2, '#pin-code', '9999'),
+        fillStep(3, '#api_key', 'live-key'),
+        fillStep(4, '#csrf-token', 'tok'),
+        fillStep(5, '#mot-de-passe', 'mdp1')
+      ]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.dataset.secrets).toEqual([
+      'password',
+      'user_pin',
+      'pin_code',
+      'api_key',
+      'csrf_token',
+      'mot_de_passe'
+    ]);
+    expect(isSecretParameterName('password')).toBe(true);
+    expect(isSecretParameterName('pin')).toBe(true);
+    expect(isSecretParameterName('pin_code')).toBe(true);
+    expect(isSecretParameterName('otp')).toBe(true);
+    expect(isSecretParameterName('cvv')).toBe(true);
+    expect(isSecretParameterName('ssn')).toBe(true);
+    expect(isSecretParameterName('apikey')).toBe(true);
+    expect(isSecretParameterName('api_key')).toBe(true);
+    expect(isSecretParameterName('api-key')).toBe(true);
+    expect(isSecretParameterName('pwd')).toBe(true);
+    expect(isSecretParameterName('mdp')).toBe(true);
+    expect(isSecretParameterName('motdepasse')).toBe(true);
+    expect(isSecretParameterName('secret')).toBe(true);
+    expect(isSecretParameterName('token')).toBe(true);
+    expect(isSecretSelector('#pin')).toBe(true);
+    expect(isSecretSelector('#password')).toBe(true);
+    expect(isSecretSelector('#userPin')).toBe(true);
+    expect(isSecretSelector('#pinCode')).toBe(true);
+    expect(isSecretSelector('#apiKey')).toBe(true);
   });
 
   it('resolves a relative dataset path from scriptDir (L7-014)', async () => {

@@ -14,7 +14,13 @@ export type ScenarioDataset = {
   secrets: string[];
 };
 
-const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp|otp|pin|cvv|apikey|api[_-]?key|ssn/iu;
+/**
+ * L36b-bound: whole identifier tokens, not substrings.
+ * `#shipping_address` / `#spinner` must not match `pin`.
+ * `password` / `passe` stay classified via the `pass…` token.
+ */
+const SECRET_NAME =
+  /^(?:pass(?:word|wd|phrase|code|e)?|secret|token|pwd|motdepasse|mdp|otp|pin|cvv|apikey|ssn)$/iu;
 
 export function parameterNameFromStep(step: RefinedStep, used: Set<string>): string | undefined {
   if (step.action.parameterRef !== undefined && step.action.parameterRef.trim().length > 0) {
@@ -336,8 +342,35 @@ function uniqueName(base: string, used: Set<string>): string {
   return `${base}_${String(index)}`;
 }
 
+/** L36b-bound: split selectors/names on separators and camelCase before matching. */
+function identifierTokens(name: string): string[] {
+  const tokens: string[] = [];
+  for (const part of name.split(/[^\p{L}\p{N}]+/u)) {
+    if (part.length === 0) {
+      continue;
+    }
+    const pieces = part.split(/(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u);
+    for (const piece of pieces) {
+      if (piece.length > 0) {
+        tokens.push(piece.toLowerCase());
+      }
+    }
+  }
+  return tokens;
+}
+
 export function isSecretParameterName(name: string): boolean {
-  return SECRET_NAME.test(name);
+  const tokens = identifierTokens(name);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token !== undefined && SECRET_NAME.test(token)) {
+      return true;
+    }
+    if (token === 'api' && tokens[index + 1] === 'key') {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function isSecretSelector(selector: string): boolean {

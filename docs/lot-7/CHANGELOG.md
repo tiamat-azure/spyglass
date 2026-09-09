@@ -1363,6 +1363,19 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 Ask-user still held: **L36b** SECRET_NAME matching; **L36c** user-stop
 status.
 
+## Captain lock L36b-bound (SECRET_NAME is token-bounded)
+
+- **L36b-bound:** `SECRET_NAME` matches whole identifier tokens (separators
+  + camelCase), not substrings. `#shipping_address`, `#spinner`, and
+  `#shopping` no longer match `pin`. Real secret-ish names stay classified
+  (`password`, `pin`, `pin_code`, `otp`, `cvv`, `apikey` / `api_key`,
+  `ssn`, `token`, `mot-de-passe`). L36a-scrub unchanged.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
+revision.
+
+Ask-user still held: **L36c** user-stop status.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
