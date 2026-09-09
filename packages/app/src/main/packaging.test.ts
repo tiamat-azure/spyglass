@@ -325,6 +325,7 @@ describe('packaged Observe', () => {
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');
     expect(closeElectron).toContain("kill('SIGKILL')");
+    expect(closeElectron).toContain("['/pid', String(child.pid), '/T', '/F']");
     expect(closeElectron).toContain("once('exit'");
     expect(closeElectron).toContain('KILL_EXIT_GRACE_MS');
     expect(closeElectron).not.toContain('child.killed === true');

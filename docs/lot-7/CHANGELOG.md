@@ -731,4 +731,7 @@ Ask-user still held: none for these captain locks.
 - Popup click uses `noWaitAfter` so Playwright does not wait for a window
   the app denies. Locator `actionTimeout` is 15s so a hung click cannot
   consume the whole test budget.
+- Windows: after close timeout, `taskkill /T /F` the Electron pid so
+  renderer/GPU children cannot block worker teardown. Empty-shell
+  `start.html` URL poll is 20s (same as later `example.com` poll).
 

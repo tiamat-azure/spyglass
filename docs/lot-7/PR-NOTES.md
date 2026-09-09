@@ -63,7 +63,7 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (274 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **626 passed**, 1 skipped (62 files) |
+| `pnpm test` | **628 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
@@ -129,8 +129,8 @@ Pass-7 (L7-053 … L7-059) plus Captain locks **O7a** (export refuses
 non-empty dest) and **I7a** (import refuses existing same `sessionId`)
 are in `CHANGELOG.md`.
 Pass-8 (L7-060 … L7-064) is in `CHANGELOG.md`.
-macOS Electron e2e close hang (timeout + `SIGKILL`, popup `noWaitAfter`)
-is in `CHANGELOG.md`.
+macOS Electron e2e close hang (timeout + `SIGKILL`, popup `noWaitAfter`;
+Windows `taskkill /T /F` process tree) is in `CHANGELOG.md`.
 Pass-9 (L7-066 … L7-073) is in `CHANGELOG.md`.
 Pass-10 (L7-074 … L7-075) plus Captain locks **F8a** (AbortError /
 cancellation excluded from first-use latency) and **B10b** (load scenario

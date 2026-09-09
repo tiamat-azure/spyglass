@@ -1,12 +1,15 @@
+import { spawnSync } from 'node:child_process';
+
 /** Playwright `electronApp.close()` waits for `app.quit()` / process exit. */
 const CLOSE_TIMEOUT_MS = 12_000;
 /** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
 export const KILL_EXIT_GRACE_MS = 2_000;
 
-type ElectronChild = {
+export type ElectronChild = {
   kill: (signal?: NodeJS.Signals) => boolean;
   killed?: boolean;
   exitCode?: number | null;
+  pid?: number;
   once?: (event: 'exit', listener: () => void) => unknown;
 };
 
@@ -40,13 +43,31 @@ export async function closeElectron(electronApp: LaunchedElectron): Promise<void
     ]);
   } catch {
     const child = electronApp.process();
-    child?.kill('SIGKILL');
+    killElectronChild(child);
     await waitForProcessExit(child);
   } finally {
     if (timer !== undefined) {
       clearTimeout(timer);
     }
   }
+}
+
+/**
+ * SIGKILL the Electron child. On Windows, `kill('SIGKILL')` does not tear down
+ * the renderer/GPU tree and Playwright's worker teardown then waits 60s.
+ */
+export function killElectronChild(child: ElectronChild | null | undefined): void {
+  if (child === undefined || child === null) {
+    return;
+  }
+  if (process.platform === 'win32' && typeof child.pid === 'number' && child.pid > 0) {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: 'ignore'
+    });
+    return;
+  }
+  child.kill('SIGKILL');
 }
 
 /** L7-117: `killed` only means kill() was called; wait until exitCode or grace. */

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { KILL_EXIT_GRACE_MS, waitForProcessExit } from '../../e2e/close-electron.ts';
+import {
+  KILL_EXIT_GRACE_MS,
+  killElectronChild,
+  waitForProcessExit
+} from '../../e2e/close-electron.ts';
 
 describe('closeElectron waitForProcessExit (L7-117)', () => {
   it('does not short-circuit on killed when exitCode is still null', async () => {
@@ -30,6 +34,25 @@ describe('closeElectron waitForProcessExit (L7-117)', () => {
       }
     });
     expect(onceCalled).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')('SIGKILLs the child when not on Windows', () => {
+    const signals: NodeJS.Signals[] = [];
+    killElectronChild({
+      kill: (signal) => {
+        if (signal !== undefined) {
+          signals.push(signal);
+        }
+        return true;
+      },
+      pid: 4242
+    });
+    expect(signals).toEqual(['SIGKILL']);
+  });
+
+  it('is a no-op when the child handle is missing', () => {
+    expect(() => killElectronChild(undefined)).not.toThrow();
+    expect(() => killElectronChild(null)).not.toThrow();
   });
 
   it('honours the grace timeout when once is missing (L7-158)', async () => {

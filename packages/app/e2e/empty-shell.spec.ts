@@ -88,7 +88,9 @@ test.describe('Lot 0 two-zone shell', () => {
       await expect(chrome.locator('#versions')).toContainText(/Electron/i);
       await expect(guest.locator('h1')).toHaveText('Spyglass start page');
 
-      await expect.poll(async () => chrome.locator('#url').inputValue()).toMatch(/start\.html/);
+      await expect
+        .poll(async () => chrome.locator('#url').inputValue(), { timeout: 20_000 })
+        .toMatch(/start\.html/);
 
       const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
       if (shotDir !== undefined && shotDir.length > 0) {
