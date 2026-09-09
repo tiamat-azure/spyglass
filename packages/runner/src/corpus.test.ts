@@ -84,6 +84,27 @@ describe('Lot 6 measurement protocol corpus', () => {
     ).rejects.toThrow(/must be a \.json file/);
   });
 
+  it('resolves relative --out from repoRoot not cwd (L6-058)', async () => {
+    const cwd = process.cwd();
+    const runnerDir = join(repoRoot(), 'packages/runner');
+    try {
+      process.chdir(runnerDir);
+      const relativeOut = 'docs/lot-6/filter-cwd.json';
+      const fromCwd = resolve(process.cwd(), relativeOut);
+      const fromRoot = resolve(repoRoot(), relativeOut);
+      expect(fromCwd).not.toBe(fromRoot);
+      expect(await resolveCorpusOutPath(['--out', relativeOut], 'J+1')).toBe(fromRoot);
+      expect(await resolveCorpusOutPath(['--out', fromRoot], 'J+1')).toBe(fromRoot);
+    } finally {
+      process.chdir(cwd);
+    }
+    const src = await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), 'corpus-cli.ts'),
+      'utf8'
+    );
+    expect(src).toContain('resolve(repoRoot(), outArg)');
+  });
+
   it('O34a jail realpaths symlink parents that point outside the repo (L6-047)', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'spyglass-out-escape-'));
     const link = join(repoRoot(), 'docs/lot-6/corpus-runs', 'l6-047-symlink');

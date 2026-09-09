@@ -514,6 +514,19 @@ unchanged. Locks **G56a** and **O57a**.
   only), with the existing realpath symlink check. Paths inside the repo
   but outside that tree fail closed.
 
+Unit tests after this pass: **406 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
+## Adversarial pass 18 (Copilot auto-fix)
+
+Applied on tip `981c737782233c043f46ada43943a4c84c8e47a3`. Product decisions
+1–14 and prior locks (incl. O57a, O34a) are unchanged.
+
+- **L6-058** Relative corpus `--out` resolves against `repoRoot()`, not
+  `process.cwd()`. `pnpm --filter @spyglass/runner exec … --out docs/lot-6/…`
+  has cwd `packages/runner`; cwd-relative resolve would miss the O57a jail.
+  Absolute `--out` is unchanged.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

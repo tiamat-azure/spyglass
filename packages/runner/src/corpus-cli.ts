@@ -57,7 +57,9 @@ export async function resolveCorpusOutPath(
   const outArg = outIndex >= 0 ? argv[outIndex + 1] : undefined;
   const resolved =
     outArg !== undefined && outArg.length > 0
-      ? resolve(outArg)
+      ? isAbsolute(outArg)
+        ? resolve(outArg)
+        : resolve(repoRoot(), outArg)
       : resolve(
           repoRoot(),
           'docs/lot-6',
