@@ -220,6 +220,12 @@ describe('sessionBundleIpcError (L7-088)', () => {
       sessionBundleIpcError(new Error('export refused: destination is not empty'), 'export-failed')
     ).toBe('dest-not-empty');
     expect(
+      sessionBundleIpcError(
+        new Error('export refused: destination is not a directory'),
+        'export-failed'
+      )
+    ).toBe('dest-not-directory');
+    expect(
       sessionBundleIpcError(new Error('import refused: session already exists'), 'import-failed')
     ).toBe('session-exists');
     expect(

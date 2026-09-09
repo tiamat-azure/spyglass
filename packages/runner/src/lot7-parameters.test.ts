@@ -1447,6 +1447,42 @@ describe('Lot 7 F-47 session export/import', () => {
     });
   });
 
+  it('refuses a file destination even when overwrite is set (O29b)', async () => {
+    const root = await tempDir('spyglass-lot7-o29b-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await writeFile(dest, 'not-a-dir\n', 'utf8');
+    await expect(exportSessionFolder(sessionDir, dest, { overwrite: true })).rejects.toThrow(
+      /destination is not a directory/
+    );
+    expect(await readFile(dest, 'utf8')).toBe('not-a-dir\n');
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(
+      /destination is not a directory/
+    );
+    expect(await readFile(dest, 'utf8')).toBe('not-a-dir\n');
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const exportFn = src.slice(
+      src.indexOf('export async function exportSessionFolder'),
+      src.indexOf('export async function importSessionFolder')
+    );
+    expect(exportFn).toContain('assertExportDestIsDirectoryIfPresent');
+    expect(exportFn.indexOf('assertExportDestIsDirectoryIfPresent')).toBeLessThan(
+      exportFn.indexOf('if (!overwrite)')
+    );
+    const replaceFn = src.slice(src.indexOf('async function replaceDirectory'));
+    const overwrite = replaceFn.slice(replaceFn.indexOf('const backup'));
+    expect(replaceFn.indexOf('isDirectory()')).toBeGreaterThan(-1);
+    expect(replaceFn.indexOf('isDirectory()')).toBeLessThan(replaceFn.indexOf('const backup'));
+    expect(overwrite).toContain('await rename(dest, backup)');
+  });
+
   it('refuses export to a non-empty destination without overwrite (O7a)', async () => {
     const root = await tempDir('spyglass-lot7-export-busy-');
     const sessionDir = join(root, 'ses_export');

@@ -49,6 +49,8 @@ export async function exportSessionFolder(
   await assertNoCopyOverlap(source, dest);
   return await withDestLock(dest, async () => {
     await recoverOrphanedBackup(dest);
+    // O29b: a file (or other non-dir) at dest is never moved/deleted, even with overwrite.
+    await assertExportDestIsDirectoryIfPresent(dest);
     if (!overwrite) {
       await assertExportDestAvailable(dest);
     }
@@ -239,8 +241,8 @@ async function unlinkIfPresent(path: string): Promise<void> {
   }
 }
 
-/** O7a: do not silently destroy a non-empty folder the user picked. */
-async function assertExportDestAvailable(dest: string): Promise<void> {
+/** O29b: refuse a file/symlink/special dest; do not move or delete it. */
+async function assertExportDestIsDirectoryIfPresent(dest: string): Promise<void> {
   let st: Awaited<ReturnType<typeof lstat>>;
   try {
     st = await lstat(dest);
@@ -252,9 +254,23 @@ async function assertExportDestAvailable(dest: string): Promise<void> {
     throw err;
   }
   if (!st.isDirectory()) {
-    throw new Error('export refused: destination already exists');
+    throw new Error('export refused: destination is not a directory');
   }
-  const names = await readdir(dest);
+}
+
+/** O7a: do not silently destroy a non-empty folder the user picked. */
+async function assertExportDestAvailable(dest: string): Promise<void> {
+  await assertExportDestIsDirectoryIfPresent(dest);
+  let names: string[];
+  try {
+    names = await readdir(dest);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return;
+    }
+    throw err;
+  }
   if (names.length > 0) {
     throw new Error('export refused: destination is not empty');
   }
@@ -424,6 +440,18 @@ async function replaceDirectory(
           throw new Error(options.existsError);
         }
       }
+      throw err;
+    }
+  }
+  // O29b: never rename/rm a non-directory dest (file-at-dest), even with overwrite.
+  try {
+    const destStat = await lstat(dest);
+    if (!destStat.isDirectory()) {
+      throw new Error('export refused: destination is not a directory');
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
       throw err;
     }
   }

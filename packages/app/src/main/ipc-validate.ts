@@ -346,6 +346,9 @@ export function sessionBundleIpcError(
   ) {
     return 'dest-not-empty';
   }
+  if (message.includes('destination is not a directory')) {
+    return 'dest-not-directory';
+  }
   if (message.includes('session already exists')) {
     return 'session-exists';
   }

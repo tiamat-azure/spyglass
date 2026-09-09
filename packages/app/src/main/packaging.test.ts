@@ -314,6 +314,7 @@ describe('packaged Observe', () => {
       'utf8'
     );
     expect(sessionBundle).toContain('destination is not empty');
+    expect(sessionBundle).toContain('destination is not a directory');
     expect(sessionBundle).toContain('session already exists');
     expect(sessionBundle).toContain('mtimeMs');
     expect(sessionBundle).toContain('refused: symlinks are not allowed');
@@ -330,6 +331,7 @@ describe('packaged Observe', () => {
       sessionBundle.indexOf('export async function importSessionFolder')
     );
     expect(exportFn).toContain("assertNoSymlinks(source, 'export')");
+    expect(exportFn).toContain('assertExportDestIsDirectoryIfPresent');
     expect(exportFn).toContain("assertNoSymlinks(staging, 'export')");
     expect(exportFn.indexOf('await cp(source, staging')).toBeLessThan(
       exportFn.indexOf("assertNoSymlinks(staging, 'export')")

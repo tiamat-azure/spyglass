@@ -1139,6 +1139,15 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: O29, A30, I30, C31, W31.
 
+## Captain lock O29b (refuse file dest on export even with overwrite)
+
+- **O29b:** Session export refuses a non-directory destination even when
+  `overwrite=true`. A file (or other non-dir) at dest is not renamed,
+  moved, or deleted. Error: `export refused: destination is not a
+  directory` (IPC `dest-not-directory`). Directory overwrite is
+  unchanged (L7-020); W26a still vacates an empty directory for
+  overwrite-false.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
