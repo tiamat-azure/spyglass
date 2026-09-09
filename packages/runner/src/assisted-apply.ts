@@ -499,10 +499,15 @@ export async function applyAssistedPatches(input: {
         prUrl = prepared.url;
       }
     } catch (error) {
-      return prPrepFailed({
+      return await afterLocalCommitRefusal({
+        git,
+        repoRoot,
+        starting,
+        revertPaths: [scenarioRel],
         branch,
         commit,
         health: input.health,
+        code: 'pr-prep-failed',
         reason: error instanceof Error ? error.message : String(error)
       });
     }
@@ -515,7 +520,11 @@ export async function applyAssistedPatches(input: {
         input.hasOpenPr ?? defaultHasOpenPr
       );
       if (!pushed.ok) {
-        return afterLocalCommitRefusal({
+        return await afterLocalCommitRefusal({
+          git,
+          repoRoot,
+          starting,
+          revertPaths: [scenarioRel],
           branch,
           commit,
           health: input.health,
@@ -531,10 +540,15 @@ export async function applyAssistedPatches(input: {
         body
       });
       if (!gh.ok) {
-        return prPrepFailed({
+        return await afterLocalCommitRefusal({
+          git,
+          repoRoot,
+          starting,
+          revertPaths: [scenarioRel],
           branch,
           commit,
           health: input.health,
+          code: 'pr-prep-failed',
           reason: 'gh pr create failed'
         });
       }
@@ -542,10 +556,15 @@ export async function applyAssistedPatches(input: {
         prUrl = gh.url;
       }
     } catch (error) {
-      return prPrepFailed({
+      return await afterLocalCommitRefusal({
+        git,
+        repoRoot,
+        starting,
+        revertPaths: [scenarioRel],
         branch,
         commit,
         health: input.health,
+        code: 'pr-prep-failed',
         reason: error instanceof Error ? error.message : String(error)
       });
     }
@@ -707,11 +726,20 @@ async function restoreStartingBranch(
       if (unexpected.length > 0) {
         revertError = `refusing to discard uncommitted changes: ${unexpected.join(', ')}`;
       } else {
-        for (const file of trackedDirty) {
-          const reset = await git(['checkout', '--', file], cwd);
-          if (reset.code !== 0) {
-            revertError = reset.stderr.trim() || `git checkout -- ${file} failed`;
+        for (const file of revertPaths) {
+          const unstage = await git(['reset', 'HEAD', '--', file], cwd);
+          if (unstage.code !== 0) {
+            revertError = unstage.stderr.trim() || `git reset HEAD -- ${file} failed`;
             break;
+          }
+        }
+        if (revertError === undefined) {
+          for (const file of trackedDirty) {
+            const reset = await git(['checkout', '--', file], cwd);
+            if (reset.code !== 0) {
+              revertError = reset.stderr.trim() || `git checkout -- ${file} failed`;
+              break;
+            }
           }
         }
         if (revertError === undefined) {
@@ -830,14 +858,35 @@ function leftoverMatchesDescriptorOnlyApply(
   return JSON.stringify(expected) === JSON.stringify(leftover);
 }
 
-/** P12a / P14a: local commit stays; PR prep / remote recreate failure does not increment health. */
-function afterLocalCommitRefusal(input: {
+/** P12a / P14a / L7-183: local commit stays on the patch branch; restore starting ref. */
+async function afterLocalCommitRefusal(input: {
+  git: GitExec;
+  repoRoot: string;
+  starting: StartingHead;
+  revertPaths: readonly string[];
   branch: string;
   commit: string;
   health: ScenarioHealth;
   code: 'pr-prep-failed' | 'open-pr';
   reason: string;
-}): AssistedApplyRefusal {
+}): Promise<AssistedApplyRefusal> {
+  const revertError = await restoreStartingBranch(
+    input.git,
+    input.repoRoot,
+    input.starting,
+    undefined,
+    input.revertPaths
+  );
+  if (revertError !== undefined) {
+    return {
+      ok: false,
+      code: 'restore-failed',
+      reason: revertError,
+      branch: input.branch,
+      commit: input.commit,
+      health: input.health
+    };
+  }
   return {
     ok: false,
     code: input.code,
@@ -846,15 +895,6 @@ function afterLocalCommitRefusal(input: {
     commit: input.commit,
     health: input.health
   };
-}
-
-function prPrepFailed(input: {
-  branch: string;
-  commit: string;
-  health: ScenarioHealth;
-  reason: string;
-}): AssistedApplyRefusal {
-  return afterLocalCommitRefusal({ ...input, code: 'pr-prep-failed' });
 }
 
 function refusalWithRestore(

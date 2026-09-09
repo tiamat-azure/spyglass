@@ -106,6 +106,25 @@ describe('validateHealth', () => {
     });
     expect(result.valid).toBe(false);
   });
+
+  it('rejects duplicate runIds on a patch candidate (L7-180)', () => {
+    const result = validateHealth({
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 2,
+          lastRunId: 'run_a',
+          runIds: ['run_a', 'run_a']
+        }
+      ]
+    });
+    expect(result.valid).toBe(false);
+  });
 });
 
 describe('validateUnknown', () => {

@@ -247,4 +247,7 @@ inactive replay next/stop, leftover descriptor-only match, leftover
 rev-parse restore, createPr/hasOpenPr catch, Windows symlink skip,
 dataset dir from scenarioPath, F16b vs whisperAvailable, realpath
 ENOENT-only, no large `existing[0]` under fallback, atomic small
-fallback fetch.
+fallback fetch. Pass-25 (L7-180 … L7-189): unique `runIds`, halt/status
+IPC errors, restore starting ref on PR-prep refusal, unstage on restore,
+sessionId match, dest TOCTOU lock, bundle manifest check, export
+symlink refusal, no explicit large under fallback.

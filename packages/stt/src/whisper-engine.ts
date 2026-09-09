@@ -104,7 +104,9 @@ export function resolveWhisperPaths(
 
 /**
  * L7-125: when small and large both exist under resources/vendor, prefer large.
- * Explicit STT_MODEL_PATH still wins (M4a / P6a). M18a: an existing
+ * Explicit STT_MODEL_PATH still wins for custom/small files (M4a / P6a).
+ * L7-189: an explicit path to the conventional large file is skipped when
+ * permanent fallback is on. M18a: an existing
  * STT_MODEL_FILE / STT_MODEL match is chosen before that large basename
  * search. F23b / F-39: existence-only large preference honours
  * `large-fallback.json` (and `STT_LARGE_FALLBACK=1`) so callers of
@@ -121,7 +123,12 @@ export function pickPreferredWhisperModel(
   if (explicit !== undefined && explicit.length > 0) {
     const hit = existing.find((path) => path === explicit);
     if (hit !== undefined) {
-      return hit;
+      // L7-189 / F-39 / F23b: explicit large is skipped when permanent fallback is on.
+      // Custom non-large STT_MODEL_PATH still wins (M4a / P6a).
+      const hitIsLarge = basename(hit) === STT_LARGE_MODEL_FILE;
+      if (!hitIsLarge || !preferSmallAfterLargeFallback(hit, env)) {
+        return hit;
+      }
     }
   }
   const configured = configuredSttModelFile(env);

@@ -173,6 +173,11 @@ export function recordSuggestedPatches(
   suggested: SuggestedPatch,
   policy: PatchPolicy
 ): ScenarioHealth {
+  if (health.sessionId.length > 0 && suggested.sessionId !== health.sessionId) {
+    throw new Error(
+      `suggested patch sessionId ${suggested.sessionId} does not match health.json ${health.sessionId}`
+    );
+  }
   const byStep = new Map(health.patchCandidates.map((entry) => [entry.stepIndex, entry]));
   const patchedSteps = new Set<number>();
   for (const patch of suggested.patches) {

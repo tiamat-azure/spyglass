@@ -782,6 +782,34 @@ Ask-user still held: none for these captain locks.
 
 Ask-user still held: none for these captain locks.
 
+## Pass-25 adversarial fixes (L7-180 … L7-189)
+
+- **L7-180:** `health.schema.json` `runIds` has `uniqueItems: true` so
+  contract validation matches distinct-runIds (L7-001).
+- **L7-181:** Renderer `replayStop` / halt handles `{ ok: false }` and
+  invoke rejections in `replayStatus`, same as next.
+- **L7-182:** Initial `sttUpgrade.status()` rejection hides the offer and
+  shows the same failure copy as decide.
+- **L7-183:** After a local patch commit, `pr-prep-failed` / `open-pr`
+  restore the starting ref (B16a) while keeping the patch branch for resume.
+- **L7-184:** `restoreStartingBranch` `git reset HEAD --` allowed paths
+  before checkout so a failed commit after `git add` does not leave
+  `scenario.json` staged.
+- **L7-185:** `recordSuggestedPatches` rejects a suggested `sessionId` that
+  does not match `health.json`.
+- **L7-186:** Session dest publish is serialized per path; overwrite-false
+  uses a no-replace rename so a dest that appears after the availability
+  check cannot be stolen.
+- **L7-187:** Import validates `spyglass-session.json` kind/schemaVersion
+  and `sessionId` agreement with `meta.json` before copying.
+- **L7-188:** Export refuses a source session that contains symlinks
+  (round-trip with import).
+- **L7-189:** Permanent large-fallback does not honour an explicit
+  `STT_MODEL_PATH` that resolves to the large model. Custom non-large
+  paths still win (M4a / P6a).
+
+Ask-user still held: none for these captain locks.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

@@ -140,11 +140,25 @@ describe('@spyglass/stt', () => {
       `${JSON.stringify({ fallback: true })}\n`
     );
     expect(pickPreferredWhisperModel([small, large], { STT_MODEL_DIR: otherDir })).toBe(small);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_PATH: large,
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(small);
+    const custom = join(dir, 'custom-weights.bin');
+    await writeFile(custom, 'custom-weights');
+    expect(
+      pickPreferredWhisperModel([custom, large], {
+        STT_MODEL_PATH: custom,
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(custom);
     const explicit = resolveWhisperPaths({
       SPYGLASS_STT_RESOURCES: dir,
       STT_MODEL_PATH: large
     });
-    expect(explicit?.model).toBe(large);
+    expect(explicit?.model).toBe(small);
   });
 
   it('does not fall back onto large when fallback is set and small is missing (L7-178)', () => {

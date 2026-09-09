@@ -214,6 +214,13 @@ describe('Lot 7 F-63 confirmation', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_a', 'run_b']);
   });
 
+  it('rejects a suggested patch whose sessionId does not match health (L7-185)', () => {
+    const health = emptyHealth('ses_lot7');
+    const other = patch('#new', 'run_a');
+    other.sessionId = 'ses_other';
+    expect(() => recordSuggestedPatches(health, other, policy)).toThrow(/sessionId/);
+  });
+
   it('increments appliedPatches by unique step indexes (L7-136)', () => {
     const health = incrementAppliedPatches(emptyHealth('ses_lot7'), [0, 0, 1], policy);
     expect(health.appliedPatches).toBe(2);
@@ -582,11 +589,14 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.health?.appliedPatches).toBe(0);
     expect(result.branch).toBeDefined();
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
     const head = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
     ).stdout.trim();
-    expect(head).toBe(result.branch);
+    expect(head).toBe('main');
+    expect(head).not.toBe(result.branch);
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
   it('replaces the descriptor with the confirmed suggestion only (L7-003)', async () => {
@@ -753,11 +763,14 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.reason).toMatch(/gh down/);
     expect(result.health?.appliedPatches).toBe(0);
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
     const head = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
     ).stdout.trim();
-    expect(head).toBe(result.branch);
+    expect(head).toBe('main');
+    expect(head).not.toBe(result.branch);
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
   it('reuses an existing patch branch to resume PR preparation (L7-084)', async () => {
@@ -1129,11 +1142,14 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.branch).toBeDefined();
     expect(listedBranch).toBe(result.branch);
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
-    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
     const head = (
       await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
     ).stdout.trim();
-    expect(head).toBe(result.branch);
+    expect(head).toBe('main');
+    expect(head).not.toBe(result.branch);
+    const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
   it('restores the starting branch when dangling patch-branch delete fails (L7-099)', async () => {
@@ -1700,6 +1716,12 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.branch?.startsWith('spyglass/patch-')).toBe(true);
     expect(result.commit).toBeDefined();
     expect(result.health?.appliedPatches).toBe(0);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
   });
 
   it('refuses restore that would discard tracked edits other than scenario.json (L7-167)', async () => {
@@ -1747,7 +1769,52 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       src.indexOf('function trackedDirtyPaths')
     );
     expect(restoreFn).not.toContain("'-f'");
+    expect(restoreFn).toContain("['reset', 'HEAD', '--', file]");
     expect(restoreFn).toContain("['checkout', target]");
+  });
+
+  it('unstages scenario.json on restore after a failed commit (L7-184)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7184-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'commit') {
+        return { stdout: '', stderr: 'commit failed', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('git-error');
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
+    const cached = (
+      await execFileAsync('git', ['diff', '--cached', '--name-only'], { cwd: dir })
+    ).stdout.trim();
+    expect(cached).toBe('');
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
   });
 
   it('maps a throwing pre-mutation git probe to git-error (L7-144)', async () => {

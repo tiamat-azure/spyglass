@@ -1121,11 +1121,71 @@ describe('Lot 7 F-47 session export/import', () => {
     await writeFile(leaked, 'KEEP\n', 'utf8');
     await symlink(leaked, join(sessionDir, SESSION_BUNDLE_MANIFEST));
     const dest = join(root, 'bundle');
-    await exportSessionFolder(sessionDir, dest);
+    await expect(exportSessionFolder(sessionDir, dest)).rejects.toThrow(/symlink/);
     expect(await readFile(leaked, 'utf8')).toBe('KEEP\n');
-    const written = await readFile(join(dest, SESSION_BUNDLE_MANIFEST), 'utf8');
-    expect(written).toContain('spyglass-session');
-    expect(written).not.toBe('KEEP\n');
+    await expect(readFile(join(dest, SESSION_BUNDLE_MANIFEST))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+  });
+
+  it('refuses export of a session folder that contains a symlink (L7-188)', async () => {
+    const root = await tempDir('spyglass-lot7-l7188-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await symlink(join(root, 'outside'), join(sessionDir, 'escape'));
+    await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toThrow(/symlink/);
+  });
+
+  it('refuses import when spyglass-session.json disagrees with meta.json (L7-187)', async () => {
+    const root = await tempDir('spyglass-lot7-l7187-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    await writeFile(
+      join(dest, SESSION_BUNDLE_MANIFEST),
+      `${JSON.stringify({ schemaVersion: 1, kind: 'spyglass-session', sessionId: 'ses_other', exportedAt: '2026-01-01T00:00:00.000Z' }, null, 2)}\n`,
+      'utf8'
+    );
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(
+      /sessionId does not match meta.json/
+    );
+  });
+
+  it('serializes concurrent imports so a dest created after the check is not replaced (L7-186)', async () => {
+    const root = await tempDir('spyglass-lot7-l7186-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const sessionsRoot = join(root, 'imported');
+    const results = await Promise.allSettled([
+      importSessionFolder(dest, sessionsRoot),
+      importSessionFolder(dest, sessionsRoot)
+    ]);
+    const fulfilled = results.filter((entry) => entry.status === 'fulfilled');
+    const rejected = results.filter((entry) => entry.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(await readFile(join(sessionsRoot, 'ses_export', 'raw.jsonl'), 'utf8')).toBe(
+      '{"schemaVersion":1}\n'
+    );
   });
 
   it('refuses a symlink meta.json before reading it (L7-064)', async () => {

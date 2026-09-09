@@ -655,9 +655,15 @@ if (api !== undefined) {
     sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
     sttUpgrade.hidden = !payload.propose;
   });
-  void api.sttUpgrade.status().then((status) => {
-    sttUpgrade.hidden = !status.propose;
-  });
+  void api.sttUpgrade
+    .status()
+    .then((status) => {
+      sttUpgrade.hidden = !status.propose;
+    })
+    .catch(() => {
+      sttUpgrade.hidden = true;
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    });
 
   void api.stagehand.cdp().then((info) => {
     if (info.port <= 0 || info.cdpUrl.length === 0) {
@@ -868,7 +874,19 @@ replayNextBtn.addEventListener('click', () => {
 });
 
 replayHaltBtn.addEventListener('click', () => {
-  void api?.replay.stop();
+  if (api === undefined) {
+    return;
+  }
+  void api.replay
+    .stop()
+    .then((result) => {
+      if (!result.ok) {
+        replayStatus.textContent = result.error;
+      }
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    });
 });
 
 sessionExportBtn.addEventListener('click', () => {

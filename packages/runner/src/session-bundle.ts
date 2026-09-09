@@ -41,35 +41,40 @@ export async function exportSessionFolder(
 ): Promise<SessionExportResult> {
   const now = options.now ?? new Date();
   const overwrite = options.overwrite === true;
-  const meta = await readSessionMeta(sessionDir);
   const source = resolve(sessionDir);
   const dest = resolve(destDir);
+  await assertNoSymlinks(source);
+  const meta = await readSessionMeta(sessionDir);
   await assertNoCopyOverlap(source, dest);
-  await recoverOrphanedBackup(dest);
-  if (!overwrite) {
-    await assertExportDestAvailable(dest);
-  }
-  const parent = dirname(dest);
-  await mkdir(parent, { recursive: true });
-  const staging = await mkdtemp(join(parent, '.spyglass-export-'));
-  try {
-    await cp(source, staging, { recursive: true, dereference: false });
-    const manifest: SessionBundleManifest = {
-      schemaVersion: 1,
-      kind: 'spyglass-session',
-      sessionId: meta.sessionId,
-      exportedAt: now.toISOString()
-    };
-    const manifestPath = join(staging, SESSION_BUNDLE_MANIFEST);
-    // L7-154: a source symlink named spyglass-session.json would otherwise redirect this write.
-    await unlinkIfPresent(manifestPath);
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-    await replaceDirectory(dest, staging);
-    return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
-  } catch (error) {
-    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
-  }
+  return await withDestLock(dest, async () => {
+    await recoverOrphanedBackup(dest);
+    if (!overwrite) {
+      await assertExportDestAvailable(dest);
+    }
+    const parent = dirname(dest);
+    await mkdir(parent, { recursive: true });
+    const staging = await mkdtemp(join(parent, '.spyglass-export-'));
+    try {
+      await cp(source, staging, { recursive: true, dereference: false });
+      const manifest: SessionBundleManifest = {
+        schemaVersion: 1,
+        kind: 'spyglass-session',
+        sessionId: meta.sessionId,
+        exportedAt: now.toISOString()
+      };
+      const manifestPath = join(staging, SESSION_BUNDLE_MANIFEST);
+      await unlinkIfPresent(manifestPath);
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      await replaceDirectory(dest, staging, {
+        overwrite,
+        existsError: 'export refused: destination already exists'
+      });
+      return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
+    } catch (error) {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  });
 }
 
 export async function importSessionFolder(
@@ -89,21 +94,27 @@ export async function importSessionFolder(
     throw new Error('import refused: invalid sessionId');
   }
   await assertNoCopyOverlap(source, dest);
-  await recoverOrphanedBackup(dest);
-  if (await pathExists(dest)) {
-    throw new Error('import refused: session already exists');
-  }
-  await mkdir(root, { recursive: true });
-  const staging = await mkdtemp(join(root, '.spyglass-import-'));
-  try {
-    await cp(source, staging, { recursive: true, dereference: false });
-    await assertNoSymlinks(staging);
-    await replaceDirectory(dest, staging);
-  } catch (error) {
-    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
-  }
-  return { sessionDir: dest, sessionId };
+  await assertBundleManifestAgrees(source, sessionId);
+  return await withDestLock(dest, async () => {
+    await recoverOrphanedBackup(dest);
+    if (await pathExists(dest)) {
+      throw new Error('import refused: session already exists');
+    }
+    await mkdir(root, { recursive: true });
+    const staging = await mkdtemp(join(root, '.spyglass-import-'));
+    try {
+      await cp(source, staging, { recursive: true, dereference: false });
+      await assertNoSymlinks(staging);
+      await replaceDirectory(dest, staging, {
+        overwrite: false,
+        existsError: 'import refused: session already exists'
+      });
+    } catch (error) {
+      await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+    return { sessionDir: dest, sessionId };
+  });
 }
 
 export async function readSessionMeta(sessionDir: string): Promise<{ sessionId: string }> {
@@ -114,6 +125,64 @@ export async function readSessionMeta(sessionDir: string): Promise<{ sessionId: 
     throw new Error('session meta.json is missing sessionId');
   }
   return { sessionId: raw.sessionId };
+}
+
+/** L7-187: import only a bundle whose manifest matches meta.json. */
+async function assertBundleManifestAgrees(dir: string, sessionId: string): Promise<void> {
+  let rawText: string;
+  try {
+    rawText = await readFile(join(dir, SESSION_BUNDLE_MANIFEST), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new Error('import refused: missing spyglass-session.json');
+    }
+    throw err;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error('import refused: invalid spyglass-session.json');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('import refused: invalid spyglass-session.json');
+  }
+  const record = parsed as { schemaVersion?: unknown; kind?: unknown; sessionId?: unknown };
+  if (record.schemaVersion !== 1) {
+    throw new Error('import refused: spyglass-session.json schemaVersion');
+  }
+  if (record.kind !== 'spyglass-session') {
+    throw new Error('import refused: spyglass-session.json kind');
+  }
+  if (typeof record.sessionId !== 'string' || record.sessionId !== sessionId) {
+    throw new Error('import refused: spyglass-session.json sessionId does not match meta.json');
+  }
+}
+
+/** L7-186: serialize dest check+publish so concurrent import/export cannot clobber. */
+const destLocks = new Map<string, Promise<void>>();
+
+async function withDestLock<T>(dest: string, fn: () => Promise<T>): Promise<T> {
+  const key = resolve(dest);
+  const previous = destLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const held = new Promise<void>((resolveHeld) => {
+    release = resolveHeld;
+  });
+  destLocks.set(
+    key,
+    previous.then(() => held)
+  );
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (destLocks.get(key) === held) {
+      destLocks.delete(key);
+    }
+  }
 }
 
 function isSafeSessionId(sessionId: string): boolean {
@@ -289,8 +358,25 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
 }
 
 /** L7-030 / L7-040 / L7-051: unique backup per replace; restore dest if publish fails.
- * L7-063: orphan recovery runs in export/import *before* O7a/I7a dest checks. */
-async function replaceDirectory(dest: string, staging: string): Promise<void> {
+ * L7-063: orphan recovery runs in export/import *before* O7a/I7a dest checks.
+ * L7-186: when overwrite is false, publish with no-replace rename (do not backup-and-steal). */
+async function replaceDirectory(
+  dest: string,
+  staging: string,
+  options: { overwrite: boolean; existsError: string }
+): Promise<void> {
+  if (!options.overwrite) {
+    try {
+      await rename(staging, dest);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EEXIST' || code === 'ENOTEMPTY' || code === 'EPERM') {
+        throw new Error(options.existsError);
+      }
+      throw err;
+    }
+  }
   const backup = `${dest}.spyglass-prev-${randomBytes(8).toString('hex')}`;
   let backedUp = false;
   let published = false;
