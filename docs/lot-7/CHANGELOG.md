@@ -1017,6 +1017,9 @@ Ask-user still held: X28, F28, W28.
   the same dest. There is **no** cross-process lockfile this lot; separate
   processes can still race. Do not read L7-186 as a machine-wide lock.
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**695 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 63.
+
 Ask-user still held: F28, W28.
 
 ## CI — macOS Electron e2e close hang
