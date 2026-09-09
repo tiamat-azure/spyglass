@@ -416,7 +416,6 @@ export type ReplayStartRequest = {
   forceAi?: boolean;
   noAi?: boolean;
   stepByStep?: boolean;
-  datasetPath?: string;
 };
 
 export type ReplayStartResponse =
@@ -432,17 +431,13 @@ export type ReplayProgressPayload = {
   message: string;
 };
 
-export type SessionExportRequest = {
-  destDir: string;
-};
+export type SessionExportRequest = Record<string, never>;
 
 export type SessionExportResponse =
   | { ok: true; dest: string; sessionId: string }
   | { ok: false; error: string };
 
-export type SessionImportRequest = {
-  bundleDir: string;
-};
+export type SessionImportRequest = Record<string, never>;
 
 export type SessionImportResponse =
   | { ok: true; sessionId: string; sessionDir: string }

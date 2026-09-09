@@ -102,6 +102,9 @@ describe('session payload validation', () => {
     expect(parseReplayStartPayload({ forceAi: true })).toEqual({ forceAi: true });
     expect(parseReplayStartPayload({ noAi: true })).toEqual({ noAi: true });
     expect(parseReplayStartPayload(null)).toEqual({});
+    expect(parseReplayStartPayload({ datasetPath: '/tmp/ds.json', stepByStep: true })).toEqual({
+      stepByStep: true
+    });
   });
 });
 

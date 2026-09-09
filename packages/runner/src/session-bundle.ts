@@ -1,4 +1,16 @@
-import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile
+} from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export const SESSION_BUNDLE_MANIFEST = 'spyglass-session.json';
@@ -62,10 +74,12 @@ export async function importSessionFolder(
     throw new Error('import refused: invalid sessionId');
   }
   await assertNoCopyOverlap(source, dest);
+  await assertNoSymlinks(source);
   await mkdir(root, { recursive: true });
   const staging = await mkdtemp(join(root, '.spyglass-import-'));
   try {
     await cp(source, staging, { recursive: true, dereference: false });
+    await assertNoSymlinks(staging);
     await replaceDirectory(dest, staging);
   } catch (error) {
     await rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -115,6 +129,28 @@ async function assertNoCopyOverlap(source: string, dest: string): Promise<void> 
   }
 }
 
+/** L7-039: import must not copy symlinks (escape / TOCTOU). */
+async function assertNoSymlinks(root: string): Promise<void> {
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) {
+      continue;
+    }
+    const st = await lstat(current);
+    if (st.isSymbolicLink()) {
+      throw new Error('import refused: symlinks are not allowed');
+    }
+    if (!st.isDirectory()) {
+      continue;
+    }
+    const names = await readdir(current);
+    for (const name of names) {
+      stack.push(join(current, name));
+    }
+  }
+}
+
 async function realpathExisting(path: string): Promise<string> {
   try {
     return await realpath(path);
@@ -127,12 +163,46 @@ async function realpathExisting(path: string): Promise<string> {
   }
 }
 
-/** L7-030: move dest aside, then publish staging; restore dest if publish fails. */
+async function recoverOrphanedBackup(dest: string): Promise<void> {
+  const parent = dirname(dest);
+  const base = basename(dest);
+  let names: string[];
+  try {
+    names = await readdir(parent);
+  } catch {
+    return;
+  }
+  const orphans = names
+    .filter((name) => name === `${base}.spyglass-prev` || name.startsWith(`${base}.spyglass-prev-`))
+    .map((name) => join(parent, name));
+  if (orphans.length === 0) {
+    return;
+  }
+  try {
+    await lstat(dest);
+    return;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      return;
+    }
+  }
+  const [first, ...rest] = orphans;
+  if (first === undefined) {
+    return;
+  }
+  await rename(first, dest);
+  for (const extra of rest) {
+    await rm(extra, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/** L7-030 / L7-040: unique backup per replace; restore dest if publish fails. */
 async function replaceDirectory(dest: string, staging: string): Promise<void> {
-  const backup = `${dest}.spyglass-prev`;
+  await recoverOrphanedBackup(dest);
+  const backup = `${dest}.spyglass-prev-${randomBytes(8).toString('hex')}`;
   let backedUp = false;
   try {
-    await rm(backup, { recursive: true, force: true });
     try {
       await rename(dest, backup);
       backedUp = true;

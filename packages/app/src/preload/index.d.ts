@@ -113,12 +113,10 @@ export type SpyglassPreloadApi = {
     onProgress: (callback: (payload: ReplayProgressPayload) => void) => () => void;
   };
   sessionBundle: {
-    exportTo: (
-      destDir: string
-    ) => Promise<{ ok: true; dest: string; sessionId: string } | { ok: false; error: string }>;
-    importFrom: (
-      bundleDir: string
-    ) => Promise<
+    exportSession: () => Promise<
+      { ok: true; dest: string; sessionId: string } | { ok: false; error: string }
+    >;
+    importSession: () => Promise<
       { ok: true; sessionId: string; sessionDir: string } | { ok: false; error: string }
     >;
   };

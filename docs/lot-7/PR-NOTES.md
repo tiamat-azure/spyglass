@@ -63,12 +63,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (267 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **489 passed**, 1 skipped (59 files) |
+| `pnpm test` | **498 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (28), `lot7-parameters.test.ts` (16),
-`upgrade.test.ts` (7), `stt-upgrade-store.test.ts` (4).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (29), `lot7-parameters.test.ts` (20),
+`upgrade.test.ts` (11), `stt-upgrade-store.test.ts` (4).
 
 Screenshots: `docs/lot-7/screenshots/` (`health-json.png`, `assisted-branch.png`,
 `datasets.png`, plus `chrome-lot7-controls.png` from e2e when
@@ -91,7 +91,8 @@ NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 3. **STT download** uses `ggml-large-v3-turbo-q5_0.bin`. Tests use
    `SPYGLASS_STT_UPGRADE_FAKE=1` and never fetch ~575 Mo.
 4. **Export/import** copies the session folder (plus
-   `spyglass-session.json` manifest). Path-traversal session ids and
+   `spyglass-session.json` manifest). In-app F-47 picks the folder with
+   a main-process directory dialog (E4a). Path-traversal session ids and
    `.` / `..` are refused (L7-007).
 
 Pass-1 adversarial (L7-001 … L7-008) is recorded in `CHANGELOG.md`.
@@ -101,10 +102,10 @@ Pass-2 (L7-009 … L7-016) and Captain lock **P2a** (dataset missing
 Pass-3 (L7-017 … L7-020), **W3a** (`--large` atomic download), and
 **F3a** (`readLargeFallback` honours `fallback: false`) are in
 `CHANGELOG.md`.
-Pass-4 (L7-021 … L7-031) is in `CHANGELOG.md`. Ask-user items (F-47
-`window.prompt`, default `STT_LARGE_SHA256`, duplicate `parameterRef`,
-custom `STT_MODEL_PATH` names, `sttUpgradeStatus` `fallback: false`) are
-unchanged.
+Pass-4 (L7-021 … L7-031) is in `CHANGELOG.md`.
+Pass-5 (L7-032 … L7-043) plus Captain locks **E4a / S4a / R4a / M4a /
+U4a** are in `CHANGELOG.md`. Still pending: **A5** (`createInProcessStt`
+sync vs Promise) and **H5** (keep L7-011 health-on-local-commit).
 
 ## Residuals
 

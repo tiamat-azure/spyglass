@@ -105,3 +105,42 @@
 - **L7-031:** `isDefaultBranchName` folds `DEFAULT_BRANCH_NAMES` (optional
   detected default included); assisted apply no longer casts the branch
   name.
+
+## Pass-5 adversarial fixes (L7-032 … L7-043) + Captain locks
+
+- **E4a:** F-47 session export/import uses main-process
+  `dialog.showOpenDialog` (directory). The renderer no longer calls
+  `window.prompt` and does not send a typed path string.
+- **S4a:** `STT_LARGE_SHA256` is pinned next to `STT_LARGE_MODEL_URL`
+  (`39422170…ffa7e2`). Default large download is integrity-checked; a
+  non-empty `STT_LARGE_SHA256` env still overrides.
+- **R4a:** Duplicate **explicit** `parameterRef` values stay shared
+  dataset variables. Only selector-derived names are uniquified
+  (`email` / `email_2`).
+- **M4a:** An explicit `STT_MODEL_PATH` whose file exists is honoured
+  even when the filename is not `ggml-small` / `ggml-large`. L7-016 still
+  refuses to use large weights as the small fallback engine.
+- **U4a:** `sttUpgradeStatus.fallback` is `readLargeFallback(modelDir)`,
+  not hardcoded `false`.
+- **L7-032:** `sttUpgradeDecide` wraps store load / `refusePermanently`
+  and returns `{ ok: false, error: 'store-unavailable' }`.
+- **L7-033 / L7-034:** Accept and refuse IPC rejections `.catch` so the
+  banner does not stay on “Téléchargement en cours…”.
+- **L7-035:** `parseReplayStartPayload` no longer reads unused
+  `datasetPath` (renderer does not expose it).
+- **L7-036:** Non-absolute assisted-apply `scenarioPath` resolves against
+  `repoRoot` before realpath containment.
+- **L7-037:** AI recovery context uses the recorded/redacted scenario,
+  not the dataset-materialized copy (secrets stay out of the LLM
+  payload).
+- **L7-038:** `suggested-patch` originals come from the recorded
+  scenario with parameterized `arguments` stripped.
+- **L7-039:** Session import refuses bundles that contain symlinks.
+- **L7-040:** Each replace uses a unique `.spyglass-prev-*` backup;
+  an orphaned backup is restored if dest is missing.
+- **L7-041:** STT downloads stream to a unique `dest.partial-*` file.
+- **L7-042:** `readLargeFallback` treats ENOENT as `false`; corrupt or
+  unreadable `large-fallback.json` throws.
+- **L7-043:** `firstUseNoted` is set only after a successful
+  fallback-marker hook; transcription still cannot fail (L7-008).
+

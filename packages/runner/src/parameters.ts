@@ -17,7 +17,8 @@ const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp/iu;
 
 export function parameterNameFromStep(step: RefinedStep, used: Set<string>): string | undefined {
   if (step.action.parameterRef !== undefined && step.action.parameterRef.trim().length > 0) {
-    return uniqueName(step.action.parameterRef.trim(), used);
+    // R4a: preserve duplicate explicit refs as a shared dataset variable.
+    return step.action.parameterRef.trim();
   }
   if (!isParameterizedType(step.action.type)) {
     return undefined;

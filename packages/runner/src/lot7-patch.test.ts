@@ -23,7 +23,7 @@ import {
 } from './health.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
-import { StaticRecoverer } from './recover.ts';
+import { type Recoverer, StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
 const execFileAsync = promisify(execFile);
@@ -444,6 +444,32 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
   });
 
+  it('resolves a relative scenario path against the repo root (L7-036)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-relpath-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath: 'scenario.json',
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(true);
+    const patched = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
+  });
+
   it('keeps ok:true and increments health when preparePr throws (L7-011)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-prthrow-'));
     await initGitRepo(dir);
@@ -670,6 +696,13 @@ describe('Lot 7 health.json wiring after recovery', () => {
       `${JSON.stringify({ schemaVersion: 1, name: 'live', values: { password: 'dataset-secret' }, secrets: ['password'] }, null, 2)}\n`,
       'utf8'
     );
+    const inner = new StaticRecoverer({ type: 'click', selector: '#new' }, 'recovered');
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        expect(JSON.stringify(context)).not.toMatch(/dataset-secret/);
+        return await inner.recover(context);
+      }
+    };
     for (const runId of ['run_a', 'run_b'] as const) {
       const driver = new MemoryPageDriver({
         url: 'https://exemple.test/start',
@@ -683,7 +716,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
       const result = await runScenario(scn, {
         driver,
         aiRecovery: true,
-        recoverer: new StaticRecoverer({ type: 'click', selector: '#new' }, 'recovered'),
+        recoverer,
         reportDir: join(sessionDir, 'runs', runId),
         sessionDir,
         scenarioPath,
@@ -695,6 +728,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
         preparePr: async () => ({})
       });
       expect(driver.fills.map((row) => row.value)).toEqual(['dataset-secret']);
+      expect(JSON.stringify(result.suggestedPatch ?? {})).not.toMatch(/dataset-secret/);
       if (runId === 'run_b') {
         expect(result.assistedApply?.ok).toBe(true);
       }

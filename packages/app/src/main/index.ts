@@ -5,12 +5,14 @@ import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
 import {
   downloadUrlToFileAtomic,
   largeModelPath,
+  readLargeFallback,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,
+  STT_LARGE_SHA256,
   sttLargeDownloadTimeoutMs,
   writeFileAtomic
 } from '@spyglass/stt';
-import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, type Session, type WebContents } from 'electron';
 import type {
   NavState,
   PopupRedirectedPayload,
@@ -44,7 +46,6 @@ import {
   parseGotoPayload,
   parseGuestVisiblePayload,
   parseObservePayload,
-  parsePathPayload,
   parseRaiseCeilingPayload,
   parseRefineConfirmPayload,
   parseRefineEditPayload,
@@ -290,6 +291,25 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
     sttUpgradeStoreLoading = undefined;
     throw error;
   }
+}
+
+async function pickSessionDirectory(
+  win: BrowserWindow | undefined,
+  title: string
+): Promise<string | undefined> {
+  const options = {
+    title,
+    properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>
+  };
+  const picked =
+    win !== undefined && !win.isDestroyed()
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+  if (picked.canceled) {
+    return undefined;
+  }
+  const path = picked.filePaths[0];
+  return path !== undefined && path.length > 0 ? path : undefined;
 }
 
 function emitToChrome(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -936,14 +956,17 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     return { ok: true };
   });
 
-  ipcMain.handle(IPC.sessionExport, async (event, raw: unknown) => {
+  ipcMain.handle(IPC.sessionExport, async (event) => {
     if (rejectForeignIpc(event, winRef, IPC.sessionExport)) {
       return { ok: false, error: 'forbidden' };
     }
-    const destDir = parsePathPayload(raw, 'destDir');
     const sessionDir = activeSession?.currentSessionDir();
-    if (destDir === undefined || sessionDir === undefined) {
-      return { ok: false, error: 'no session or destDir' };
+    if (sessionDir === undefined) {
+      return { ok: false, error: 'no session' };
+    }
+    const destDir = await pickSessionDirectory(winRef.current, 'Exporter la session');
+    if (destDir === undefined) {
+      return { ok: false, error: 'cancelled' };
     }
     try {
       const exported = await exportSessionFolder(sessionDir, destDir);
@@ -953,13 +976,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
   });
 
-  ipcMain.handle(IPC.sessionImport, async (event, raw: unknown) => {
+  ipcMain.handle(IPC.sessionImport, async (event) => {
     if (rejectForeignIpc(event, winRef, IPC.sessionImport)) {
       return { ok: false, error: 'forbidden' };
     }
-    const bundleDir = parsePathPayload(raw, 'bundleDir');
+    const bundleDir = await pickSessionDirectory(winRef.current, 'Importer une session');
     if (bundleDir === undefined) {
-      return { ok: false, error: 'bundleDir required' };
+      return { ok: false, error: 'cancelled' };
     }
     try {
       const imported = await importSessionFolder(
@@ -986,12 +1009,18 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       const store = await ensureSttUpgradeStore();
       const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
       const snap = store.snapshot(modelDir);
+      let fallback = false;
+      try {
+        fallback = await readLargeFallback(modelDir);
+      } catch {
+        fallback = false;
+      }
       return {
         correctionCount: snap.correctionCount,
         refusedPermanently: snap.refusedPermanently,
         largeAvailable: snap.largeAvailable,
         propose: snap.decision === 'propose',
-        fallback: false
+        fallback
       };
     } catch {
       return {
@@ -1012,10 +1041,15 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (action === undefined) {
       return { ok: false };
     }
-    const store = await ensureSttUpgradeStore();
-    if (action === 'refuse') {
-      await store.refusePermanently();
-      return { ok: true };
+    let store: SttUpgradeStore;
+    try {
+      store = await ensureSttUpgradeStore();
+      if (action === 'refuse') {
+        await store.refusePermanently();
+        return { ok: true };
+      }
+    } catch {
+      return { ok: false, error: 'store-unavailable' };
     }
     const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
     await mkdir(modelDir, { recursive: true });
@@ -1025,12 +1059,14 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: true };
     }
     try {
-      const digest = process.env.STT_LARGE_SHA256;
+      const fromEnv = process.env.STT_LARGE_SHA256;
+      const digest =
+        fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : STT_LARGE_SHA256;
       await downloadUrlToFileAtomic({
         dest,
         url: STT_LARGE_MODEL_URL,
         timeoutMs: sttLargeDownloadTimeoutMs(process.env),
-        ...(digest !== undefined && digest.length > 0 ? { expectedSha256: digest } : {})
+        expectedSha256: digest
       });
       return { ok: true };
     } catch (error) {

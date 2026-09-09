@@ -53,15 +53,27 @@ export async function createEngineFromEnv(
       const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
       const smallOk = existsSync(smallPath);
       const fallback = env.STT_LARGE_FALLBACK === '1' || (await readLargeFallback(modelDir));
-      const choice = chooseWhisperModel({
-        ...(existsSync(largePath) ? { largePath } : {}),
-        ...(smallOk ? { smallPath } : {}),
-        largeFallback: fallback
-      });
-      if (choice.kind === 'small') {
-        model = requireSmallModelFile(smallPath, paths.model);
+      const explicit = env.STT_MODEL_PATH?.trim();
+      const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
+      const largeOk = existsSync(largePath);
+      if (explicitOk && !largeOk && !smallOk && !fallback) {
+        // M4a: honor an explicit custom filename when conventional models are absent.
+        model = explicit;
       } else {
-        model = choice.file;
+        const choice = chooseWhisperModel({
+          ...(largeOk ? { largePath } : {}),
+          ...(smallOk ? { smallPath } : {}),
+          largeFallback: fallback
+        });
+        if (choice.kind === 'small') {
+          if (explicitOk && basename(explicit) !== STT_LARGE_MODEL_FILE) {
+            model = explicit;
+          } else {
+            model = requireSmallModelFile(smallPath, paths.model);
+          }
+        } else {
+          model = choice.file;
+        }
       }
       const engineOpts: Parameters<typeof createWhisperEngine>[0] = {
         bin: paths.bin,
@@ -70,7 +82,7 @@ export async function createEngineFromEnv(
         timeoutMs:
           Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
       };
-      if (choice.kind === 'large') {
+      if (existsSync(largePath) && model === largePath) {
         const budgetMs = parseMaxLatencyMs(env);
         engineOpts.onFirstUseLatency = (latencyMs) => {
           void recordFirstUseLatency({ modelDir, latencyMs, budgetMs });

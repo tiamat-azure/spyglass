@@ -275,12 +275,12 @@ const spyglass = {
     }
   },
   sessionBundle: {
-    exportTo: async (destDir: string) =>
-      ipcRenderer.invoke(IPC.sessionExport, { destDir }) as Promise<
+    exportSession: async () =>
+      ipcRenderer.invoke(IPC.sessionExport, {}) as Promise<
         { ok: true; dest: string; sessionId: string } | { ok: false; error: string }
       >,
-    importFrom: async (bundleDir: string) =>
-      ipcRenderer.invoke(IPC.sessionImport, { bundleDir }) as Promise<
+    importSession: async () =>
+      ipcRenderer.invoke(IPC.sessionImport, {}) as Promise<
         { ok: true; sessionId: string; sessionDir: string } | { ok: false; error: string }
       >
   },

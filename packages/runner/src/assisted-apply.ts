@@ -116,7 +116,9 @@ export async function resolveScenarioInRepo(
   } catch {
     return undefined;
   }
-  const requested = resolve(scenarioPath);
+  const requested = isAbsolute(scenarioPath)
+    ? resolve(scenarioPath)
+    : resolve(repoRoot, scenarioPath);
   const scenarioReal = await realpathExisting(requested);
   let parentReal: string;
   try {

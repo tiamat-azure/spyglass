@@ -206,5 +206,14 @@ describe('packaged Observe', () => {
     expect(main).toContain("error: 'voice capture refused'");
     expect(main).toContain('onStopRolledBack');
     expect(main).toContain("state.state === 'recording'");
+    expect(main).toContain('dialog.showOpenDialog');
+    expect(renderer).toContain('exportSession');
+    expect(renderer).toContain('importSession');
+    const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
+    expect(exportIdx).toBeGreaterThan(-1);
+    expect(renderer.slice(exportIdx, exportIdx + 900)).not.toContain('window.prompt');
+    const importIdx = renderer.indexOf('sessionImportBtn.addEventListener');
+    expect(importIdx).toBeGreaterThan(-1);
+    expect(renderer.slice(importIdx, importIdx + 900)).not.toContain('window.prompt');
   });
 });

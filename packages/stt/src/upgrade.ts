@@ -7,6 +7,8 @@ export const STT_LARGE_MODEL_FILE = 'ggml-large-v3-turbo-q5_0.bin';
 export const STT_SMALL_MODEL_FILE = 'ggml-small-q5_1.bin';
 export const STT_LARGE_MODEL_URL =
   'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
+/** Hugging Face LFS oid for ggml-large-v3-turbo-q5_0.bin (S4a). Env may override. */
+export const STT_LARGE_SHA256 = '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2';
 
 export const STT_UPGRADE_PROMPT_AFTER_DEFAULT = 10;
 export const STT_MAX_LATENCY_MS_DEFAULT = 2_000;
@@ -81,14 +83,30 @@ export function shouldFallbackToSmall(latencyMs: number, budgetMs: number): bool
 }
 
 export async function readLargeFallback(modelDir: string): Promise<boolean> {
+  let rawText: string;
   try {
-    const raw = JSON.parse(await readFile(join(modelDir, STT_FALLBACK_MARKER), 'utf8')) as {
-      fallback?: unknown;
-    };
-    return raw.fallback === true;
-  } catch {
-    return false;
+    rawText = await readFile(join(modelDir, STT_FALLBACK_MARKER), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return false;
+    }
+    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error('corrupt large-fallback.json: invalid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('corrupt large-fallback.json: not an object');
+  }
+  const fallback = (parsed as { fallback?: unknown }).fallback;
+  if (typeof fallback !== 'boolean') {
+    throw new Error('corrupt large-fallback.json: fallback');
+  }
+  return fallback === true;
 }
 
 export async function writeLargeFallback(modelDir: string, fallback: boolean): Promise<void> {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -57,6 +57,32 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.dataset.values.user).toBe('alice');
     expect(extracted.dataset.values.password).toBe('s3cret');
     expect(extracted.dataset.secrets).toContain('password');
+  });
+
+  it('preserves duplicate explicit parameterRef as a shared variable (R4a)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/login',
+      steps: [fillStep(0, '#pw1', 's3cret', 'password'), fillStep(1, '#pw2', 's3cret', 'password')]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('password');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('password');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).not.toBe('password_2');
+    expect(extracted.dataset.values.password).toBe('s3cret');
+  });
+
+  it('still uniquifies generated selector-derived names (R4a)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/form',
+      steps: [fillStep(0, '#email', 'a@x.test'), fillStep(1, '#email', 'b@x.test')]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('email');
+    expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('email_2');
   });
 
   it('replays the same scenario with distinct datasets', async () => {
@@ -342,6 +368,40 @@ describe('Lot 7 F-47 session export/import', () => {
     await expect(
       readFile(join(sessionsRoot, 'ses_export.spyglass-prev', 'stale.txt'))
     ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('refuses import when the bundle contains a symlink (L7-039)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-symlink-import-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    await symlink(join(root, 'outside'), join(dest, 'escape'));
+    await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(/symlink/);
+  });
+
+  it('recovers an orphaned replace backup before the next replace (L7-040)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-orphan-'));
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const orphan = `${dest}.spyglass-prev-deadbeef`;
+    await rename(dest, orphan);
+    await exportSessionFolder(sessionDir, dest);
+    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+    await expect(readFile(join(orphan, 'raw.jsonl'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

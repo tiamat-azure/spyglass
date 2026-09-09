@@ -854,11 +854,10 @@ sessionExportBtn.addEventListener('click', () => {
   if (api === undefined) {
     return;
   }
-  const dest = window.prompt('Dossier d’export autonome (F-47)');
-  if (dest === null || dest.trim().length === 0) {
-    return;
-  }
-  void api.sessionBundle.exportTo(dest.trim()).then((result) => {
+  void api.sessionBundle.exportSession().then((result) => {
+    if (!result.ok && result.error === 'cancelled') {
+      return;
+    }
     replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
   });
 });
@@ -867,11 +866,10 @@ sessionImportBtn.addEventListener('click', () => {
   if (api === undefined) {
     return;
   }
-  const bundle = window.prompt('Dossier de session à importer (F-47)');
-  if (bundle === null || bundle.trim().length === 0) {
-    return;
-  }
-  void api.sessionBundle.importFrom(bundle.trim()).then((result) => {
+  void api.sessionBundle.importSession().then((result) => {
+    if (!result.ok && result.error === 'cancelled') {
+      return;
+    }
     replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
   });
 });
@@ -884,9 +882,6 @@ sttUpgradeAccept.addEventListener('click', () => {
   sttUpgradeCopy.textContent = 'Téléchargement en cours…';
   void api.sttUpgrade
     .decide('accept')
-    .finally(() => {
-      sttUpgradeAccept.disabled = false;
-    })
     .then((result) => {
       if (result.ok) {
         sttUpgrade.hidden = true;
@@ -896,6 +891,13 @@ sttUpgradeAccept.addEventListener('click', () => {
         result.error === 'timeout'
           ? 'Téléchargement trop long. Réessayez ou refusez définitivement.'
           : 'Téléchargement impossible. Réessayez ou refusez définitivement.';
+    })
+    .catch(() => {
+      sttUpgradeCopy.textContent =
+        'Téléchargement impossible. Réessayez ou refusez définitivement.';
+    })
+    .finally(() => {
+      sttUpgradeAccept.disabled = false;
     });
 });
 
@@ -903,9 +905,14 @@ requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () 
   if (api === undefined) {
     return;
   }
-  void api.sttUpgrade.decide('refuse').then(() => {
-    sttUpgrade.hidden = true;
-  });
+  void api.sttUpgrade
+    .decide('refuse')
+    .then(() => {
+      sttUpgrade.hidden = true;
+    })
+    .catch(() => {
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    });
 });
 
 requireEl<HTMLButtonElement>('fast-test').addEventListener('click', () => {

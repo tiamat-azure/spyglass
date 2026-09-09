@@ -104,6 +104,7 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeEnd).toBeGreaterThan(largeStart);
     const largeBlock = src.slice(largeStart, largeEnd);
     expect(largeBlock).toMatch(/downloadResponseToFileAtomic/);
+    expect(largeBlock).toMatch(/STT_LARGE_SHA256/);
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 });
@@ -114,6 +115,7 @@ describe('Lot 7 first-use latency isolation (L7-008)', () => {
       notifyFirstUseLatency(async () => {
         throw new Error('disk full');
       }, 3500)
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
+    await expect(notifyFirstUseLatency(async () => undefined, 10)).resolves.toBe(true);
   });
 });

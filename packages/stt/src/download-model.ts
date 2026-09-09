@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -19,14 +19,15 @@ export type StreamToFileAtomicInput = {
 };
 
 /**
- * Stream to `dest.partial`, validate size/digest, then atomic rename (L7-005).
+ * Stream to a unique `dest.partial-*`, validate size/digest, then atomic rename
+ * (L7-005 / L7-041).
  */
 export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promise<{
   bytes: number;
   sha256: string;
 }> {
   await mkdir(dirname(input.dest), { recursive: true });
-  const partial = `${input.dest}.partial`;
+  const partial = `${input.dest}.partial-${randomBytes(8).toString('hex')}`;
   await rm(partial, { force: true });
   const hash = createHash('sha256');
   let bytes = 0;

@@ -282,7 +282,6 @@ export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
     forceAi?: unknown;
     noAi?: unknown;
     stepByStep?: unknown;
-    datasetPath?: unknown;
   };
   const result: ReplayStartRequest = {};
   if (record.forceAi === true) {
@@ -293,9 +292,6 @@ export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
   }
   if (record.stepByStep === true) {
     result.stepByStep = true;
-  }
-  if (typeof record.datasetPath === 'string' && record.datasetPath.length > 0) {
-    result.datasetPath = record.datasetPath;
   }
   return result;
 }

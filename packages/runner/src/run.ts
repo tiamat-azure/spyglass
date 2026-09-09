@@ -196,7 +196,7 @@ async function runScenarioOnDriver(
   const executable = await scenarioWithDataset(scenario, resolved, options);
   const runId = options.runId ?? newRunId();
   const startedAt = new Date();
-  const original = executable.steps.map((step) => cloneDescriptor(step.action.descriptor));
+  const original = scenario.steps.map((step) => originalDescriptorForPatch(step));
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
   let failed = false;
@@ -291,8 +291,8 @@ async function runScenarioOnDriver(
         warnings.push(TEXT_ONLY_WARNING);
       }
       const recovered = await recoverStep({
-        scenario: executable,
-        step,
+        scenario: scenarioForRecovery(scenario),
+        step: stepForRecovery(scenario.steps[index] ?? step),
         driver: options.driver,
         recoverer: options.recoverer,
         timeoutMs,
@@ -511,8 +511,8 @@ async function recoverStep(input: {
       step: input.step,
       attempt,
       error: lastError,
-      beforeDom: input.beforeDom,
-      afterDom,
+      beforeDom: redactSnapshotForRecovery(input.beforeDom, input.scenario),
+      afterDom: redactSnapshotForRecovery(afterDom, input.scenario),
       multimodal: input.multimodal,
       ...(screenshotRef !== undefined ? { screenshotPath: screenshotRef } : {})
     };
@@ -631,6 +631,56 @@ function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+/** L7-038: persist suggested-patch originals from the recorded scenario, without parameter args. */
+function originalDescriptorForPatch(step: RefinedStep): ReplayDescriptor {
+  const descriptor = cloneDescriptor(step.action.descriptor);
+  if (step.action.parameterRef !== undefined && step.action.parameterRef.length > 0) {
+    delete descriptor.arguments;
+  }
+  return descriptor;
+}
+
+/** L7-037: AI recovery sees the recorded/redacted scenario, not dataset-materialized secrets. */
+function scenarioForRecovery(scenario: Scenario): Scenario {
+  return {
+    ...scenario,
+    steps: scenario.steps.map((step) => stepForRecovery(step))
+  };
+}
+
+function stepForRecovery(step: RefinedStep): RefinedStep {
+  return {
+    ...step,
+    action: {
+      ...step.action,
+      descriptor: originalDescriptorForPatch(step)
+    }
+  };
+}
+
+function redactSnapshotForRecovery(
+  snapshot: { url: string; title: string; text: string; values: Record<string, string> },
+  scenario: Scenario
+): { url: string; title: string; text: string; values: Record<string, string> } {
+  const redactedSelectors = new Set(
+    scenario.steps
+      .filter(
+        (step) => step.action.parameterRef !== undefined && step.action.parameterRef.length > 0
+      )
+      .map((step) => step.action.descriptor.selector)
+  );
+  if (redactedSelectors.size === 0) {
+    return snapshot;
+  }
+  const values: Record<string, string> = { ...snapshot.values };
+  for (const selector of redactedSelectors) {
+    if (Object.hasOwn(values, selector)) {
+      values[selector] = '';
+    }
+  }
+  return { ...snapshot, values };
 }
 
 async function scenarioWithDataset(
