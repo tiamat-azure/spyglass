@@ -837,6 +837,14 @@ Ask-user still held: none for these captain locks.
 
 Ask-user still held: W26, C26, I26 (not assumed).
 
+## W26a captain lock
+
+- **W26a:** Overwrite-false session export vacates an existing empty dest
+  (Windows folder picker) then `rename`s staging onto it. Non-empty dest
+  is still refused (O7a). Import does not vacate an empty dest (I7a).
+
+Ask-user still held: C26, I26.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

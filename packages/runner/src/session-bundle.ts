@@ -9,6 +9,7 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
   unlink,
   writeFile
 } from 'node:fs/promises';
@@ -67,7 +68,8 @@ export async function exportSessionFolder(
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
       await replaceDirectory(dest, staging, {
         overwrite,
-        existsError: 'export refused: destination already exists'
+        existsError: 'export refused: destination already exists',
+        allowEmptyDest: !overwrite
       });
       return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
     } catch (error) {
@@ -313,6 +315,33 @@ function isMissingPathError(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR';
 }
 
+/**
+ * W26a: Windows `rename(staging, dest)` fails when dest already exists as an
+ * empty directory (folder picker). Remove only a still-empty dest.
+ * Non-empty dest is left in place (O7a / L7-186).
+ */
+async function vacateEmptyDirectory(dest: string): Promise<boolean> {
+  let st: Awaited<ReturnType<typeof lstat>>;
+  try {
+    st = await lstat(dest);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return false;
+    }
+    throw err;
+  }
+  if (!st.isDirectory()) {
+    return false;
+  }
+  const names = await readdir(dest);
+  if (names.length > 0) {
+    return false;
+  }
+  await rmdir(dest);
+  return true;
+}
+
 async function recoverOrphanedBackup(dest: string): Promise<void> {
   const parent = dirname(dest);
   const base = basename(dest);
@@ -359,17 +388,26 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
 
 /** L7-030 / L7-040 / L7-051: unique backup per replace; restore dest if publish fails.
  * L7-063: orphan recovery runs in export/import *before* O7a/I7a dest checks.
- * L7-186: when overwrite is false, publish with no-replace rename (do not backup-and-steal). */
+ * L7-186: when overwrite is false, publish with no-replace rename (do not backup-and-steal).
+ * W26a: export may vacate an existing empty dest (Windows folder picker) then rename. */
 async function replaceDirectory(
   dest: string,
   staging: string,
-  options: { overwrite: boolean; existsError: string }
+  options: { overwrite: boolean; existsError: string; allowEmptyDest?: boolean }
 ): Promise<void> {
   if (!options.overwrite) {
+    if (options.allowEmptyDest === true) {
+      await vacateEmptyDirectory(dest);
+    }
     try {
       await rename(staging, dest);
       return;
     } catch (err) {
+      // W26a: Windows rename onto an existing empty dest fails (EPERM/EEXIST).
+      if (options.allowEmptyDest === true && (await vacateEmptyDirectory(dest))) {
+        await rename(staging, dest);
+        return;
+      }
       const code = (err as NodeJS.ErrnoException).code;
       // L7-195: EPERM is not "already exists" (permissions / Windows rename).
       if (code === 'EEXIST' || code === 'ENOTEMPTY') {

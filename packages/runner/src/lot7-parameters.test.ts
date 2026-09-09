@@ -1107,6 +1107,40 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(await readFile(join(dest, 'keep.txt'), 'utf8')).toBe('alive\n');
   });
 
+  it('publishes overwrite-false export into an existing empty dest (W26a)', async () => {
+    const root = await tempDir('spyglass-lot7-w26a-empty-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    await writeFile(join(sessionDir, 'raw.jsonl'), '{"schemaVersion":1}\n', 'utf8');
+    const dest = join(root, 'bundle');
+    await mkdir(dest, { recursive: true });
+    const result = await exportSessionFolder(sessionDir, dest);
+    expect(result.dest).toBe(dest);
+    expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
+    expect(await readFile(join(dest, SESSION_BUNDLE_MANIFEST), 'utf8')).toMatch(/spyglass-session/);
+  });
+
+  it('still refuses import when an empty dest directory already exists (I7a)', async () => {
+    const root = await tempDir('spyglass-lot7-w26a-import-empty-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const dest = join(root, 'bundle');
+    await exportSessionFolder(sessionDir, dest);
+    const sessionsRoot = join(root, 'imported');
+    await mkdir(join(sessionsRoot, 'ses_export'), { recursive: true });
+    await expect(importSessionFolder(dest, sessionsRoot)).rejects.toThrow(/session already exists/);
+  });
+
   it('refuses import when a session with the same id already exists (I7a)', async () => {
     const root = await tempDir('spyglass-lot7-import-exists-');
     const sessionDir = join(root, 'ses_export');
@@ -1166,6 +1200,25 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(noOverwrite).toContain("code === 'ENOTEMPTY'");
     expect(noOverwrite).not.toContain("code === 'EPERM'");
     expect(noOverwrite).toContain('pathExists(dest)');
+  });
+
+  it('vacates an empty dest before no-replace rename so Windows folder pickers work (W26a)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('async function replaceDirectory');
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(start);
+    const noOverwrite = body.slice(0, body.indexOf('const backup'));
+    expect(noOverwrite).toContain('allowEmptyDest');
+    expect(noOverwrite).toContain('vacateEmptyDirectory(dest)');
+    expect(noOverwrite.indexOf('vacateEmptyDirectory(dest)')).toBeLessThan(
+      noOverwrite.indexOf('await rename(staging, dest)')
+    );
+    const vacateStart = src.indexOf('async function vacateEmptyDirectory');
+    expect(vacateStart).toBeGreaterThan(-1);
+    const vacate = src.slice(vacateStart, src.indexOf('async function recoverOrphanedBackup'));
+    expect(vacate).toContain('names.length > 0');
+    expect(vacate).toContain('await rmdir(dest)');
+    expect(vacate).not.toContain('recursive: true');
   });
 
   it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {

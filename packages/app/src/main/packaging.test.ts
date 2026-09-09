@@ -311,6 +311,8 @@ describe('packaged Observe', () => {
     expect(noOverwritePublish).toContain("code === 'ENOTEMPTY'");
     expect(noOverwritePublish).not.toContain("code === 'EPERM'");
     expect(noOverwritePublish).toContain('pathExists(dest)');
+    expect(noOverwritePublish).toContain('allowEmptyDest');
+    expect(noOverwritePublish).toContain('vacateEmptyDirectory(dest)');
     const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
     expect(replaceCatch).not.toContain('await rm(dest');
     expect(replaceCatch).toContain('await rename(backup, dest)');
