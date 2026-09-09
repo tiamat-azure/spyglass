@@ -953,6 +953,18 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: R28, G28, P28, S28, X28, F28, W28.
 
+## Captain lock R28a (migrate-before-validate health runIds)
+
+- **R28a:** Aligns H21a so `validateHealth` runs `migrateHealthPatchCandidates`
+  before Ajv. Pre-Lot-7 candidates missing `runIds` default from existing
+  non-empty string items, else `lastRunId`, and are not fail-closed for
+  that omission. Raw `validateUnknown('health', …)` still requires `runIds`
+  (L7-128 corpus). `schemaVersion` stays **1**. Load still does not rewrite
+  `health.json`. Duplicate `runIds` still fail (L7-180); migrate does not
+  unique them.
+
+Ask-user still held: G28, P28, S28, X28, F28, W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

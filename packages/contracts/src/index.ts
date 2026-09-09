@@ -1,3 +1,4 @@
+export { migrateHealthPatchCandidates } from './health-migrate.ts';
 export type { SchemaName } from './paths.ts';
 export { examplesDir, repoRoot, schemaDir, schemaFiles } from './paths.ts';
 export type {

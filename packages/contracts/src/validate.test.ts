@@ -89,8 +89,8 @@ describe('validateHealth', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('rejects a patch candidate missing runIds (L7-128)', () => {
-    const result = validateHealth({
+  it('migrates missing runIds from lastRunId before schema checks (R28a / H21a)', () => {
+    const payload = {
       schemaVersion: 1,
       sessionId: 'ses_x',
       status: 'healthy',
@@ -101,6 +101,25 @@ describe('validateHealth', () => {
           descriptorHash: 'sha256:abc',
           consecutiveRuns: 1,
           lastRunId: 'run_a'
+        }
+      ]
+    };
+    expect(validateHealth(payload).valid).toBe(true);
+    expect(validateUnknown('health', payload).valid).toBe(false);
+  });
+
+  it('still rejects a candidate with no derivable runIds', () => {
+    const result = validateHealth({
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: ''
         }
       ]
     });

@@ -237,6 +237,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   `runIds` get them from existing string items or `lastRunId`.
   `schemaVersion` stays 1. Schema still requires `runIds` (L7-128);
   load no longer fails solely for that omission.
+- **R28a:** `validateHealth` migrates missing `runIds` (H21a) before Ajv
+  so callers that skip `loadHealth` do not fail-closed on pre-Lot-7
+  artifacts. Raw `validateUnknown('health', …)` still rejects missing
+  `runIds` (L7-128). `schemaVersion` stays 1.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -287,4 +291,6 @@ export staging symlink re-check, aligned large-fallback marker dirs.
 `STT_WHISPER_TIMEOUT_MS` (process) from `STT_MAX_LATENCY_MS` (first-use).
 Pass-28 (L7-210 … L7-212): re-check dirty worktree before write/commit,
 `consecutiveRuns` matches capped `runIds` window, looser hung-git
-SIGKILL bound. Held: R28, G28, P28, S28, X28, F28, W28.
+SIGKILL bound. **R28a:** `validateHealth` migrates missing `runIds`
+before schema checks (H21a); raw schema still fail-closed (L7-128).
+Held: G28, P28, S28, X28, F28, W28.

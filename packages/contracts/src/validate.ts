@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { migrateHealthPatchCandidates } from './health-migrate.ts';
 import { examplesDir, type SchemaName, schemaDir, schemaFiles } from './paths.ts';
 
 export type ValidationResult = {
@@ -194,7 +195,8 @@ export function validateRefinedStep(data: unknown): ValidationResult {
 }
 
 export function validateHealth(data: unknown): ValidationResult {
-  return validateUnknown('health', data);
+  // R28a: migrate missing runIds before schema checks (H21a load path).
+  return validateUnknown('health', migrateHealthPatchCandidates(data));
 }
 
 export function validateScenario(data: unknown): ValidationResult {

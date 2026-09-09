@@ -9,7 +9,7 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
-import { validateHealth } from '@spyglass/contracts';
+import { validateHealth, validateUnknown } from '@spyglass/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyAssistedPatches,
@@ -2696,8 +2696,8 @@ describe('loadHealth H21a runIds migration', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
   });
 
-  it('still rejects missing runIds at the schema (L7-128)', () => {
-    const result = validateHealth({
+  it('still rejects missing runIds at the raw schema (L7-128)', () => {
+    const payload = {
       schemaVersion: 1,
       sessionId: 'ses_x',
       status: 'healthy',
@@ -2710,8 +2710,9 @@ describe('loadHealth H21a runIds migration', () => {
           lastRunId: 'run_a'
         }
       ]
-    });
-    expect(result.valid).toBe(false);
+    };
+    expect(validateUnknown('health', payload).valid).toBe(false);
+    expect(validateHealth(payload).valid).toBe(true);
   });
 
   it('still fails load when a candidate has no derivable runIds', async () => {
