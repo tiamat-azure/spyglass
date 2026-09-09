@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **562 passed**, 1 skipped (60 files) |
+| `pnpm test` | **569 passed**, 1 skipped (60 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (44), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (35),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (47), `patch-redact.test.ts` (9), `lot7-parameters.test.ts` (37),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -153,6 +153,7 @@ Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
 Pass-15 (L7-103 … L7-108) is in `CHANGELOG.md`.
 Windows CI: L7-108 backoff starts after the second failed first-use persist
 so L7-097 can still sample a later non-overlapping finalize.
+Pass-16 (L7-109 … L7-116) is in `CHANGELOG.md`.
 
 ## Residuals
 

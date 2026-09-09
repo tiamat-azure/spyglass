@@ -73,7 +73,7 @@ export async function downloadResponseToFileAtomic(input: {
   dest: string;
   response: Response;
   expectedSha256?: string;
-  minBytes?: number;
+  minBytes: number;
 }): Promise<{ bytes: number; sha256: string }> {
   if (!input.response.ok) {
     await input.response.body?.cancel()?.catch(() => undefined);
@@ -96,7 +96,7 @@ export async function downloadResponseToFileAtomic(input: {
   const opts: StreamToFileAtomicInput = {
     dest: input.dest,
     stream,
-    minBytes: input.minBytes ?? STT_LARGE_MIN_BYTES
+    minBytes: input.minBytes
   };
   if (expectedBytes !== undefined) {
     opts.expectedBytes = expectedBytes;
@@ -121,18 +121,16 @@ export async function downloadUrlToFileAtomic(input: {
   url: string;
   timeoutMs?: number;
   expectedSha256?: string;
-  minBytes?: number;
+  minBytes: number;
 }): Promise<{ bytes: number; sha256: string }> {
   const timeoutMs = input.timeoutMs ?? STT_LARGE_DOWNLOAD_TIMEOUT_MS;
   const signal = AbortSignal.timeout(timeoutMs);
   const response = await fetch(input.url, { redirect: 'follow', signal });
   const opts: Parameters<typeof downloadResponseToFileAtomic>[0] = {
     dest: input.dest,
-    response
+    response,
+    minBytes: input.minBytes
   };
-  if (input.minBytes !== undefined) {
-    opts.minBytes = input.minBytes;
-  }
   if (input.expectedSha256 !== undefined && input.expectedSha256.length > 0) {
     opts.expectedSha256 = input.expectedSha256;
   }

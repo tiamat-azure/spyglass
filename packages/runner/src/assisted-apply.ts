@@ -681,18 +681,24 @@ function ghExecEnv(): NodeJS.ProcessEnv {
   return { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT: 'never' };
 }
 
+function gitFailureReason(stderr: string, args: readonly string[]): string {
+  const detail = stderr.trim();
+  return detail.length > 0 ? detail : `git ${args.join(' ')} failed`;
+}
+
 async function pushPatchBranch(
   git: GitExec,
   repoRoot: string,
   branch: string,
   hasOpenPr: HasOpenPr
 ): Promise<{ ok: true } | { ok: false; code: 'pr-prep-failed' | 'open-pr'; reason: string }> {
-  const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
+  const pushArgs = ['push', '-u', 'origin', branch] as const;
+  const pushed = await git(pushArgs, repoRoot);
   if (pushed.code === 0) {
     return { ok: true };
   }
   if (!isNonFastForwardPush(pushed.stderr)) {
-    return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
+    return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(pushed.stderr, pushArgs) };
   }
   const openPr = await hasOpenPr({ repo: repoRoot, branch });
   if (openPr) {
@@ -705,18 +711,17 @@ async function pushPatchBranch(
   const deletedArgs = ['push', 'origin', '--delete', branch] as const;
   const deleted = await git(deletedArgs, repoRoot);
   if (deleted.code !== 0) {
-    const detail = deleted.stderr.trim();
     return {
       ok: false,
       code: 'pr-prep-failed',
-      reason: detail.length > 0 ? detail : `git ${deletedArgs.join(' ')} failed`
+      reason: gitFailureReason(deleted.stderr, deletedArgs)
     };
   }
-  const retried = await git(['push', '-u', 'origin', branch], repoRoot);
+  const retried = await git(pushArgs, repoRoot);
   if (retried.code === 0) {
     return { ok: true };
   }
-  return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
+  return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(retried.stderr, pushArgs) };
 }
 
 /** P14a fail-closed: if `gh` cannot prove there is no open PR, do not delete remote. */
@@ -738,7 +743,8 @@ async function defaultHasOpenPr(input: { repo: string; branch: string }): Promis
     );
     const parsed = JSON.parse(result.stdout) as unknown;
     return Array.isArray(parsed) && parsed.length > 0;
-  } catch {
+  } catch (error) {
+    logGhError('gh pr list', error);
     return true;
   }
 }
@@ -785,9 +791,15 @@ async function tryGhPrCreate(input: {
       return { ok: true, url };
     }
     return { ok: true };
-  } catch {
+  } catch (error) {
+    logGhError('gh pr create', error);
     return { ok: false };
   }
+}
+
+function logGhError(op: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`spyglass: ${op} failed: ${message}\n`);
 }
 
 export async function loadScenarioJson(path: string): Promise<Scenario> {

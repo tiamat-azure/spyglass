@@ -269,6 +269,8 @@ describe('packaged Observe', () => {
     expect(inProcess).not.toContain('export async function createInProcessStt(');
     expect(inProcess).toContain('createInProcessSttFromEnv');
     expect(bridge).toContain('createInProcessSttFromEnv');
+    expect(bridge).toContain('await createInProcessSttFromEnv');
+    expect(bridge).not.toMatch(/createInProcessStt\(/);
     const exportIdx = renderer.indexOf('sessionExportBtn.addEventListener');
     expect(exportIdx).toBeGreaterThan(-1);
     expect(renderer.slice(exportIdx, exportIdx + 900)).not.toContain('window.prompt');

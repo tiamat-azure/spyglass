@@ -57,9 +57,8 @@ async function main() {
   const large = process.argv.includes('--large');
   await mkdir(outDir, { recursive: true });
   if (large) {
-    const { downloadResponseToFileAtomic, STT_LARGE_DOWNLOAD_TIMEOUT_MS } = await import(
-      '../packages/stt/src/download-model.ts'
-    );
+    const { downloadResponseToFileAtomic, STT_LARGE_DOWNLOAD_TIMEOUT_MS, STT_LARGE_MIN_BYTES } =
+      await import('../packages/stt/src/download-model.ts');
     const { STT_LARGE_MODEL_FILE, STT_LARGE_MODEL_URL, STT_LARGE_SHA256 } = await import(
       '../packages/stt/src/upgrade.ts'
     );
@@ -72,7 +71,8 @@ async function main() {
     await downloadResponseToFileAtomic({
       dest: largePath,
       response,
-      expectedSha256: STT_LARGE_SHA256
+      expectedSha256: STT_LARGE_SHA256,
+      minBytes: STT_LARGE_MIN_BYTES
     });
     process.stdout.write(`Wrote ${largePath}\nKeep ggml-small-q5_1.bin as fallback (F-39).\n`);
     return;

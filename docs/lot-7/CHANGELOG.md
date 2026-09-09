@@ -450,6 +450,34 @@ Ask-user still held: none for P12–P14.
   failed persist so a non-overlapping later finalize can still write its
   own sample (L7-097; Windows CI where the two finals often do not overlap).
 
+## Pass-16 adversarial fixes (L7-109 … L7-116)
+
+- **L7-109:** `pushPatchBranch` refusal reasons include trimmed git stderr
+  for the initial `-u` push and the post-delete retry (same helper as
+  `--delete`). Empty stderr falls back to `git <args> failed`.
+- **L7-110:** `defaultHasOpenPr` / `tryGhPrCreate` log caught `gh` errors
+  to stderr (`spyglass: gh pr list|create failed: …`) and stay fail-closed
+  (treat as open PR / `{ ok: false }`).
+- **L7-111:** `scenarioWithDataset` loads JSON through `loadDatasetFile`.
+- **L7-112:** `skipParameterizedScreenshots` is
+  `scenario.steps.some(hasParameterRef)` (the current step is always in
+  `scenario.steps`).
+- **L7-113:** Recovery DOM text redaction skips secrets shorter than 3
+  characters so 1–2 char parameter values do not over-strip unrelated
+  text. Selector values are still blanked.
+- **L7-114:** `downloadResponseToFileAtomic` / `downloadUrlToFileAtomic`
+  require callers to pass `minBytes`. Large-model sites pass
+  `STT_LARGE_MIN_BYTES` (`fetch-whisper --large`, Electron upgrade IPC).
+- **L7-115:** Duplicate identical L7-108 `it` block removed (already
+  landed with the Windows L7-097 backoff lock).
+- **L7-116:** Electron in-process STT uses `createInProcessSttFromEnv`;
+  the sync `createInProcessStt` factory still refuses whisper without a
+  provided engine (A5b). No runtime stragglers.
+
+Ask-user still held: **B16** (stay on patch branch vs checkout back),
+**F16** (fail-loud corrupt `large-fallback.json` always vs only when
+large is in play).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

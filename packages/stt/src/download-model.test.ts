@@ -85,6 +85,26 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('publishes a small body when the caller passes an explicit low minBytes (L7-114)', async () => {
+    const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-tiny-')), 'model.bin');
+    const payload = 'tiny-weights';
+    const response = new Response(payload, { status: 200, statusText: 'OK' });
+    const result = await downloadResponseToFileAtomic({ dest, response, minBytes: 1 });
+    expect(result.bytes).toBe(payload.length);
+    expect(await readFile(dest, 'utf8')).toBe(payload);
+  });
+
+  it('does not default downloadResponseToFileAtomic minBytes to STT_LARGE_MIN_BYTES (L7-114)', async () => {
+    const src = await readFile(new URL('./download-model.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function downloadResponseToFileAtomic');
+    const end = src.indexOf('export function sttLargeDownloadTimeoutMs');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const helper = src.slice(start, end);
+    expect(helper).not.toMatch(/minBytes \?\? STT_LARGE_MIN_BYTES/);
+    expect(helper).toMatch(/minBytes: number/);
+  });
+
   it('aborts a hung URL download (L7-018)', async () => {
     const server = createServer(() => undefined);
     await new Promise<void>((resolve) => {
@@ -124,6 +144,7 @@ describe('W3a fetch-whisper --large', () => {
     const largeBlock = src.slice(largeStart, largeEnd);
     expect(largeBlock).toMatch(/downloadResponseToFileAtomic/);
     expect(largeBlock).toMatch(/STT_LARGE_SHA256/);
+    expect(largeBlock).toMatch(/minBytes:\s*STT_LARGE_MIN_BYTES/);
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
 import type {
   ExecutionReport,
@@ -26,7 +26,7 @@ import {
 } from './options.ts';
 import { applyDataset, parseDataset } from './parameters.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
-import { processSuggestedPatch } from './patch-lifecycle.ts';
+import { loadDatasetFile, processSuggestedPatch } from './patch-lifecycle.ts';
 import {
   findStepByIndex,
   hasParameterRef,
@@ -288,7 +288,7 @@ async function runScenarioOnDriver(
     let attempts = 1;
     let error: string | undefined = verify.ok ? undefined : verify.error;
     let screenshotRef: string | undefined;
-    const skipSecretShots = skipParameterizedScreenshots(executable, step);
+    const skipSecretShots = skipParameterizedScreenshots(executable);
 
     if (!verify.ok) {
       if (!skipSecretShots) {
@@ -679,8 +679,8 @@ function unique(values: string[]): string[] {
 }
 
 /** S11a: do not write fail/recover screenshots when filled parameter values may be visible. */
-function skipParameterizedScreenshots(scenario: Scenario, step: RefinedStep): boolean {
-  return hasParameterRef(step) || scenario.steps.some(hasParameterRef);
+function skipParameterizedScreenshots(scenario: Scenario): boolean {
+  return scenario.steps.some(hasParameterRef);
 }
 
 /** L7-037: AI recovery sees the recorded/redacted scenario, not dataset-materialized secrets. */
@@ -731,6 +731,10 @@ function redactSnapshotForRecovery(
   let text = snapshot.text;
   const ordered = [...secrets].sort((left, right) => right.length - left.length);
   for (const secret of ordered) {
+    // L7-113: 1–2 char values would over-strip unrelated DOM text (`ab` vs "about").
+    if (secret.length < 3) {
+      continue;
+    }
     text = text.split(secret).join('');
   }
   return { ...snapshot, values, text };
@@ -793,6 +797,6 @@ async function scenarioWithDataset(
     isAbsolute(datasetPath) || scriptDir === undefined
       ? resolve(datasetPath)
       : resolve(scriptDir, datasetPath);
-  const raw = JSON.parse(await readFile(absolute, 'utf8')) as unknown;
+  const raw = await loadDatasetFile(absolute);
   return applyDataset(scenario, parseDataset(raw));
 }

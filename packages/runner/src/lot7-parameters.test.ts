@@ -447,6 +447,60 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('does not over-strip 1-2 character parameter values from recovery DOM text (L7-113)', async () => {
+    const secret = 'ab';
+    const step = fillStep(0, '#code', secret, 'code');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ text: string; values: Record<string, string> }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({ text: context.afterDom.text, values: { ...context.afterDom.values } });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: 'visible about the table on page',
+      elements: [
+        { selector: '#code', visible: true, value: secret, text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.values['#code']).toBe('');
+      expect(snap.text).toContain('about');
+      expect(snap.text).toContain('table');
+    }
+  });
+
+  it('loads datasets through loadDatasetFile and skips parameterized shots from scenario.steps (L7-111 / L7-112)', async () => {
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    expect(src).toContain('await loadDatasetFile(absolute)');
+    expect(src).not.toMatch(/JSON\.parse\(await readFile\(absolute/);
+    expect(src).toContain('return scenario.steps.some(hasParameterRef)');
+    expect(src).not.toContain('hasParameterRef(step) ||');
+  });
+
   it('skips fail/recover screenshots for parameterRef steps (S11a)', async () => {
     const step = fillStep(0, '#password', 's3cret-password', 'password');
     step.verification.expected = '#gone';

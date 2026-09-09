@@ -6,6 +6,7 @@ import {
   downloadUrlToFileAtomic,
   largeModelPath,
   readLargeFallback,
+  STT_LARGE_MIN_BYTES,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,
   STT_LARGE_SHA256,
@@ -1086,7 +1087,8 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         dest,
         url: STT_LARGE_MODEL_URL,
         timeoutMs: sttLargeDownloadTimeoutMs(process.env),
-        expectedSha256: digest
+        expectedSha256: digest,
+        minBytes: STT_LARGE_MIN_BYTES
       });
       return { ok: true };
     } catch (error) {

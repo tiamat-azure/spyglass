@@ -417,7 +417,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       return;
     }
     expect(result.code).toBe('pr-prep-failed');
-    expect(result.reason).toMatch(/git push failed/);
+    expect(result.reason).toMatch(/rejected/);
+    expect(result.reason).not.toBe('git push failed');
     expect(result.health?.appliedPatches).toBe(0);
     expect(result.branch).toBeDefined();
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
@@ -759,6 +760,101 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.code).toBe('pr-prep-failed');
     expect(result.reason).toMatch(/remote ref refuse: cannot lock/);
     expect(result.reason).not.toBe('git push failed');
+  });
+
+  it('surfaces git push -u stderr on initial failure (L7-109)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7109-empty-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push') {
+        return { stdout: '', stderr: '   ', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      createPr: async () => ({ ok: false })
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/git push -u origin .+ failed/);
+    expect(result.reason).not.toBe('git push failed');
+  });
+
+  it('surfaces git push -u stderr on non-fast-forward retry failure (L7-109)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7109-retry-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let upstreamPushes = 0;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push' && args.includes('--delete')) {
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      if (args[0] === 'push' && args.includes('-u')) {
+        upstreamPushes += 1;
+        if (upstreamPushes === 1) {
+          return {
+            stdout: '',
+            stderr: '! [rejected] spyglass/patch (non-fast-forward)',
+            code: 1
+          };
+        }
+        return { stdout: '', stderr: 'retry: remote hung up', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      hasOpenPr: async () => false,
+      createPr: async () => ({ ok: false })
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/retry: remote hung up/);
+    expect(result.reason).not.toBe('git push failed');
+  });
+
+  it('logs caught gh errors to stderr while staying fail-closed (L7-110)', async () => {
+    const src = await readFile(
+      fileURLToPath(new URL('./assisted-apply.ts', import.meta.url)),
+      'utf8'
+    );
+    expect(src).toMatch(/process\.stderr\.write\(`spyglass: \$\{op\} failed: \$\{message\}\\n`\)/);
+    expect(src).toContain("logGhError('gh pr list'");
+    expect(src).toContain("logGhError('gh pr create'");
   });
 
   it('refuses remote delete/recreate when an open PR exists (P14a)', async () => {
