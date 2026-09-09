@@ -138,6 +138,8 @@ Pass-11 (L7-076 … L7-082) plus Captain lock **R10a** (shared explicit
 `parameterRef` last-write-wins on extract; no conflict warn/error) are
 in `CHANGELOG.md`.
 Pass-12 (L7-083 … L7-090) is in `CHANGELOG.md`.
+Captain lock **S11a** (skip fail/recover screenshots for `parameterRef`
+steps) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -147,8 +149,8 @@ Pass-12 (L7-083 … L7-090) is in `CHANGELOG.md`.
 - **R10a:** Shared explicit `parameterRef` last-write-wins on extract.
   Duplicate refs stay one dataset variable (R4a). A later step overwrites
   `dataset.values[name]`. No conflict warn/error (Captain lock).
-- **S11** ask-user: screenshot skip/blur vs accept for parameterRef
-  recovery steps (unchanged).
+- **S11a:** Recovery/fail screenshots are skipped for parameterized
+  scenarios so filled secrets are not written to screenshot artifacts.
 - **D11** ask-user: gitignore `datasets/recorded.json` vs document
   plaintext-on-disk risk (unchanged).
 - **P12** ask-user: PR-prep failure remains `ok: true` +

@@ -330,6 +330,18 @@ document plaintext-on-disk risk).
 Ask-user still held: **S11**, **D11**, **P12** (whether PR-prep failure
 should be `ok: false` vs `ok: true` + `prPrepared: false`).
 
+## Captain lock S11a (parameterRef recovery screenshots)
+
+- **S11a:** Fail and recover screenshot capture is skipped when the
+  failing step or any scenario step has a `parameterRef`. Recovery
+  context does not get `screenshotPath`; the step report has no
+  `screenshotRef`. Non-parameterized steps still write screenshots.
+  Blur is not used — skip is enough (no secret pixels on disk).
+
+Ask-user still held: **D11** (gitignore `recorded.json` vs document
+plaintext-on-disk risk), **P12** (PR-prep `ok: false` vs `ok: true` +
+`prPrepared: false`).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

@@ -278,9 +278,17 @@ async function runScenarioOnDriver(
     let attempts = 1;
     let error: string | undefined = verify.ok ? undefined : verify.error;
     let screenshotRef: string | undefined;
+    const skipSecretShots = skipParameterizedScreenshots(executable, step);
 
     if (!verify.ok) {
-      screenshotRef = await captureFailure(options.driver, resolved.reportDir, step.index, 'fail');
+      if (!skipSecretShots) {
+        screenshotRef = await captureFailure(
+          options.driver,
+          resolved.reportDir,
+          step.index,
+          'fail'
+        );
+      }
       if (!resolved.aiRecovery || options.recoverer === undefined) {
         failed = true;
         const report = failedStepReport({
@@ -317,6 +325,7 @@ async function runScenarioOnDriver(
         beforeDom,
         originalError: error ?? 'verification failed',
         runId,
+        skipScreenshots: skipSecretShots,
         ...(resolved.reportDir !== undefined ? { reportDir: resolved.reportDir } : {}),
         ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
       });
@@ -346,7 +355,9 @@ async function runScenarioOnDriver(
         error = recovered.error;
         screenshotRef =
           recovered.screenshotRef ??
-          (await captureFailure(options.driver, resolved.reportDir, step.index, 'recover'));
+          (skipSecretShots
+            ? undefined
+            : await captureFailure(options.driver, resolved.reportDir, step.index, 'recover'));
         emit(options, {
           runId,
           stepIndex: step.index,
@@ -493,6 +504,8 @@ async function recoverStep(input: {
   originalError: string;
   onProgress?: (event: ReplayProgress) => void;
   runId: string;
+  /** S11a: skip screenshot files when parameterized secrets may be on screen. */
+  skipScreenshots?: boolean;
 }): Promise<
   | {
       ok: true;
@@ -518,12 +531,9 @@ async function recoverStep(input: {
       message: `AI recovery attempt ${String(attempt)}/${String(input.maxAiRetries)}${textOnly}`
     });
     const afterDom = await input.driver.snapshot();
-    screenshotRef = await captureFailure(
-      input.driver,
-      input.reportDir,
-      input.step.index,
-      'recover'
-    );
+    screenshotRef = input.skipScreenshots
+      ? undefined
+      : await captureFailure(input.driver, input.reportDir, input.step.index, 'recover');
     const redactFrom = input.argumentScenario ?? input.scenario;
     const context = {
       scenario: input.scenario,
@@ -650,6 +660,16 @@ function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function hasParameterRef(step: RefinedStep): boolean {
+  const ref = step.action.parameterRef;
+  return ref !== undefined && ref.length > 0;
+}
+
+/** S11a: do not write fail/recover screenshots when filled parameter values may be visible. */
+function skipParameterizedScreenshots(scenario: Scenario, step: RefinedStep): boolean {
+  return hasParameterRef(step) || scenario.steps.some(hasParameterRef);
 }
 
 /** L7-038: persist suggested-patch originals from the recorded scenario, without parameter args. */

@@ -385,6 +385,93 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('skips fail/recover screenshots for parameterRef steps (S11a)', async () => {
+    const step = fillStep(0, '#password', 's3cret-password', 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const paths: Array<string | undefined> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        paths.push(context.screenshotPath);
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#password', visible: true, value: '' },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const reportDir = await tempDir('spyglass-lot7-s11a-');
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer,
+        reportDir
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(driver.screenshotWrites).toEqual([]);
+    expect(paths.every((path) => path === undefined)).toBe(true);
+    expect(result.report.steps[0]?.screenshotRef).toBeUndefined();
+  });
+
+  it('still captures recovery screenshots for non-parameterized steps (S11a)', async () => {
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [
+        { selector: '#gone', visible: false },
+        { selector: '#ok', visible: true }
+      ]
+    });
+    driver.failSelectors.add('#gone');
+    const step: RefinedStep = {
+      index: 0,
+      intent: 'Je clique',
+      action: {
+        type: 'click',
+        descriptor: { type: 'click', selector: '#gone', selectorStrategy: 'css' }
+      },
+      verification: {
+        type: 'elementVisible',
+        expected: '#ok',
+        strength: 'strong',
+        confirmedByUser: true,
+        timeoutMs: 40
+      },
+      sourceEvents: ['evt_000001']
+    };
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/start',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer: {
+          recover: async () => undefined
+        }
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(driver.screenshotWrites.length).toBeGreaterThan(0);
+  });
+
   it('returns a failed ExecutionReport when the dataset file is missing (L7-080)', async () => {
     const dir = await tempDir('spyglass-lot7-ds-miss-');
     const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
