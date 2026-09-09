@@ -1047,7 +1047,32 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: none.
 
-## CI — macOS Electron e2e close hang
+## Pass-29 adversarial fixes (L7-213 … L7-222)
+
+- **L7-213:** Leftover patch-branch recovery re-checks dirty and uses
+  non-force `git checkout defaultBranch`. `checkout -f` no longer discards
+  tracked edits made after the initial dirty probe.
+- **L7-214:** R28a/H21a migration recomputes `consecutiveRuns` to the
+  migrated `runIds` window so a legacy counter cannot auto-qualify from a
+  single synthesized id.
+- **L7-215:** `whisperAvailable` matches `pickPreferredWhisperModel`
+  (only-large + prefer-small is unavailable). Corrupt marker still
+  returns true so F16b fail-loud is not skipped (L7-176).
+- **L7-216:** `runScenario` wraps `processSuggestedPatch` so health
+  load/write failures cannot crash after report/suggested-patch exist
+  (structured `internal-error`).
+- **L7-217:** Configured `STT_MODEL_FILE` / `STT_MODEL` large basename
+  honours `skipLargePath` (F-39 / F23b / F28b).
+- **L7-218:** `needsLargeFallbackMarker` requires the explicit large
+  `STT_MODEL_PATH` to exist (`explicitOk`).
+- **L7-219:** `assertNoSymlinks` also refuses FIFO/socket/device files.
+- **L7-220:** `consecutiveRuns` schema `maximum` is 32 (runIds window).
+- **L7-221:** STT upgrade accept skips the ~575MB download when large is
+  already present (queued duplicate accepts).
+- **L7-222:** Descriptor hashes canonicalize nested objects/arrays with
+  stable key order.
+
+Ask-user still held: N29, D29, O29.
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
   spec. Playwright `close()` waits for `app.quit()`; after a guest

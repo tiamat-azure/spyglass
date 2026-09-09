@@ -5,6 +5,7 @@ import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
 import {
   downloadUrlToFileAtomic,
   largeModelPath,
+  largeModelPresent,
   readLargeFallback,
   STT_LARGE_MIN_BYTES,
   STT_LARGE_MODEL_FILE,
@@ -1100,6 +1101,11 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         return { ok: false, error: 'store-unavailable' };
       }
       const modelDir = resolveSttModelDir();
+      // L7-221: queued duplicate accepts / already-present large must not
+      // re-fetch ~575MB; gate beyond refusedPermanently only.
+      if (largeModelPresent(modelDir)) {
+        return { ok: true };
+      }
       try {
         await mkdir(modelDir, { recursive: true });
         const dest = largeModelPath(modelDir);

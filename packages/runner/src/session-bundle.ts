@@ -276,7 +276,7 @@ async function assertNoCopyOverlap(source: string, dest: string): Promise<void> 
   }
 }
 
-/** L7-039 / L7-198: refuse symlinks; message names export vs import. */
+/** L7-039 / L7-198 / L7-219: refuse symlinks and non-regular special files. */
 async function assertNoSymlinks(root: string, action: 'import' | 'export'): Promise<void> {
   const stack = [root];
   while (stack.length > 0) {
@@ -288,12 +288,15 @@ async function assertNoSymlinks(root: string, action: 'import' | 'export'): Prom
     if (st.isSymbolicLink()) {
       throw new Error(`${action} refused: symlinks are not allowed`);
     }
-    if (!st.isDirectory()) {
+    if (st.isDirectory()) {
+      const names = await readdir(current);
+      for (const name of names) {
+        stack.push(join(current, name));
+      }
       continue;
     }
-    const names = await readdir(current);
-    for (const name of names) {
-      stack.push(join(current, name));
+    if (!st.isFile()) {
+      throw new Error(`${action} refused: special files are not allowed`);
     }
   }
 }

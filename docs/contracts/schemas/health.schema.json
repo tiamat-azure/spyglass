@@ -21,7 +21,12 @@
         "properties": {
           "stepIndex": { "type": "integer" },
           "descriptorHash": { "type": "string" },
-          "consecutiveRuns": { "type": "integer", "minimum": 1 },
+          "consecutiveRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32,
+            "description": "Distinct runIds in the retained window (maxItems 32, L7-211 / L7-220)."
+          },
           "lastRunId": { "type": "string" },
           "runIds": {
             "type": "array",

@@ -499,13 +499,22 @@ async function runScenarioOnDriver(
     lifecycleInput.createPr = options.createPr;
   }
   // L7-153: empty patches reset F-63 candidates only on a successful (clean) run.
+  // L7-216: health load/write must not crash after report/suggested-patch exist.
   if (suggestedPatch.patches.length > 0 || report.exitCode === 0) {
-    const lifecycle = await processSuggestedPatch(lifecycleInput);
-    if (lifecycle.healthPath !== undefined) {
-      result.healthPath = lifecycle.healthPath;
-    }
-    if (lifecycle.assistedApply !== undefined) {
-      result.assistedApply = lifecycle.assistedApply;
+    try {
+      const lifecycle = await processSuggestedPatch(lifecycleInput);
+      if (lifecycle.healthPath !== undefined) {
+        result.healthPath = lifecycle.healthPath;
+      }
+      if (lifecycle.assistedApply !== undefined) {
+        result.assistedApply = lifecycle.assistedApply;
+      }
+    } catch (error) {
+      result.assistedApply = {
+        ok: false,
+        code: 'internal-error',
+        reason: error instanceof Error ? error.message : String(error)
+      };
     }
   }
   if (runDir !== undefined) {

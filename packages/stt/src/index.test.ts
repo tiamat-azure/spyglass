@@ -112,6 +112,18 @@ describe('@spyglass/stt', () => {
         STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin'
       })
     ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([large], {
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBeUndefined();
   });
 
   it('does not prefer large by existence when large-fallback.json is set (F23b)', async () => {

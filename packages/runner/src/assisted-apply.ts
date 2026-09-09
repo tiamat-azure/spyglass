@@ -317,11 +317,23 @@ export async function applyAssistedPatches(input: {
       ) {
         skipMutate = true;
       } else {
+        // L7-213: re-check dirty and never `checkout -f` — force would discard
+        // tracked edits made after the initial dirty probe.
+        if (await isWorktreeDirty(git, repoRoot)) {
+          const revertError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+            scenarioRel
+          ]);
+          return refusalWithRestore(
+            { ok: false, reason: 'F-64: refusing dirty worktree', code: 'dirty-worktree' },
+            revertError,
+            starting
+          );
+        }
         const ontoDefault = await checkoutOrGitError(
           git,
           repoRoot,
           starting,
-          ['checkout', '-f', defaultBranch],
+          ['checkout', defaultBranch],
           [scenarioRel]
         );
         if (ontoDefault !== undefined) {

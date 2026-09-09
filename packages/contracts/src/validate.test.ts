@@ -144,6 +144,26 @@ describe('validateHealth', () => {
     });
     expect(result.valid).toBe(false);
   });
+
+  it('caps consecutiveRuns at the runIds window (L7-220)', () => {
+    const payload = {
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 33,
+          lastRunId: 'run_a',
+          runIds: ['run_a']
+        }
+      ]
+    };
+    expect(validateUnknown('health', payload).valid).toBe(false);
+    expect(validateHealth(payload).valid).toBe(true);
+  });
 });
 
 describe('validateUnknown', () => {

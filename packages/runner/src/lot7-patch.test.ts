@@ -1417,6 +1417,17 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(descriptorHash({ ...base, extra: 'silent' } as typeof base & { extra: string })).toBe(
       descriptorHash(base)
     );
+    const nestedLeft = {
+      type: 'click' as const,
+      selector: '#a',
+      arguments: [{ z: '1', a: '2' }] as unknown as string[]
+    };
+    const nestedRight = {
+      type: 'click' as const,
+      selector: '#a',
+      arguments: [{ a: '2', z: '1' }] as unknown as string[]
+    };
+    expect(descriptorHash(nestedLeft)).toBe(descriptorHash(nestedRight));
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
@@ -1766,6 +1777,66 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     await expect(
       execFileAsync('git', ['cat-file', '-e', `${result.branch}:extra.txt`], { cwd: dir })
     ).rejects.toThrow();
+  });
+
+  it('does not force-checkout default when leftover recovery sees a dirty tree (L7-213)', async () => {
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const leftoverStart = src.indexOf('if (leftoverExists)');
+    const leftoverEnd = src.indexOf('let scenario = input.scenario');
+    expect(leftoverStart).toBeGreaterThan(-1);
+    expect(leftoverEnd).toBeGreaterThan(leftoverStart);
+    const leftoverBlock = src.slice(leftoverStart, leftoverEnd);
+    expect(leftoverBlock).not.toContain("'-f'");
+    expect(leftoverBlock).toContain("['checkout', defaultBranch]");
+    expect(leftoverBlock).toContain('isWorktreeDirty');
+    const dir = await tempDir('spyglass-lot7-l7213-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const leftover = patchBranchName(
+      'ses_lot7',
+      patchSetHash([{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }])
+    );
+    await execFileAsync('git', ['checkout', '-b', leftover], { cwd: dir });
+    const applied = scenario([clickStep(0, '#new')]);
+    await writeFile(scenarioPath, `${JSON.stringify(applied, null, 2)}\n`, 'utf8');
+    await writeFile(join(dir, 'extra.txt'), 'unrelated\n', 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json', 'extra.txt'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'leftover with extra file'], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    let dirtyChecks = 0;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'checkout' && args[1] === '-f') {
+        throw new Error('L7-213: leftover recovery must not git checkout -f');
+      }
+      if (args[0] === 'status' && args.includes('--porcelain')) {
+        dirtyChecks += 1;
+        if (dirtyChecks > 1) {
+          return { stdout: ' M extra.txt\n', stderr: '', code: 0 };
+        }
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('dirty-worktree');
+    }
   });
 
   it('does not skipMutate a leftover scenario.json that also edits verification (L7-171)', async () => {
@@ -2475,6 +2546,40 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_c']);
   });
 
+  it('keeps the report when health.json cannot be loaded after write (L7-216)', async () => {
+    const sessionDir = await tempDir('spyglass-lot7-l7216-');
+    const reportDir = join(sessionDir, 'runs', 'run_lot7');
+    await mkdir(reportDir, { recursive: true });
+    await mkdir(join(sessionDir, 'health.json'));
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/start',
+      elements: [{ selector: '#go', visible: true }]
+    });
+    const result = await runScenario(scenario([clickStep(0, '#go')]), {
+      driver,
+      aiRecovery: false,
+      reportDir,
+      sessionDir,
+      env: { PATCH_ASSISTED_APPLY: 'false' }
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.report.exitCode).toBe(0);
+    expect(result.assistedApply?.ok).toBe(false);
+    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
+      expect(result.assistedApply.code).toBe('internal-error');
+    }
+    const reportRaw = await readFile(join(reportDir, 'report.json'), 'utf8');
+    expect(reportRaw).toContain('ses_lot7');
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    const lifecycle = src.slice(
+      src.indexOf('const lifecycleInput'),
+      src.indexOf('if (runDir !== undefined)')
+    );
+    expect(lifecycle).toContain('try {');
+    expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
+    expect(lifecycle).toContain("code: 'internal-error'");
+  });
+
   it('does not reset candidates on a failed empty-patch run (L7-153)', async () => {
     const sessionDir = await tempDir('spyglass-lot7-l7153-');
     const broken = clickStep(0, '#target');
@@ -2835,8 +2940,45 @@ describe('loadHealth H21a runIds migration', () => {
     await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
     const health = await loadHealth(dir, 'ses_lot7');
     expect(health.schemaVersion).toBe(1);
-    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(2);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_0002']);
+  });
+
+  it('recomputes consecutiveRuns to the migrated runIds window (L7-214)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7214-');
+    const disk = {
+      schemaVersion: 1,
+      sessionId: 'ses_lot7',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 99,
+          lastRunId: 'run_only'
+        }
+      ]
+    };
+    await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
+    const health = await loadHealth(dir, 'ses_lot7');
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_only']);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
+    const migrated = migrateHealthPatchCandidates({
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 2,
+          lastRunId: 'run_a'
+        }
+      ]
+    }) as { patchCandidates: Array<{ consecutiveRuns: number; runIds: string[] }> };
+    expect(migrated.patchCandidates[0]?.runIds).toEqual(['run_a']);
+    expect(migrated.patchCandidates[0]?.consecutiveRuns).toBe(1);
   });
 
   it('keeps usable runIds and drops empty entries', async () => {

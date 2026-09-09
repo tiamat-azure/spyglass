@@ -170,8 +170,11 @@ function collectModelSelection(
 
 /** F16b: fail-loud on corrupt/unreadable large-fallback.json only when large could be selected. */
 function needsLargeFallbackMarker(selection: WhisperModelSelection): boolean {
+  // L7-218: a missing STT_MODEL_PATH whose basename is large is not selectable.
   const explicitIsLargeFile =
-    selection.explicit !== undefined && basename(selection.explicit) === STT_LARGE_MODEL_FILE;
+    selection.explicitOk &&
+    selection.explicit !== undefined &&
+    basename(selection.explicit) === STT_LARGE_MODEL_FILE;
   const largeCouldBeSelected = selection.largeOk || explicitIsLargeFile;
   const customNonLarge = selection.explicitCustomPath && !explicitIsLargeFile;
   return largeCouldBeSelected && !selection.envForcedSmall && !customNonLarge;

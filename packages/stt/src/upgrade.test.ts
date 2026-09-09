@@ -202,6 +202,27 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
   });
 
+  it('does not treat a missing STT_MODEL_PATH large as selectable (L7-218)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7218-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: join(dir, STT_LARGE_MODEL_FILE)
+    });
+    expect(engine.model).toBe(join(dir, STT_SMALL_MODEL_FILE));
+    const src = await readFile(new URL('./resolve-engine.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('function needsLargeFallbackMarker'),
+      src.indexOf('function alignedFallbackMarkerDirs')
+    );
+    expect(fn).toContain('selection.explicitOk');
+  });
+
   it('fails loud on corrupt large-fallback.json when large would be selected (F16b)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-f16b-large-'));
     await mkdir(dir, { recursive: true });
@@ -247,6 +268,20 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     };
     expect(whisperAvailable(resourcesOnly)).toBe(true);
     expect(() => createEngineFromEnv(resourcesOnly)).toThrow(/corrupt large-fallback.json/);
+  });
+
+  it('does not report whisper available when prefer-small leaves no model (L7-215)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7215-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    const env = {
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_LARGE_FALLBACK: '1'
+    };
+    expect(whisperAvailable(env)).toBe(false);
+    expect(resolveSttEngineName(env)).toBe('mock');
   });
 
   it('fails loud on unreadable large-fallback.json when large would be selected (F16b / I26a)', async () => {

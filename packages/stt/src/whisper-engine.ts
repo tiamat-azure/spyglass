@@ -50,6 +50,7 @@ export function whisperCandidateBins(env: NodeJS.ProcessEnv = process.env): stri
   return candidates;
 }
 
+/** Basename from STT_MODEL_FILE / STT_MODEL. Large names are skipped in pick (L7-217). */
 function configuredSttModelFile(env: NodeJS.ProcessEnv): string | undefined {
   const raw = env.STT_MODEL_FILE ?? env.STT_MODEL;
   if (raw === undefined || raw.trim().length === 0) {
@@ -146,7 +147,11 @@ export function pickPreferredWhisperModel(
     const configuredBase = basename(configured);
     const hit = existing.find((path) => path === configured || basename(path) === configuredBase);
     if (hit !== undefined) {
-      return hit;
+      // L7-217: configured large basename must not bypass F-39 / F23b / F28b.
+      const hitIsLarge = basename(hit) === STT_LARGE_MODEL_FILE;
+      if (!hitIsLarge || !skipLargePath(hit)) {
+        return hit;
+      }
     }
   }
   const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
@@ -198,12 +203,25 @@ function readFallbackMarkerForPathPick(dir: string): boolean {
 }
 
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {
-  // L7-176: existence only. Do not read large-fallback.json here — a corrupt
-  // marker must fail-loud in the engine factory (F16b), not flip auto-select to mock.
-  return (
-    whisperCandidateBins(env).some((path) => existsSync(path)) &&
-    whisperCandidateModels(env).some((path) => existsSync(path))
-  );
+  // L7-215: same model pick as resolveWhisperPaths — only-large + prefer-small
+  // must not report available. L7-176: a corrupt/unreadable marker still
+  // returns true so auto-select stays whisper and the factory fail-louds (F16b).
+  if (!whisperCandidateBins(env).some((path) => existsSync(path))) {
+    return false;
+  }
+  const existing = whisperCandidateModels(env).filter((path) => existsSync(path));
+  if (existing.length === 0) {
+    return false;
+  }
+  try {
+    return pickPreferredWhisperModel(existing, env) !== undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('large-fallback.json')) {
+      return true;
+    }
+    throw error;
+  }
 }
 
 function parseWhisperText(stdout: string, txtFile?: string): string {

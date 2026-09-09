@@ -50,7 +50,23 @@ function canonicalize(descriptor: ReplayDescriptor): Record<string, unknown> {
     if (value === undefined) {
       continue;
     }
-    record[key] = Array.isArray(value) ? [...value] : value;
+    record[key] = canonicalizeValue(value);
   }
   return record;
+}
+
+/** L7-222: nested objects (and arrays of objects) hash with sorted keys. */
+function canonicalizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeValue);
+  }
+  if (value !== null && typeof value === 'object') {
+    const rec = value as Record<string, unknown>;
+    const nested: Record<string, unknown> = {};
+    for (const key of Object.keys(rec).sort()) {
+      nested[key] = canonicalizeValue(rec[key]);
+    }
+    return nested;
+  }
+  return value;
 }

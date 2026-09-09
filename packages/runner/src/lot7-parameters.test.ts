@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
@@ -1352,6 +1353,34 @@ describe('Lot 7 F-47 session export/import', () => {
     await writeFile(join(existing, 'stale.txt'), 'old\n', 'utf8');
     await expect(importSessionFolder(dest, sessionsRoot)).rejects.toThrow(/session already exists/);
     expect(await readFile(join(existing, 'stale.txt'), 'utf8')).toBe('old\n');
+  });
+
+  it('refuses FIFO/socket/device files on export (L7-219)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('async function assertNoSymlinks');
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf('async function realpathExisting'));
+    expect(body).toContain('st.isFile()');
+    expect(body).toContain('special files are not allowed');
+    if (process.platform === 'win32') {
+      return;
+    }
+    const root = await tempDir('spyglass-lot7-l7219-');
+    const sessionDir = join(root, 'ses_export');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const fifo = join(sessionDir, 'pipe');
+    const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+    if (made.status !== 0) {
+      return;
+    }
+    await expect(exportSessionFolder(sessionDir, join(root, 'bundle'))).rejects.toThrow(
+      /export refused: special files/
+    );
   });
 
   it('refuses import when the bundle contains a symlink (L7-039)', async () => {

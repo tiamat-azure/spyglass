@@ -288,6 +288,7 @@ describe('packaged Observe', () => {
     expect(resolveEngine).toContain('largeFallbackMarkerDirs');
     expect(resolveEngine).toContain('readAlignedLargeFallbackSync');
     expect(resolveEngine).toContain('explicitIsLargeFile');
+    expect(resolveEngine).toContain('selection.explicitOk');
     expect(resolveEngine).toContain('parseWhisperTimeoutMs(env)');
     expect(resolveEngine).toContain('parseMaxLatencyMs(env)');
     expect(resolveEngine).not.toContain('env.STT_MAX_LATENCY_MS');
@@ -357,6 +358,10 @@ describe('packaged Observe', () => {
     expect(decideFn).toContain('enqueueSttUpgradeDecide');
     expect(decideFn).toContain('refusedPermanently');
     expect(decideFn).toContain("error: 'refused'");
+    expect(decideFn).toContain('largeModelPresent');
+    expect(decideFn.indexOf('largeModelPresent')).toBeLessThan(
+      decideFn.indexOf('downloadUrlToFileAtomic')
+    );
     expect(decideFn).not.toContain("process.env.SPYGLASS_STT_UPGRADE_FAKE === '1'");
     expect(decideFn).not.toContain('process.env.STT_LARGE_SHA256');
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');

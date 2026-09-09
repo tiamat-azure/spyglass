@@ -260,6 +260,21 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **W28b:** `fetch-whisper.mjs` `extractArchive` is zip-aware when
   `cliAsset()` yields `.zip` (Windows Expand-Archive; not always
   `tar -xf`). `.tar.gz` still uses `tar`.
+- **L7-213:** Leftover recovery never `checkout -f` the default branch;
+  re-check dirty first.
+- **L7-214:** Health migration caps `consecutiveRuns` to the synthesized
+  `runIds` window.
+- **L7-215:** `whisperAvailable` is false when prefer-small leaves no
+  model.
+- **L7-216:** `processSuggestedPatch` failures after the report are
+  structured, not thrown.
+- **L7-217:** Configured large basename honours large-fallback skip.
+- **L7-218:** Missing `STT_MODEL_PATH` large is not “large could be
+  selected”.
+- **L7-219:** Session bundle export/import refuses special files.
+- **L7-220:** `consecutiveRuns` max 32.
+- **L7-221:** Duplicate STT accept does not re-download large.
+- **L7-222:** Nested descriptor objects hash with sorted keys.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -321,4 +336,9 @@ scrubs known secrets by value even without `parameterRef`. **S28b:**
 cross-process lockfile. **F28b:** first-use latency hook follows any
 selected large model, not only `join(modelDir, STT_LARGE…)`. **W28b:**
 whisper-cli extract is zip-aware for `cliAsset()` `.zip` (Windows
-Expand-Archive, not always `tar -xf`). Held: none.
+Expand-Archive, not always `tar -xf`). Pass-29 (L7-213 … L7-222): leftover
+recovery without `checkout -f`, migrated consecutiveRuns window,
+whisperAvailable vs prefer-small, soft health lifecycle, configured
+large skip, existing explicit large only, refuse special files,
+consecutiveRuns max 32, skip duplicate large download, nested descriptor
+canonicalize. Held: N29, D29, O29.
