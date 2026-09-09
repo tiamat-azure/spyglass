@@ -518,6 +518,23 @@ large is in play).
 Ask-user still held: **F16**, **A17** (`createEngineFromEnv`
 sync vs async API).
 
+## Pass-18 adversarial fixes (L7-126 … L7-127)
+
+- **L7-126:** `detectDefaultBranch` never returns literal `HEAD` or an
+  empty name as the default. Origin/HEAD that resolves to `HEAD` is
+  skipped; if local `main`/`master` are also missing, assisted apply
+  refuses with `code: 'unresolved-default'` instead of using `HEAD` as
+  `--base` or a checkout target.
+- **L7-127:** While `onFirstUseLatency` is in-flight (including a hang),
+  further `finalize`s keep at most one queued sample instead of
+  accumulating a detached `noteFirstUse` awaiter per call. The in-flight
+  persist drains that sample (L7-097 overlap retry). `FIRST_USE_RETRY_LIMIT`
+  and L7-108 backoff stay.
+
+Ask-user still held: **F16**, **A17**, **E18** (FAKE/SHA256 packaged
+guard), **M18** (`STT_MODEL_FILE` vs large preference), **W18** (`--large`
+ensure small vs incremental).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

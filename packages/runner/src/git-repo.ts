@@ -19,11 +19,22 @@ export const DEFAULT_BRANCH_NAMES = ['main', 'master'] as const;
 /** Tagged so patch-lifecycle can classify without matching git stderr text (L7-075). */
 export const GIT_APPLY_ERROR_TAG = 'spyglass.git-apply' as const;
 
+/** L7-126: `detectDefaultBranch` must not yield literal HEAD or an empty name. */
+export const UNRESOLVED_DEFAULT_TAG = 'spyglass.unresolved-default' as const;
+
 export class GitApplyError extends Error {
   readonly tag: typeof GIT_APPLY_ERROR_TAG = GIT_APPLY_ERROR_TAG;
   constructor(message: string) {
     super(message);
     this.name = 'GitApplyError';
+  }
+}
+
+export class UnresolvedDefaultBranchError extends GitApplyError {
+  readonly unresolvedDefault: typeof UNRESOLVED_DEFAULT_TAG = UNRESOLVED_DEFAULT_TAG;
+  constructor(message = 'unable to detect default branch (detached HEAD or unresolved)') {
+    super(message);
+    this.name = 'UnresolvedDefaultBranchError';
   }
 }
 
@@ -33,6 +44,20 @@ export function isGitApplyError(error: unknown): boolean {
     error !== null &&
     (error as { tag?: unknown }).tag === GIT_APPLY_ERROR_TAG
   );
+}
+
+export function isUnresolvedDefaultBranchError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { unresolvedDefault?: unknown }).unresolvedDefault === UNRESOLVED_DEFAULT_TAG
+  );
+}
+
+/** L7-126: never use detached `HEAD` or an empty name as `--base` / checkout target. */
+export function isUsableDefaultBranch(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed.length > 0 && trimmed !== 'HEAD';
 }
 
 export async function defaultGitExec(args: readonly string[], cwd: string): Promise<GitExecResult> {
@@ -84,7 +109,7 @@ export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<s
   if (originHead.code === 0) {
     const ref = originHead.stdout.trim();
     const short = ref.replace(/^refs\/remotes\/origin\//u, '');
-    if (short.length > 0) {
+    if (isUsableDefaultBranch(short)) {
       return short;
     }
   }
@@ -94,7 +119,11 @@ export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<s
       return name;
     }
   }
-  return (await currentBranch(exec, cwd)) || 'main';
+  const fallback = (await currentBranch(exec, cwd)).trim();
+  if (!isUsableDefaultBranch(fallback)) {
+    throw new UnresolvedDefaultBranchError();
+  }
+  return fallback;
 }
 
 export function isDefaultBranchName(branch: string, defaultBranch?: string): boolean {

@@ -1190,6 +1190,48 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(named).toBe('HEAD');
   });
 
+  it('refuses when default branch fallback is detached HEAD (L7-126)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7126-');
+    await execFileAsync('git', ['init', '-b', 'develop'], { cwd: dir });
+    await execFileAsync('git', ['config', 'user.email', 'lot7@spyglass.test'], { cwd: dir });
+    await execFileAsync('git', ['config', 'user.name', 'Lot7 Tests'], { cwd: dir });
+    await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir });
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    await execFileAsync('git', ['checkout', '--detach'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('unresolved-default');
+      expect(result.reason).toMatch(/detached HEAD|unresolved/u);
+    }
+    const named = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(named).toBe('HEAD');
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+    const branches = (
+      await execFileAsync('git', ['branch', '--list', 'spyglass/patch-*'], { cwd: dir })
+    ).stdout.trim();
+    expect(branches).toBe('');
+  });
+
   it('returns git-error when checkout -b fails and restores starting branch (L7-025)', async () => {
     const dir = await tempDir('spyglass-lot7-checkout-b-');
     await initGitRepo(dir);

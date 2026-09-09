@@ -394,6 +394,7 @@ export function createWhisperEngine(options: {
   const jobs = new Set<WhisperJob>();
   let firstUseNoted = false;
   let firstUsePending: Promise<void> | undefined;
+  let firstUseQueuedSample: number | undefined;
   let firstUseAttempts = 0;
   let firstUseBackoffUntil = 0;
 
@@ -427,13 +428,18 @@ export function createWhisperEngine(options: {
     if (hook === undefined) {
       return;
     }
+    if (firstUseNoted || firstUseAttempts >= FIRST_USE_RETRY_LIMIT) {
+      return;
+    }
+    // L7-127: a hanging persist must not spawn an awaiter per finalize.
+    // Keep one queued sample; the in-flight noteFirstUse drains it.
+    if (firstUsePending !== undefined) {
+      firstUseQueuedSample = latencyMs;
+      return;
+    }
+    let sample = latencyMs;
     let skipBackoff = false;
     while (!firstUseNoted && firstUseAttempts < FIRST_USE_RETRY_LIMIT) {
-      if (firstUsePending !== undefined) {
-        await firstUsePending;
-        skipBackoff = true;
-        continue;
-      }
       if (!skipBackoff && Date.now() < firstUseBackoffUntil) {
         return;
       }
@@ -442,7 +448,7 @@ export function createWhisperEngine(options: {
       // after joining a failed in-flight hook.
       const pending = (async () => {
         firstUseAttempts += 1;
-        const noted = await notifyFirstUseLatency(hook, latencyMs);
+        const noted = await notifyFirstUseLatency(hook, sample);
         if (noted) {
           firstUseNoted = true;
           return;
@@ -462,7 +468,16 @@ export function createWhisperEngine(options: {
           firstUsePending = undefined;
         }
       }
-      break;
+      if (firstUseNoted) {
+        firstUseQueuedSample = undefined;
+        return;
+      }
+      if (firstUseQueuedSample === undefined) {
+        break;
+      }
+      sample = firstUseQueuedSample;
+      firstUseQueuedSample = undefined;
+      skipBackoff = true;
     }
   };
 

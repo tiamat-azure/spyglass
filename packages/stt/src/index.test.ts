@@ -767,6 +767,49 @@ describe('@spyglass/stt', () => {
     }
   });
 
+  it('keeps at most one queued first-use sample while persist hangs (L7-127)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7127-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    let failFirst: (() => void) | undefined;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise<void>((_, reject) => {
+            failFirst = () => {
+              reject(new Error('first-use persist hung then failed'));
+            };
+          });
+        }
+      }
+    });
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const id = `u${String(index)}`;
+        engine.begin(id);
+        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
+        await engine.finalize(id);
+      }
+      expect(calls).toBe(1);
+      expect(failFirst).toBeDefined();
+      failFirst?.();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 200);
+      });
+      // In-flight hang plus one queued retry — not one hook per finalize.
+      expect(calls).toBe(2);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
   it('rejects invalid client frames', () => {
     expect(parseClientMessage({ type: 'start' })).toBeUndefined();
     expect(parseClientMessage({ type: 'hello', sampleRate: 16000 })?.type).toBe('hello');

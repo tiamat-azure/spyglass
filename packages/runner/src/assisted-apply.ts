@@ -18,6 +18,7 @@ import {
   gitOk,
   isDefaultBranchName,
   isGitApplyError,
+  isUnresolvedDefaultBranchError,
   isWorktreeDirty,
   patchBranchName
 } from './git-repo.ts';
@@ -45,7 +46,8 @@ export type AssistedApplyRefusal = {
     | 'internal-error'
     | 'type-mismatch'
     | 'pr-prep-failed'
-    | 'open-pr';
+    | 'open-pr'
+    | 'unresolved-default';
   /** P12a / P14a: set when the local patch commit succeeded but PR prep / remote recreate failed. */
   branch?: string;
   commit?: string;
@@ -258,7 +260,20 @@ export async function applyAssistedPatches(input: {
     return { ok: false, reason: 'F-64: refusing dirty worktree', code: 'dirty-worktree' };
   }
 
-  const defaultBranch = await detectDefaultBranch(git, repoRoot);
+  let defaultBranch: string;
+  try {
+    defaultBranch = await detectDefaultBranch(git, repoRoot);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (isUnresolvedDefaultBranchError(error)) {
+      return { ok: false, reason, code: 'unresolved-default' };
+    }
+    return {
+      ok: false,
+      reason,
+      code: isGitApplyError(error) ? 'git-error' : 'internal-error'
+    };
+  }
   const starting: StartingHead = {
     name: await currentBranch(git, repoRoot),
     sha: (await gitOk(git, repoRoot, ['rev-parse', 'HEAD'])).trim()
