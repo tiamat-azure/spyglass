@@ -46,6 +46,16 @@ export async function processSuggestedPatch(input: {
     ...(input.sessionDir !== undefined ? { sessionDir: input.sessionDir } : {})
   });
   if (sessionDir === undefined) {
+    // A30a: do not silently skip apply, and do not apply without sessionDir.
+    if (policy.assistedApply) {
+      return {
+        assistedApply: {
+          ok: false,
+          code: 'missing-session-dir',
+          reason: 'assisted apply requires sessionDir'
+        }
+      };
+    }
     return {};
   }
   const persisted = redactSuggestedPatchForPersistence(input.suggested, input.scenario);

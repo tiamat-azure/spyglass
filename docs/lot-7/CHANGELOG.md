@@ -1170,6 +1170,16 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: A30, I30, C31, W31, R32.
 
+## Captain lock A30a (assisted apply requires sessionDir)
+
+- **A30a:** Keep require-`sessionDir` for assisted apply. When
+  `resolveSessionDir` is undefined and `PATCH_ASSISTED_APPLY` is on,
+  `processSuggestedPatch` returns a structured `missing-session-dir`
+  refusal (`assisted apply requires sessionDir`). It does not silently
+  return `{}` and does not apply without a session directory. Health
+  recording still needs a resolved sessionDir. Off-path without
+  sessionDir remains `{}`.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

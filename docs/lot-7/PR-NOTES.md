@@ -300,6 +300,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   redaction is health / suggested-patch / PR only (P13a / P28b).
 - **L7-231:** Replay next/stop IPC returns a structured error instead of
   an unhandled rejection.
+- **A30a:** Assisted apply requires a resolved `sessionDir`. Missing dir
+  with apply enabled is `missing-session-dir` (not a silent skip, not
+  apply-without-sessionDir).
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -375,4 +378,6 @@ skip `--large` when valid large exists. **N29a:** vacant parameterized
 unique-ified against selector-derived names (R10a last-write-wins).
 **O29b:** export refuses a file dest even with overwrite. Pass-32
 (L7-230 … L7-231): apply live suggested args (redact for health/artifacts
-only); replay next/stop IPC try/catch. Held: A30, I30, C31, W31, R32.
+only); replay next/stop IPC try/catch. **A30a:** assisted apply requires
+sessionDir (structured `missing-session-dir` refusal). Held: I30, C31,
+W31, R32.
