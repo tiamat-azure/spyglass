@@ -248,6 +248,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   parameter/secret values by value (R19a), even when the recorded step
   has no `parameterRef`. L7-106 missing-step and P13a parameterized
   strips stay.
+- **S28b:** `resolveScenarioPath` refuses a scenario/script path that
+  resolves outside `policy.repo` (`scenario-outside-repo`). Relative
+  paths still resolve against the repo (L7-036) then must stay inside.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -302,5 +305,6 @@ SIGKILL bound. **R28a:** `validateHealth` migrates missing `runIds`
 before schema checks (H21a); raw schema still fail-closed (L7-128).
 **G28b:** `detectDefaultBranch` is `origin/HEAD` or local/remote
 `main`/`master` only (no checkout fallback). **P28b:** patch redaction
-scrubs known secrets by value even without `parameterRef`. Held: S28,
-X28, F28, W28.
+scrubs known secrets by value even without `parameterRef`. **S28b:**
+`resolveScenarioPath` fails when the path resolves outside `--repo`.
+Held: X28, F28, W28.

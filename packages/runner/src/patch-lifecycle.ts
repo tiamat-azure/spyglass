@@ -6,6 +6,7 @@ import {
   applyAssistedPatches,
   type CreatePr,
   type HasOpenPr,
+  isInsideRepo,
   type PreparePr
 } from './assisted-apply.ts';
 import { type GitExec, isGitApplyError } from './git-repo.ts';
@@ -56,16 +57,17 @@ export async function processSuggestedPatch(input: {
   if (!policy.assistedApply || suggested.patches.length === 0) {
     return result;
   }
-  const scenarioPath = resolveScenarioPath(input.scenarioPath, policy.repo);
-  if (scenarioPath === undefined) {
-    // L7-078: assisted apply is on and there are patches — do not silently skip.
+  const resolvedPath = resolveScenarioPath(input.scenarioPath, policy.repo);
+  if (!resolvedPath.ok) {
+    // L7-078 / S28b: assisted apply is on and there are patches — do not silently skip.
     result.assistedApply = {
       ok: false,
-      code: 'missing-scenario-path',
-      reason: 'assisted apply requires scenarioPath'
+      code: resolvedPath.code,
+      reason: resolvedPath.reason
     };
     return result;
   }
+  const scenarioPath = resolvedPath.path;
   try {
     const applyInput: Parameters<typeof applyAssistedPatches>[0] = {
       health,
@@ -103,20 +105,42 @@ export async function processSuggestedPatch(input: {
   return result;
 }
 
-function resolveScenarioPath(
+export type ResolveScenarioPathResult =
+  | { ok: true; path: string }
+  | {
+      ok: false;
+      code: 'missing-scenario-path' | 'scenario-outside-repo';
+      reason: string;
+    };
+
+/**
+ * S28b: do not assume the scenario/script lives under `--repo`. Relative
+ * paths still resolve against the repo (L7-036), but a result outside
+ * `policy.repo` is a structured refusal.
+ */
+export function resolveScenarioPath(
   scenarioPath: string | undefined,
   repo: string | undefined
-): string | undefined {
+): ResolveScenarioPathResult {
   if (scenarioPath === undefined || scenarioPath.length === 0) {
-    return undefined;
+    return {
+      ok: false,
+      code: 'missing-scenario-path',
+      reason: 'assisted apply requires scenarioPath'
+    };
   }
-  if (isAbsolute(scenarioPath)) {
-    return scenarioPath;
+  const resolved =
+    !isAbsolute(scenarioPath) && repo !== undefined && repo.length > 0
+      ? resolve(repo, scenarioPath)
+      : resolve(scenarioPath);
+  if (repo !== undefined && repo.length > 0 && !isInsideRepo(repo, resolved)) {
+    return {
+      ok: false,
+      code: 'scenario-outside-repo',
+      reason: 'F-64: scenarioPath resolves outside the target --repo'
+    };
   }
-  if (repo !== undefined && repo.length > 0) {
-    return resolve(repo, scenarioPath);
-  }
-  return resolve(scenarioPath);
+  return { ok: true, path: resolved };
 }
 
 export async function loadDatasetFile(path: string): Promise<unknown> {

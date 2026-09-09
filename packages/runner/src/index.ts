@@ -108,7 +108,8 @@ export {
   PATCH_WARN_THRESHOLD_DEFAULT,
   resolvePatchPolicy
 } from './patch-config.ts';
-export { processSuggestedPatch } from './patch-lifecycle.ts';
+export type { ResolveScenarioPathResult } from './patch-lifecycle.ts';
+export { processSuggestedPatch, resolveScenarioPath } from './patch-lifecycle.ts';
 export {
   originalDescriptorForPatch,
   redactSuggestedPatchForPersistence

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   RefinedStep,
@@ -50,7 +50,7 @@ import {
 } from './health.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
-import { processSuggestedPatch } from './patch-lifecycle.ts';
+import { processSuggestedPatch, resolveScenarioPath } from './patch-lifecycle.ts';
 import { type Recoverer, StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
@@ -2258,11 +2258,83 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     }
   });
 
+  it('refuses processSuggestedPatch when scenarioPath is outside --repo (S28b)', async () => {
+    const sessionDir = await tempDir('spyglass-lot7-s28b-session-');
+    const repo = await tempDir('spyglass-lot7-s28b-repo-');
+    const outside = await tempDir('spyglass-lot7-s28b-out-');
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(outside, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    const result = await processSuggestedPatch({
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      policy,
+      sessionDir,
+      scenarioPath
+    });
+    expect(result.health).toBeDefined();
+    expect(result.assistedApply?.ok).toBe(false);
+    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
+      expect(result.assistedApply.code).toBe('scenario-outside-repo');
+      expect(result.assistedApply.reason).toMatch(/outside the target --repo/u);
+    }
+  });
+
   it('folds DEFAULT_BRANCH_NAMES into isDefaultBranchName (L7-031)', () => {
     expect(isDefaultBranchName('main')).toBe(true);
     expect(isDefaultBranchName('master')).toBe(true);
     expect(isDefaultBranchName('develop')).toBe(false);
     expect(isDefaultBranchName('develop', 'develop')).toBe(true);
+  });
+});
+
+describe('resolveScenarioPath S28b', () => {
+  const repo = resolve(tmpdir(), 'spyglass-s28b-lexical-repo');
+
+  it('resolves a relative path that stays inside the repo (L7-036)', () => {
+    const result = resolveScenarioPath(join('generated', 'scenario.json'), repo);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.path).toBe(resolve(repo, 'generated', 'scenario.json'));
+    }
+  });
+
+  it('refuses a relative path that escapes the repo', () => {
+    const result = resolveScenarioPath(join('..', 'other', 'scenario.json'), repo);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('scenario-outside-repo');
+      expect(result.reason).toMatch(/outside the target --repo/u);
+    }
+  });
+
+  it('refuses an absolute path outside the repo', () => {
+    const result = resolveScenarioPath(
+      resolve(tmpdir(), 'spyglass-s28b-other', 'scenario.json'),
+      repo
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('scenario-outside-repo');
+    }
+  });
+
+  it('accepts an absolute path inside the repo', () => {
+    const inside = resolve(repo, 'scenario.json');
+    const result = resolveScenarioPath(inside, repo);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.path).toBe(inside);
+    }
+  });
+
+  it('returns missing-scenario-path when the path is empty', () => {
+    const result = resolveScenarioPath('', repo);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('missing-scenario-path');
+    }
   });
 });
 

@@ -995,6 +995,17 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: S28, X28, F28, W28.
 
+## Captain lock S28b (scenarioPath must stay inside --repo)
+
+- **S28b:** `resolveScenarioPath` fails when the scenario/script path
+  resolves outside `policy.repo`. It does not assume the file lives under
+  the target repo. Relative paths still resolve against the repo (L7-036),
+  then containment is checked. Outside paths return structured
+  `code: 'scenario-outside-repo'` from `processSuggestedPatch` (L7-009
+  realpath symlink escape in apply still holds).
+
+Ask-user still held: X28, F28, W28.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
