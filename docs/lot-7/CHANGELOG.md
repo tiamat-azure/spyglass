@@ -446,7 +446,9 @@ Ask-user still held: none for P12–P14.
   for `processSuggestedPatch` instead of rebuilding from raw patches.
 - **L7-108:** First-use latency persist retries are capped (3) with
   backoff so a rejecting `onFirstUseLatency` does not rewrite on every
-  finalize for the engine lifetime.
+  finalize for the engine lifetime. Backoff starts after the **second**
+  failed persist so a non-overlapping later finalize can still write its
+  own sample (L7-097; Windows CI where the two finals often do not overlap).
 
 ## CI — macOS Electron e2e close hang
 

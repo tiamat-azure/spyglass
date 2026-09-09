@@ -422,8 +422,12 @@ export function createWhisperEngine(options: {
           firstUseNoted = true;
           return;
         }
-        const delayMs = Math.min(250 * 2 ** (firstUseAttempts - 1), 4_000);
-        firstUseBackoffUntil = Date.now() + delayMs;
+        // L7-097: do not back off after the first failed persist so a second
+        // finalize can still write its own sample when the two finals did not overlap.
+        if (firstUseAttempts >= 2) {
+          const delayMs = Math.min(250 * 2 ** (firstUseAttempts - 2), 4_000);
+          firstUseBackoffUntil = Date.now() + delayMs;
+        }
       })();
       firstUsePending = pending;
       try {

@@ -151,6 +151,8 @@ persistence) is in `CHANGELOG.md`.
 Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
 `CHANGELOG.md`.
 Pass-15 (L7-103 … L7-108) is in `CHANGELOG.md`.
+Windows CI: L7-108 backoff starts after the second failed first-use persist
+so L7-097 can still sample a later non-overlapping finalize.
 
 ## Residuals
 

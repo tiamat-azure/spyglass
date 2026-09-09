@@ -559,7 +559,44 @@ describe('@spyglass/stt', () => {
       const second = engine.finalize('u2');
       await Promise.all([first, second]);
       await new Promise((resolve) => {
-        setTimeout(resolve, 200);
+        setTimeout(resolve, 400);
+      });
+      expect(calls).toBe(2);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('retries first-use latency on a later finalize when the first persist failed without overlap (L7-097)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7097-seq-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('first-use persist failed');
+        }
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await engine.finalize('u1');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await engine.finalize('u2');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
       });
       expect(calls).toBe(2);
     } finally {
@@ -597,10 +634,10 @@ describe('@spyglass/stt', () => {
     }
   });
 
-  it('caps first-use latency hook retries when persist keeps failing (L7-108)', async () => {
-    const dir = join(tmpdir(), `spyglass-whisper-l7108-${String(Date.now())}`);
+  it('does not persist first-use latency during backoff after the second failed persist (L7-108)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7108-backoff-${String(Date.now())}`);
     await mkdir(dir, { recursive: true });
-    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
     const model = join(dir, 'ggml-small-q5_1.bin');
     await writeFile(model, 'fake-weights');
     let calls = 0;
@@ -614,14 +651,27 @@ describe('@spyglass/stt', () => {
       }
     });
     try {
-      for (let index = 0; index < 8; index += 1) {
-        const id = `u${String(index)}`;
-        engine.begin(id);
-        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
-        await engine.finalize(id);
-      }
-      expect(calls).toBeGreaterThan(0);
-      expect(calls).toBeLessThanOrEqual(3);
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await engine.finalize('u1');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await engine.finalize('u2');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20);
+      });
+      engine.begin('u3');
+      engine.pushPcm('u3', Buffer.alloc(6400, 3), () => undefined);
+      await engine.finalize('u3');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      // First isolated failure does not back off (L7-097). The second starts
+      // backoff; the third is skipped while that window is open.
+      expect(calls).toBe(2);
     } finally {
       engine.dispose?.();
     }
