@@ -623,6 +623,11 @@ Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**
 - **L7-157:** `readLargeFallback` returns `fallback` after the boolean
   guard.
 
+Windows `verify`: skip POSIX `chmod` on `datasets/` (L7-152); give
+generated `scenario.ts` exec tests a timeout above `execFile`; wait for
+the second STT first-use persist before asserting L7-108 backoff; stub
+`createPr` on L7-134 leftover-recreate.
+
 Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
 **H21**.
 

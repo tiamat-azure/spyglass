@@ -680,6 +680,12 @@ describe('@spyglass/stt', () => {
       engine.begin('u2');
       engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
       await engine.finalize('u2');
+      const waited = Date.now();
+      while (calls < 2 && Date.now() - waited < 1_000) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
       await new Promise((resolve) => {
         setTimeout(resolve, 20);
       });

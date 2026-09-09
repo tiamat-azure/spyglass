@@ -45,7 +45,7 @@ import { runScenario } from './run.ts';
 
 const execFileAsync = promisify(execFile);
 const tmpDirs: string[] = [];
-const GIT_TEST_MS = process.platform === 'win32' ? 20_000 : 10_000;
+const GIT_TEST_MS = process.platform === 'win32' ? 40_000 : 10_000;
 
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), prefix));
@@ -1429,7 +1429,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenarioPath,
       policy,
       git: defaultGitExec,
-      preparePr: async () => ({})
+      preparePr: async () => ({}),
+      createPr: async () => ({ ok: true })
     });
     expect(result.ok).toBe(true);
     if (!result.ok) {

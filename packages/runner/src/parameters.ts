@@ -168,7 +168,10 @@ export async function writeGeneratedDatasets(
   const dir = join(generatedDir, DATASETS_DIR);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   // L7-152: recursive mkdir ignores mode when the dir already exists.
-  await chmod(dir, 0o700);
+  // Windows chmod only toggles read-only; skip POSIX modes there.
+  if (process.platform !== 'win32') {
+    await chmod(dir, 0o700);
+  }
   const recordedPath = join(dir, 'recorded.json');
   const examplePath = join(dir, 'example.json');
   // D11a / L7-137: recorded.json is plaintext captured values (including secrets).
@@ -177,7 +180,9 @@ export async function writeGeneratedDatasets(
     mode: 0o600
   });
   // writeFile mode applies only on create; tighten an existing broader file.
-  await chmod(recordedPath, 0o600);
+  if (process.platform !== 'win32') {
+    await chmod(recordedPath, 0o600);
+  }
   await writeFile(examplePath, `${JSON.stringify(exampleDataset(recorded), null, 2)}\n`, 'utf8');
   return { recorded: recordedPath, example: examplePath };
 }
