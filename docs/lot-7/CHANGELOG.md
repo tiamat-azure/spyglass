@@ -711,6 +711,17 @@ Ask-user still held: **D20**, **H21**.
 
 Ask-user still held: **H21**.
 
+## Captain lock H21a (migrate missing health runIds on load)
+
+- **H21a:** `loadHealth` migrates pre-Lot-7 `patchCandidates` that omit
+  usable `runIds`, defaulting from existing non-empty string items or
+  `lastRunId`. `schemaVersion` stays **1** (no bump). Load does not
+  rewrite `health.json`. `validateHealth` still requires `runIds`
+  (L7-128); upgraded sessions no longer hard-fail solely for a missing
+  array. `consecutiveRuns` is not used to invent extra IDs.
+
+Ask-user still held: none for these captain locks.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

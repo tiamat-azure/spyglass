@@ -9,6 +9,7 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
+import { validateHealth } from '@spyglass/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyAssistedPatches,
@@ -34,6 +35,7 @@ import {
   incrementAppliedPatches,
   loadHealth,
   MAX_CANDIDATE_RUN_IDS,
+  migrateHealthPatchCandidates,
   recordSuggestedPatches,
   resolveSessionDir,
   saveHealth
@@ -2127,5 +2129,137 @@ describe('saveHealth schema', () => {
     await writeFile(join(dir, 'health.json'), `${JSON.stringify(foreign, null, 2)}\n`, 'utf8');
     await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(/health.json sessionId mismatch/);
     expect(JSON.parse(await readFile(join(dir, 'health.json'), 'utf8'))).toEqual(foreign);
+  });
+});
+
+describe('loadHealth H21a runIds migration', () => {
+  it('fills missing runIds from lastRunId without bumping schemaVersion', async () => {
+    const dir = await tempDir('spyglass-lot7-h21a-missing-');
+    const fixtureText = await readFile(
+      new URL('../../../docs/contracts/examples/invalid/health.missing-runids.json', import.meta.url),
+      'utf8'
+    );
+    const path = join(dir, 'health.json');
+    await writeFile(path, fixtureText, 'utf8');
+    const health = await loadHealth(dir, 'ses_20260907_demo');
+    expect(health.schemaVersion).toBe(1);
+    expect(health.patchCandidates[0]?.lastRunId).toBe('run_0001');
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_0001']);
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(JSON.parse(fixtureText));
+  });
+
+  it('does not invent extra runIds when consecutiveRuns is 2 but only lastRunId exists', async () => {
+    const dir = await tempDir('spyglass-lot7-h21a-consec-');
+    const disk = {
+      schemaVersion: 1,
+      sessionId: 'ses_lot7',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 2,
+          lastRunId: 'run_0002'
+        }
+      ]
+    };
+    await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
+    const health = await loadHealth(dir, 'ses_lot7');
+    expect(health.schemaVersion).toBe(1);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(2);
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_0002']);
+  });
+
+  it('keeps usable runIds and drops empty entries', async () => {
+    const dir = await tempDir('spyglass-lot7-h21a-empty-ids-');
+    const disk = {
+      schemaVersion: 1,
+      sessionId: 'ses_lot7',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: 'run_a',
+          runIds: ['', 'run_a']
+        }
+      ]
+    };
+    await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
+    const health = await loadHealth(dir, 'ses_lot7');
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+  });
+
+  it('still rejects missing runIds at the schema (L7-128)', () => {
+    const result = validateHealth({
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: 'run_a'
+        }
+      ]
+    });
+    expect(result.valid).toBe(false);
+  });
+
+  it('still fails load when a candidate has no derivable runIds', async () => {
+    const dir = await tempDir('spyglass-lot7-h21a-underived-');
+    const disk = {
+      schemaVersion: 1,
+      sessionId: 'ses_lot7',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: ''
+        }
+      ]
+    };
+    await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
+    await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(
+      /corrupt health.json: schema validation failed/
+    );
+  });
+
+  it('calls migrateHealthPatchCandidates before validateHealth on load', async () => {
+    const src = await readFile(new URL('./health.ts', import.meta.url), 'utf8');
+    const loadFn = src.slice(
+      src.indexOf('export async function loadHealth'),
+      src.indexOf('export async function saveHealth')
+    );
+    expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeGreaterThan(-1);
+    expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeLessThan(loadFn.indexOf('validateHealth'));
+  });
+
+  it('does not invent schemaVersion when migrating', () => {
+    const migrated = migrateHealthPatchCandidates({
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 1,
+          lastRunId: 'run_a'
+        }
+      ]
+    });
+    expect(migrated).toMatchObject({
+      patchCandidates: [{ runIds: ['run_a'], lastRunId: 'run_a' }]
+    });
+    expect(migrated).not.toHaveProperty('schemaVersion');
   });
 });

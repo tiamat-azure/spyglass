@@ -61,6 +61,7 @@ export {
   healthStatus,
   incrementAppliedPatches,
   loadHealth,
+  migrateHealthPatchCandidates,
   recordSuggestedPatches,
   resolveSessionDir,
   saveHealth

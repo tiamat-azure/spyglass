@@ -230,3 +230,7 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **D20a:** `parameterRef` without a resolved dataset value fails fast
   even when `--dataset` is omitted (no silent empty fill/select). Same
   P2a error; empty string present in the dataset is still valid.
+- **H21a:** On health load, pre-Lot-7 `patchCandidates` missing usable
+  `runIds` get them from existing string items or `lastRunId`.
+  `schemaVersion` stays 1. Schema still requires `runIds` (L7-128);
+  load no longer fails solely for that omission.
