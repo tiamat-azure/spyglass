@@ -264,4 +264,8 @@ export vacates an empty dest before rename (Windows folder picker).
 **C26a:** `--large` also ensures whisper-cli (same as a plain fetch).
 **I26a:** unreadable marker I/O is no-marker on Whisper path pick;
 corrupt still fail-louds; F16b factory fail-loud when large is selected.
-Held: none.
+Pass-27 (L7-202 … L7-209): narrow non-ff push detection, explicit
+descriptor identity allow-list, halt keeps next disabled, STT decide
+response type, `GH_PROMPT_DISABLED`, dest-lock same-promise cleanup,
+export staging symlink re-check, aligned large-fallback marker dirs.
+Held: D27, A27, L27.

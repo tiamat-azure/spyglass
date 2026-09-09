@@ -936,15 +936,26 @@ async function checkoutOrGitError(
   }
 }
 
-/** L7-094: after local recreate, origin may already have this spyglass/patch-* name. */
-function isNonFastForwardPush(stderr: string): boolean {
-  return /non-fast-forward|\[rejected\]|fetch first/iu.test(stderr);
+/**
+ * L7-094 / L7-202: after local recreate, origin may already have this
+ * spyglass/patch-* name. Only real non-fast-forward / tip-behind rejections
+ * take the delete-and-repush path — not protected-branch, pre-receive, or
+ * shallow `[rejected]` lines.
+ */
+export function isNonFastForwardPush(stderr: string): boolean {
+  if (/non-fast-forward/iu.test(stderr)) {
+    return true;
+  }
+  if (/\[rejected\][^\n]*\(fetch first\)/iu.test(stderr)) {
+    return true;
+  }
+  return /tip of your current branch is behind/iu.test(stderr);
 }
 
 const GH_PR_CREATE_TIMEOUT_MS = 120_000;
 
 function ghExecEnv(): NodeJS.ProcessEnv {
-  return { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT: 'never' };
+  return { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1' };
 }
 
 function gitFailureReason(stderr: string, args: readonly string[]): string {

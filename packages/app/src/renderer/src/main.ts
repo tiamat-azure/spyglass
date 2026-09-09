@@ -499,6 +499,8 @@ const replayRunBtn = requireEl<HTMLButtonElement>('replay-run');
 const replayNextBtn = requireEl<HTMLButtonElement>('replay-next');
 const replayHaltBtn = requireEl<HTMLButtonElement>('replay-halt');
 const replaySteps = requireEl<HTMLOListElement>('replay-steps');
+/** L7-204: halt must keep next disabled even if next()'s finally runs later. */
+let replayHalted = false;
 const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
 const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
 const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
@@ -831,6 +833,7 @@ replayRunBtn.addEventListener('click', () => {
   replaySteps.replaceChildren();
   const forceAi = replayAi.checked;
   const stepByStep = replayStepwise.checked;
+  replayHalted = false;
   replayNextBtn.disabled = !stepByStep;
   replayHaltBtn.disabled = !stepByStep;
   void api.replay
@@ -867,16 +870,19 @@ replayNextBtn.addEventListener('click', () => {
       replayStatus.textContent = error instanceof Error ? error.message : String(error);
     })
     .finally(() => {
-      if (!replayHaltBtn.disabled) {
+      if (!replayHalted && !replayHaltBtn.disabled) {
         replayNextBtn.disabled = false;
       }
     });
 });
 
 replayHaltBtn.addEventListener('click', () => {
-  if (api === undefined) {
+  if (api === undefined || replayHaltBtn.disabled) {
     return;
   }
+  replayHalted = true;
+  replayNextBtn.disabled = true;
+  replayHaltBtn.disabled = true;
   void api.replay
     .stop()
     .then((result) => {

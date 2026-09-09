@@ -16,10 +16,15 @@ import {
   assertAssistedApplyAllowed,
   confirmedDescriptor,
   defaultHasOpenPr,
+  isNonFastForwardPush,
   openPrListMeansOpen,
   tryGhPrCreate
 } from './assisted-apply.ts';
-import { descriptorHash, patchSetHash } from './descriptor-hash.ts';
+import {
+  descriptorHash,
+  patchSetHash,
+  REPLAY_DESCRIPTOR_IDENTITY_KEYS
+} from './descriptor-hash.ts';
 import {
   defaultGitExec,
   GIT_EXEC_TIMEOUT_MS,
@@ -1055,6 +1060,86 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.reason).not.toBe('git push failed');
   });
 
+  it('does not treat protected-branch or shallow [rejected] as non-fast-forward (L7-202)', () => {
+    expect(isNonFastForwardPush('! [rejected] spyglass/patch (non-fast-forward)')).toBe(true);
+    expect(isNonFastForwardPush('! [rejected] spyglass/patch (fetch first)')).toBe(true);
+    expect(
+      isNonFastForwardPush(
+        'hint: Updates were rejected because the tip of your current branch is behind'
+      )
+    ).toBe(true);
+    expect(
+      isNonFastForwardPush('! [rejected] spyglass/patch (protected branch hook declined)')
+    ).toBe(false);
+    expect(isNonFastForwardPush('! [rejected] spyglass/patch (pre-receive hook declined)')).toBe(
+      false
+    );
+    expect(isNonFastForwardPush('! [rejected] spyglass/patch (shallow update not allowed)')).toBe(
+      false
+    );
+    expect(
+      isNonFastForwardPush('! [remote rejected] spyglass/patch (pre-receive hook declined)')
+    ).toBe(false);
+    expect(isNonFastForwardPush('remote: please fetch first and retry')).toBe(false);
+  });
+
+  it('does not delete the remote branch on a protected-branch push rejection (L7-202)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7202-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let deletedRemote = false;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push' && args.includes('--delete')) {
+        deletedRemote = true;
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      if (args[0] === 'push' && args.includes('-u')) {
+        return {
+          stdout: '',
+          stderr: '! [rejected] spyglass/patch (protected branch hook declined)',
+          code: 1
+        };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      hasOpenPr: async () => false,
+      createPr: async () => ({ ok: false })
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/protected branch/);
+    expect(deletedRemote).toBe(false);
+  });
+
+  it('disables gh prompts with GH_PROMPT_DISABLED (L7-206)', async () => {
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('function ghExecEnv');
+    const end = src.indexOf('function gitFailureReason');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain("GH_PROMPT_DISABLED: '1'");
+    expect(body).not.toContain('GH_PROMPT:');
+  });
+
   it('logs caught gh errors to stderr while staying fail-closed (L7-110)', async () => {
     const logs: string[] = [];
     const origWrite = process.stderr.write.bind(process.stderr);
@@ -1257,6 +1342,29 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const onPatch = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
     expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#a');
     expect(onPatch.steps[1]?.action.descriptor.selector).toBe('#b');
+  });
+
+  it('hashes every ReplayDescriptor identity field and ignores extras (L7-203)', () => {
+    expect(REPLAY_DESCRIPTOR_IDENTITY_KEYS).toEqual([
+      'type',
+      'selector',
+      'selectorStrategy',
+      'description',
+      'fallbackSelectors',
+      'arguments',
+      'framePath',
+      'shadowPath'
+    ]);
+    const base = { type: 'click' as const, selector: '#a' };
+    expect(descriptorHash({ ...base, selectorStrategy: 'css' })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, description: 'go' })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, fallbackSelectors: ['#b'] })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, arguments: ['x'] })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, framePath: ['main'] })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, shadowPath: ['root'] })).not.toBe(descriptorHash(base));
+    expect(descriptorHash({ ...base, extra: 'silent' } as typeof base & { extra: string })).toBe(
+      descriptorHash(base)
+    );
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {

@@ -57,6 +57,7 @@ export async function exportSessionFolder(
     const staging = await mkdtemp(join(parent, '.spyglass-export-'));
     try {
       await cp(source, staging, { recursive: true, dereference: false });
+      await assertNoSymlinks(staging, 'export');
       const manifest: SessionBundleManifest = {
         schemaVersion: 1,
         kind: 'spyglass-session',
@@ -172,16 +173,15 @@ async function withDestLock<T>(dest: string, fn: () => Promise<T>): Promise<T> {
   const held = new Promise<void>((resolveHeld) => {
     release = resolveHeld;
   });
-  destLocks.set(
-    key,
-    previous.then(() => held)
-  );
+  // L7-207: store the same promise we later compare for cleanup.
+  const queued = previous.then(() => held);
+  destLocks.set(key, queued);
   await previous;
   try {
     return await fn();
   } finally {
     release();
-    if (destLocks.get(key) === held) {
+    if (destLocks.get(key) === queued) {
       destLocks.delete(key);
     }
   }

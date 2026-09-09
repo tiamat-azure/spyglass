@@ -9,6 +9,7 @@ import {
 } from './resolve-engine.ts';
 import {
   chooseWhisperModel,
+  largeFallbackMarkerDirs,
   parseUpgradePromptAfter,
   readLargeFallback,
   readLargeFallbackSync,
@@ -297,6 +298,31 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(engine.model).toBe(explicit);
   });
 
+  it('honours large-fallback.json beside STT_MODEL_PATH even when STT_MODEL_DIR differs (L7-209)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7209-'));
+    const modelDir = join(root, 'dir');
+    const other = join(root, 'other');
+    await mkdir(modelDir, { recursive: true });
+    await mkdir(other, { recursive: true });
+    await writeFile(join(modelDir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(modelDir, STT_SMALL_MODEL_FILE), 'small-weights\n', 'utf8');
+    await writeFile(join(modelDir, STT_LARGE_MODEL_FILE), 'dir-large\n', 'utf8');
+    const explicit = join(other, STT_LARGE_MODEL_FILE);
+    await writeFile(explicit, 'other-large\n', 'utf8');
+    await writeFile(join(other, STT_FALLBACK_MARKER), `${JSON.stringify({ fallback: true })}\n`);
+    const env = {
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: modelDir,
+      STT_BIN: join(modelDir, 'whisper-cli'),
+      STT_MODEL_PATH: explicit
+    };
+    const engine = createEngineFromEnv(env);
+    expect(engine.model).toBe(join(modelDir, STT_SMALL_MODEL_FILE));
+    await expect(createEngineFromEnvAsync(env)).resolves.toMatchObject({
+      model: join(modelDir, STT_SMALL_MODEL_FILE)
+    });
+  });
+
   it('does not load a custom STT_MODEL_PATH on large→small fallback (L7-096)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7096-'));
     await mkdir(dir, { recursive: true });
@@ -340,6 +366,12 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(resolveSttModelDir({ STT_MODEL_PATH: ' /opt/whisper/ggml-small-q5_1.bin ' })).toBe(
       '/opt/whisper'
     );
+  });
+
+  it('lists STT_MODEL_DIR and STT_MODEL_PATH dirname for fallback markers (L7-209)', () => {
+    expect(
+      largeFallbackMarkerDirs({ STT_MODEL_DIR: '/models' }, ['/other/ggml-large-v3-turbo-q5_0.bin'])
+    ).toEqual(['/models', '/other']);
   });
 
   it('lists large model candidates via STT_LARGE_MODEL_FILE (L7-156)', async () => {

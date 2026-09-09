@@ -1221,6 +1221,34 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(vacate).not.toContain('recursive: true');
   });
 
+  it('cleans destLocks using the same queued promise that was stored (L7-207)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('async function withDestLock');
+    const end = src.indexOf('function isSafeSessionId');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('const queued = previous.then(() => held)');
+    expect(body).toContain('destLocks.set(key, queued)');
+    expect(body).toContain('destLocks.get(key) === queued');
+    expect(body).not.toContain('destLocks.get(key) === held');
+  });
+
+  it('re-checks export staging for symlinks after copy (L7-208)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function exportSessionFolder');
+    const end = src.indexOf('export async function importSessionFolder');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain("assertNoSymlinks(source, 'export')");
+    expect(body).toContain("assertNoSymlinks(staging, 'export')");
+    expect(body.indexOf('await cp(source, staging')).toBeGreaterThan(-1);
+    expect(body.indexOf('await cp(source, staging')).toBeLessThan(
+      body.indexOf("assertNoSymlinks(staging, 'export')")
+    );
+  });
+
   it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {
     const root = await tempDir('spyglass-lot7-l7154-');
     const sessionDir = join(root, 'ses_export');

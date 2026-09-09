@@ -9,6 +9,7 @@ import {
 } from './protocol.ts';
 import {
   chooseWhisperModel,
+  largeFallbackMarkerDirs,
   parseMaxLatencyMs,
   readLargeFallback,
   readLargeFallbackSync,
@@ -67,7 +68,7 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
     return begun;
   }
   const fallback = needsLargeFallbackMarker(begun.selection)
-    ? readLargeFallbackSync(begun.modelDir)
+    ? readAlignedLargeFallbackSync(env, begun)
     : begun.selection.envForcedSmall;
   return finishWhisperFromEnv(env, begun, fallback);
 }
@@ -87,7 +88,7 @@ export async function createEngineFromEnvAsync(
     return begun;
   }
   const fallback = needsLargeFallbackMarker(begun.selection)
-    ? await readLargeFallback(begun.modelDir)
+    ? await readAlignedLargeFallback(env, begun)
     : begun.selection.envForcedSmall;
   return finishWhisperFromEnv(env, begun, fallback);
 }
@@ -177,7 +178,41 @@ function collectModelSelection(
 
 /** F16b: fail-loud on corrupt/unreadable large-fallback.json only when large could be selected. */
 function needsLargeFallbackMarker(selection: WhisperModelSelection): boolean {
-  return selection.largeOk && !selection.envForcedSmall && !selection.explicitCustomPath;
+  const explicitIsLargeFile =
+    selection.explicit !== undefined && basename(selection.explicit) === STT_LARGE_MODEL_FILE;
+  const largeCouldBeSelected = selection.largeOk || explicitIsLargeFile;
+  const customNonLarge = selection.explicitCustomPath && !explicitIsLargeFile;
+  return largeCouldBeSelected && !selection.envForcedSmall && !customNonLarge;
+}
+
+/** L7-209: same marker dirs as F23b (`STT_MODEL_DIR` and `STT_MODEL_PATH` dirname). */
+function alignedFallbackMarkerDirs(env: NodeJS.ProcessEnv, ctx: WhisperBuildContext): string[] {
+  const extra = [ctx.paths.model, ctx.selection.largePath];
+  if (ctx.selection.explicit !== undefined && ctx.selection.explicit.length > 0) {
+    extra.push(ctx.selection.explicit);
+  }
+  return largeFallbackMarkerDirs(env, extra);
+}
+
+function readAlignedLargeFallbackSync(env: NodeJS.ProcessEnv, ctx: WhisperBuildContext): boolean {
+  for (const dir of alignedFallbackMarkerDirs(env, ctx)) {
+    if (readLargeFallbackSync(dir)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function readAlignedLargeFallback(
+  env: NodeJS.ProcessEnv,
+  ctx: WhisperBuildContext
+): Promise<boolean> {
+  for (const dir of alignedFallbackMarkerDirs(env, ctx)) {
+    if (await readLargeFallback(dir)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function selectWhisperModel(selection: WhisperModelSelection, fallback: boolean): string {

@@ -22,6 +22,7 @@ import type {
   StagehandActResponse,
   StagehandCdpResponse,
   StagehandObserveResponse,
+  SttUpgradeDecideResponse,
   UsagePayload,
   VoiceFinalPayload,
   VoiceLevelPayload,
@@ -130,7 +131,7 @@ export type SpyglassPreloadApi = {
       fallback: boolean;
       error?: string;
     }>;
-    decide: (action: 'accept' | 'refuse') => Promise<{ ok: boolean; error?: string }>;
+    decide: (action: 'accept' | 'refuse') => Promise<SttUpgradeDecideResponse>;
     onOffer: (callback: (payload: { propose: boolean }) => void) => () => void;
   };
 };

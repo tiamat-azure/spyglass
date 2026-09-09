@@ -195,6 +195,7 @@ describe('packaged Observe', () => {
     expect(pickBody).toContain('readFallbackMarkerForPathPick');
     expect(pickBody).toContain('unreadable large-fallback.json');
     expect(pickBody).toContain('readLargeFallbackSync');
+    expect(pickBody).toContain('largeFallbackMarkerDirs');
     expect(pickBody).toContain('skipLarge');
     expect(main).toContain("error: 'inactive'");
     expect(main).toContain('activeReplay === undefined');
@@ -206,6 +207,10 @@ describe('packaged Observe', () => {
     expect(replayNextHandler).not.toContain('activeReplay?.next()');
     expect(replayNextHandler).toContain('activeReplay.next()');
     expect(preload).toContain('IPC.voiceSetMode');
+    const ipcShared = readFileSync(join(appRoot, 'src/shared/ipc.ts'), 'utf8');
+    expect(ipcShared).toContain('export type SttUpgradeDecideResponse');
+    expect(ipcShared).toContain('{ ok: true } | { ok: false; error: string }');
+    expect(preload).toContain('SttUpgradeDecideResponse');
     expect(bridge).toContain('VOICE_FLUSH_MS');
     expect(bridge).not.toContain('sleep(4_000)');
     expect(bridge).toContain('this.trackFinal(journal)');
@@ -278,6 +283,9 @@ describe('packaged Observe', () => {
     expect(resolveEngine).toContain('export async function createEngineFromEnvAsync(');
     expect(resolveEngine).toContain('ctx.selection.largeOk');
     expect(resolveEngine).not.toContain('existsSync(ctx.selection.largePath)');
+    expect(resolveEngine).toContain('largeFallbackMarkerDirs');
+    expect(resolveEngine).toContain('readAlignedLargeFallbackSync');
+    expect(resolveEngine).toContain('explicitIsLargeFile');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');
@@ -305,6 +313,21 @@ describe('packaged Observe', () => {
     expect(importFn.indexOf("assertNoSymlinks(source, 'import')")).toBeLessThan(
       importFn.indexOf('readSessionMeta(source)')
     );
+    const exportFn = sessionBundle.slice(
+      sessionBundle.indexOf('export async function exportSessionFolder'),
+      sessionBundle.indexOf('export async function importSessionFolder')
+    );
+    expect(exportFn).toContain("assertNoSymlinks(source, 'export')");
+    expect(exportFn).toContain("assertNoSymlinks(staging, 'export')");
+    expect(exportFn.indexOf('await cp(source, staging')).toBeLessThan(
+      exportFn.indexOf("assertNoSymlinks(staging, 'export')")
+    );
+    const destLock = sessionBundle.slice(
+      sessionBundle.indexOf('async function withDestLock'),
+      sessionBundle.indexOf('function isSafeSessionId')
+    );
+    expect(destLock).toContain('const queued = previous.then(() => held)');
+    expect(destLock).toContain('destLocks.get(key) === queued');
     const replaceFn = sessionBundle.slice(sessionBundle.indexOf('async function replaceDirectory'));
     expect(replaceFn.startsWith('async function replaceDirectory')).toBe(true);
     expect(replaceFn).not.toMatch(/await recoverOrphanedBackup\(dest\)/);
@@ -360,19 +383,23 @@ describe('packaged Observe', () => {
     expect(importHandler).toContain('sessionImportBtn.disabled = true');
     expect(importHandler).toContain('.catch((error: unknown) => {');
     const nextIdx = renderer.indexOf('replayNextBtn.addEventListener');
+    const haltIdx = renderer.indexOf('replayHaltBtn.addEventListener');
     expect(nextIdx).toBeGreaterThan(-1);
-    const nextHandler = renderer.slice(nextIdx, nextIdx + 900);
+    expect(haltIdx).toBeGreaterThan(nextIdx);
+    const nextHandler = renderer.slice(nextIdx, haltIdx);
     expect(nextHandler).toContain('replayNextBtn.disabled = true');
     expect(nextHandler).toContain('api.replay');
     expect(nextHandler).toContain('result.ok');
     expect(nextHandler).toContain('result.error');
-    const haltIdx = renderer.indexOf('replayHaltBtn.addEventListener');
-    expect(haltIdx).toBeGreaterThan(-1);
-    const haltHandler = renderer.slice(haltIdx, haltIdx + 900);
+    expect(nextHandler).toContain('replayHalted');
+    const haltHandler = renderer.slice(haltIdx, haltIdx + 1100);
     expect(haltHandler).toContain('api.replay');
     expect(haltHandler).toContain('result.ok');
     expect(haltHandler).toContain('result.error');
     expect(haltHandler).toContain('.catch((error: unknown) => {');
+    expect(haltHandler).toContain('replayHalted = true');
+    expect(haltHandler).toContain('replayNextBtn.disabled = true');
+    expect(haltHandler).toContain('replayHaltBtn.disabled = true');
     const statusStart = renderer.indexOf('void api.sttUpgrade');
     const statusEnd = renderer.indexOf('void api.stagehand.cdp()');
     expect(statusStart).toBeGreaterThan(-1);

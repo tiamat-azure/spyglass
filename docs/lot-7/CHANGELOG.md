@@ -867,6 +867,30 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: none.
 
+## Pass-27 adversarial fixes (L7-202 … L7-209)
+
+- **L7-202:** `isNonFastForwardPush` only matches real non-fast-forward /
+  tip-behind / `[rejected] (fetch first)` cases. Protected-branch,
+  pre-receive, and shallow `[rejected]` lines do not take the remote
+  delete-and-repush path.
+- **L7-203:** Descriptor hashes use an explicit `ReplayDescriptor`
+  identity allow-list covering every current type field; extras cannot
+  silently change the hash, and a new type field fails typecheck.
+- **L7-204:** Replay halt immediately disables next (and halt) and sets
+  `replayHalted` so `next()`'s `finally` cannot re-enable past a halt.
+- **L7-205:** `SttUpgradeDecideResponse` (`ok` / `error`) matches
+  renderer consumption of `sttUpgrade.decide()`.
+- **L7-206:** `gh` exec env sets `GH_PROMPT_DISABLED=1` (not `GH_PROMPT`).
+- **L7-207:** `withDestLock` cleanup compares/deletes the same queued
+  promise that was stored in the map.
+- **L7-208:** Export re-checks `assertNoSymlinks` on staging after copy
+  (import TOCTOU parity), parameterized as export.
+- **L7-209:** Engine factory large-fallback marker dirs match F23b
+  (`STT_MODEL_DIR` and `STT_MODEL_PATH` dirname) so those two cannot
+  disagree when large fallback applies.
+
+Ask-user still held: D27, A27, L27 (not assumed).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

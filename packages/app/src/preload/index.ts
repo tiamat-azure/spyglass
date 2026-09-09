@@ -24,6 +24,7 @@ import type {
   StagehandCdpResponse,
   StagehandObserveRequest,
   StagehandObserveResponse,
+  SttUpgradeDecideResponse,
   UsagePayload,
   VoiceFinalPayload,
   VoiceLevelPayload,
@@ -296,10 +297,7 @@ const spyglass = {
         error?: string;
       }>,
     decide: async (action: 'accept' | 'refuse') =>
-      ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<{
-        ok: boolean;
-        error?: string;
-      }>,
+      ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<SttUpgradeDecideResponse>,
     onOffer: (callback: (payload: { propose: boolean }) => void): (() => void) => {
       const listener = (_event: unknown, payload: { propose: boolean }): void => {
         callback(payload);

@@ -6,8 +6,8 @@ import { basename, dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
 import {
+  largeFallbackMarkerDirs,
   readLargeFallbackSync,
-  resolveSttModelDir,
   STT_LARGE_MODEL_FILE,
   STT_SMALL_MODEL_FILE
 } from './upgrade.ts';
@@ -161,16 +161,7 @@ function preferSmallAfterLargeFallback(largePath: string, env: NodeJS.ProcessEnv
   if (env.STT_LARGE_FALLBACK === '1') {
     return true;
   }
-  const dirs: string[] = [];
-  const modelDir = resolveSttModelDir(env);
-  if (modelDir !== undefined && modelDir.length > 0) {
-    dirs.push(modelDir);
-  }
-  const largeDir = dirname(largePath);
-  if (!dirs.includes(largeDir)) {
-    dirs.push(largeDir);
-  }
-  for (const dir of dirs) {
+  for (const dir of largeFallbackMarkerDirs(env, [largePath])) {
     if (readFallbackMarkerForPathPick(dir)) {
       return true;
     }

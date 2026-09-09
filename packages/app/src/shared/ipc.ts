@@ -458,3 +458,6 @@ export type SttUpgradeStatus = {
 export type SttUpgradeDecideRequest = {
   action: 'accept' | 'refuse';
 };
+
+/** L7-205: `sttUpgrade.decide()` ok/error, matching main + renderer. */
+export type SttUpgradeDecideResponse = { ok: true } | { ok: false; error: string };

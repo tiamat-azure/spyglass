@@ -184,3 +184,29 @@ export function resolveSttModelDir(env: NodeJS.ProcessEnv = process.env): string
   }
   return undefined;
 }
+
+/**
+ * L7-209 / F23b: marker lookup dirs are STT_MODEL_DIR (or STT_MODEL_PATH
+ * dirname) plus dirname of each extra model path so those two cannot disagree.
+ */
+export function largeFallbackMarkerDirs(
+  env: NodeJS.ProcessEnv,
+  extraModelPaths: readonly string[] = []
+): string[] {
+  const dirs: string[] = [];
+  const add = (dir: string): void => {
+    if (dir.length > 0 && !dirs.includes(dir)) {
+      dirs.push(dir);
+    }
+  };
+  const modelDir = resolveSttModelDir(env);
+  if (modelDir !== undefined) {
+    add(modelDir);
+  }
+  for (const modelPath of extraModelPaths) {
+    if (modelPath.length > 0) {
+      add(dirname(modelPath));
+    }
+  }
+  return dirs;
+}
