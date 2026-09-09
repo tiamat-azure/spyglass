@@ -1414,6 +1414,20 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(vacate).not.toContain('recursive: true');
   });
 
+  it('documents withDestLock as single-process in-memory only (X28a)', async () => {
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const map = src.indexOf('const destLocks = new Map<string, Promise<void>>()');
+    const start = src.indexOf('async function withDestLock');
+    const end = src.indexOf('function isSafeSessionId');
+    expect(map).toBeGreaterThan(-1);
+    expect(start).toBeGreaterThan(map);
+    expect(end).toBeGreaterThan(start);
+    const header = src.slice(src.lastIndexOf('/**', map), end);
+    expect(header).toMatch(/in-memory|single-process|this process/iu);
+    expect(header).toMatch(/not a\s+cross-process lockfile|no lockfile/iu);
+    expect(header).not.toMatch(/so concurrent import\/export cannot clobber\./u);
+  });
+
   it('cleans destLocks using the same queued promise that was stored (L7-207)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
     const start = src.indexOf('async function withDestLock');

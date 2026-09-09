@@ -251,6 +251,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **S28b:** `resolveScenarioPath` refuses a scenario/script path that
   resolves outside `policy.repo` (`scenario-outside-repo`). Relative
   paths still resolve against the repo (L7-036) then must stay inside.
+- **X28a:** `withDestLock` stays a single-process in-memory Map. No
+  cross-process lockfile this lot. Concurrent import/export is serialized
+  only within one process.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -280,7 +283,8 @@ dataset dir from scenarioPath, F16b vs whisperAvailable, realpath
 ENOENT-only, no large `existing[0]` under fallback, atomic small
 fallback fetch. Pass-25 (L7-180 … L7-189): unique `runIds`, halt/status
 IPC errors, restore starting ref on PR-prep refusal, unstage on restore,
-sessionId match, dest TOCTOU lock, bundle manifest check, export
+sessionId match, in-process dest TOCTOU lock (X28a; no cross-process
+lockfile), bundle manifest check, export
 symlink refusal, no explicit large under fallback. Pass-26 (L7-190 …
 L7-201): log STT bookkeeping failures, close timeout-only SIGKILL,
 propagate replay stop, redact recovery `lastError`, EPERM not
@@ -307,4 +311,5 @@ before schema checks (H21a); raw schema still fail-closed (L7-128).
 `main`/`master` only (no checkout fallback). **P28b:** patch redaction
 scrubs known secrets by value even without `parameterRef`. **S28b:**
 `resolveScenarioPath` fails when the path resolves outside `--repo`.
-Held: X28, F28, W28.
+**X28a:** `withDestLock` is single-process (in-memory Map); no
+cross-process lockfile. Held: F28, W28.

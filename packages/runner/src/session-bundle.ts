@@ -163,9 +163,15 @@ async function assertBundleManifestAgrees(dir: string, sessionId: string): Promi
   }
 }
 
-/** L7-186: serialize dest check+publish so concurrent import/export cannot clobber. */
+/**
+ * L7-186 / X28a: in-process dest mutex (in-memory `destLocks` Map). Same-process
+ * concurrent import/export cannot clobber the same dest. Not a
+ * cross-process lockfile — separate processes can still race. No lockfile
+ * this lot.
+ */
 const destLocks = new Map<string, Promise<void>>();
 
+/** L7-186 / L7-207 / X28a: single-process queue; see destLocks comment. */
 async function withDestLock<T>(dest: string, fn: () => Promise<T>): Promise<T> {
   const key = resolve(dest);
   const previous = destLocks.get(key) ?? Promise.resolve();

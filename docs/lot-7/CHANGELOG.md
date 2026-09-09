@@ -797,9 +797,10 @@ Ask-user still held: none for these captain locks.
   `scenario.json` staged.
 - **L7-185:** `recordSuggestedPatches` rejects a suggested `sessionId` that
   does not match `health.json`.
-- **L7-186:** Session dest publish is serialized per path; overwrite-false
-  uses a no-replace rename so a dest that appears after the availability
-  check cannot be stolen.
+- **L7-186:** Session dest publish is serialized per path **in-process**
+  (in-memory Map); overwrite-false uses a no-replace rename so a dest
+  that appears after the availability check cannot be stolen in the same
+  process. Cross-process races are not locked (X28a).
 - **L7-187:** Import validates `spyglass-session.json` kind/schemaVersion
   and `sessionId` agreement with `meta.json` before copying.
 - **L7-188:** Export refuses a source session that contains symlinks
@@ -1008,6 +1009,15 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 **694 passed**, 1 skipped (62 files). `lot7-patch.test.ts` 90.
 
 Ask-user still held: X28, F28, W28.
+
+## Captain lock X28a (withDestLock is single-process only)
+
+- **X28a:** `withDestLock` stays an in-memory `Map` in this process
+  (L7-186 / L7-207). Same-process concurrent import/export cannot clobber
+  the same dest. There is **no** cross-process lockfile this lot; separate
+  processes can still race. Do not read L7-186 as a machine-wide lock.
+
+Ask-user still held: F28, W28.
 
 ## CI — macOS Electron e2e close hang
 
