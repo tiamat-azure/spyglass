@@ -519,6 +519,11 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     const body = src.slice(start, end);
     expect(body).toContain('STT_LARGE_MODEL_FILE');
     expect(body.match(/ggml-large-v3-turbo-q5_0\.bin/g) ?? []).toEqual([]);
+    const resolveStart = src.indexOf('export function resolveWhisperPaths');
+    const resolveEnd = src.indexOf('export function pickPreferredWhisperModel');
+    expect(resolveStart).toBeGreaterThan(-1);
+    const resolveBody = src.slice(resolveStart, resolveEnd);
+    expect(resolveBody).toContain('isExistingRegularFile');
   });
 
   it('returns the parsed fallback boolean directly (L7-157)', async () => {

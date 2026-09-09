@@ -144,12 +144,15 @@ export function resolveScenarioPath(
     !isAbsolute(scenarioPath) && repo !== undefined && repo.length > 0
       ? resolve(repo, scenarioPath)
       : resolve(scenarioPath);
-  if (repo !== undefined && repo.length > 0 && !isInsideRepo(repo, resolved)) {
-    return {
-      ok: false,
-      code: 'scenario-outside-repo',
-      reason: 'F-64: scenarioPath resolves outside the target --repo'
-    };
+  if (repo !== undefined && repo.length > 0) {
+    const repoAbs = resolve(repo);
+    if (!isInsideRepo(repoAbs, resolved)) {
+      return {
+        ok: false,
+        code: 'scenario-outside-repo',
+        reason: 'F-64: scenarioPath resolves outside the target --repo'
+      };
+    }
   }
   return { ok: true, path: resolved };
 }

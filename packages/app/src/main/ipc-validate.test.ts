@@ -138,6 +138,15 @@ describe('session payload validation', () => {
     expect(body).toContain('result.datasetPath');
     expect(body).not.toMatch(/datasetPath \(renderer does not expose it\)/);
   });
+
+  it('documents datasetPath on spyglass:replay:start (L7-240)', () => {
+    const ipcMd = readFileSync(
+      new URL('../../../../docs/contracts/ipc.md', import.meta.url),
+      'utf8'
+    );
+    expect(ipcMd).toMatch(/spyglass:replay:start/);
+    expect(ipcMd).toMatch(/datasetPath\?/);
+  });
 });
 
 describe('layout', () => {

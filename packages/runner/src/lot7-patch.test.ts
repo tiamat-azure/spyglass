@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   RefinedStep,
@@ -2517,12 +2517,35 @@ describe('resolveScenarioPath S28b', () => {
     }
   });
 
+  it('resolves a relative repo before containment (L7-243)', () => {
+    const relativeRepo = relative(process.cwd(), repo);
+    expect(isAbsolute(relativeRepo)).toBe(false);
+    const inside = resolve(repo, 'scenario.json');
+    const result = resolveScenarioPath(inside, relativeRepo);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.path).toBe(inside);
+    }
+  });
+
   it('returns missing-scenario-path when the path is empty', () => {
     const result = resolveScenarioPath('', repo);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe('missing-scenario-path');
     }
+  });
+
+  it('resolves repo to absolute before isInsideRepo (L7-243)', async () => {
+    const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('export function resolveScenarioPath'),
+      src.indexOf('export async function loadDatasetFile')
+    );
+    expect(fn).toContain('const repoAbs = resolve(repo)');
+    expect(fn.indexOf('const repoAbs = resolve(repo)')).toBeLessThan(
+      fn.indexOf('isInsideRepo(repoAbs')
+    );
   });
 });
 
@@ -3177,7 +3200,7 @@ describe('loadHealth H21a runIds migration', () => {
     expect(migrated.patchCandidates[0]?.consecutiveRuns).toBe(1);
   });
 
-  it('keeps usable runIds and drops empty entries', async () => {
+  it('rejects current-schema runIds that contain empty entries (L7-242)', async () => {
     const dir = await tempDir('spyglass-lot7-h21a-empty-ids-');
     const disk = {
       schemaVersion: 1,
@@ -3195,8 +3218,9 @@ describe('loadHealth H21a runIds migration', () => {
       ]
     };
     await writeFile(join(dir, 'health.json'), `${JSON.stringify(disk)}\n`, 'utf8');
-    const health = await loadHealth(dir, 'ses_lot7');
-    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+    await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(
+      /corrupt health.json: schema validation failed/
+    );
   });
 
   it('still rejects missing runIds at the raw schema (L7-128)', () => {
@@ -3250,6 +3274,7 @@ describe('loadHealth H21a runIds migration', () => {
     expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeLessThan(
       loadFn.indexOf('validateHealth')
     );
+    expect(loadFn).toContain('checked.data');
   });
 
   it('does not invent schemaVersion when migrating', () => {

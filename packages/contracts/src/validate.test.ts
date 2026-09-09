@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { migrateHealthPatchCandidates } from './health-migrate.ts';
 import {
   formatErrors,
   schemaFromFixtureName,
@@ -104,8 +105,13 @@ describe('validateHealth', () => {
         }
       ]
     };
-    expect(validateHealth(payload).valid).toBe(true);
+    const result = validateHealth(payload);
+    expect(result.valid).toBe(true);
     expect(validateUnknown('health', payload).valid).toBe(false);
+    expect(result.data).toMatchObject({
+      patchCandidates: [{ lastRunId: 'run_a', runIds: ['run_a'], consecutiveRuns: 1 }]
+    });
+    expect(payload.patchCandidates[0]).not.toHaveProperty('runIds');
   });
 
   it('still rejects a candidate with no derivable runIds', () => {
@@ -145,7 +151,7 @@ describe('validateHealth', () => {
     expect(result.valid).toBe(false);
   });
 
-  it('caps consecutiveRuns at the runIds window (L7-220)', () => {
+  it('does not soften current-schema consecutiveRuns overflow (L7-242)', () => {
     const payload = {
       schemaVersion: 1,
       sessionId: 'ses_x',
@@ -162,7 +168,28 @@ describe('validateHealth', () => {
       ]
     };
     expect(validateUnknown('health', payload).valid).toBe(false);
-    expect(validateHealth(payload).valid).toBe(true);
+    expect(validateHealth(payload).valid).toBe(false);
+  });
+
+  it('does not rewrite a candidate that already has runIds (L7-242)', () => {
+    const payload = {
+      schemaVersion: 1,
+      sessionId: 'ses_x',
+      status: 'healthy',
+      appliedPatches: 0,
+      patchCandidates: [
+        {
+          stepIndex: 0,
+          descriptorHash: 'sha256:abc',
+          consecutiveRuns: 33,
+          lastRunId: 'run_a',
+          runIds: ['', 'run_a']
+        }
+      ]
+    };
+    const migrated = migrateHealthPatchCandidates(payload) as typeof payload;
+    expect(migrated.patchCandidates[0]?.runIds).toEqual(['', 'run_a']);
+    expect(migrated.patchCandidates[0]?.consecutiveRuns).toBe(33);
   });
 });
 

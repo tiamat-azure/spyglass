@@ -324,6 +324,13 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **L7-237:** Default small model download is atomic + min-size.
 - **L7-238:** Large-fallback marker errors are structured (`LargeFallbackError`).
 - **L7-239:** `chooseWhisperModel` does not return a non-existent `largePath`.
+- **L7-240:** IPC contract documents `datasetPath` on replay-start.
+- **L7-241:** Health load uses the migrated payload after validate ok.
+- **L7-242:** Health migrate does not rewrite current-schema `runIds`.
+- **L7-243:** `resolveScenarioPath` absolutizes `repo` before containment.
+- **L7-244:** Existing whisper-cli / large skip requires SHA-256 match.
+- **L7-245:** Model candidates must be regular files, not directories.
+- **L7-246:** Missing recorded step still omits live fill args as `original`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -409,4 +416,8 @@ forwards `datasetPath` for parameterized in-app replay. Pass-33
 IPC codes; Suivant gated on stepwise-active; git timeout ≠ exit 1;
 no live fill original on miss; atomic default small download;
 structured large-fallback errors; `chooseWhisperModel` existence-checks
-large. Held: none.
+large. Pass-34 (L7-240 … L7-246): document replay-start `datasetPath`;
+health validate returns migrated payload; migrate only missing-runIds
+legacy; resolve repo absolute before containment; SHA-256 before skip
+existing cli/large; model candidates must be regular files; L7-236
+original still omits live fill args. Held: **D34**.

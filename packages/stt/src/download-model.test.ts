@@ -350,6 +350,26 @@ describe('W3a fetch-whisper --large', () => {
     );
   });
 
+  it('verifies sha256 before skipping an existing whisper-cli or large model (L7-244)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    expect(src).toContain('async function existingCliDigestOk');
+    const cliStart = src.indexOf('async function ensureWhisperCli');
+    const cliEnd = src.indexOf('const SMALL_MIN_BYTES');
+    expect(cliStart).toBeGreaterThan(-1);
+    expect(cliEnd).toBeGreaterThan(cliStart);
+    const cliBody = src.slice(cliStart, cliEnd);
+    expect(cliBody).toContain('existingCliDigestOk(dest, cli)');
+    expect(cliBody).toContain('existingCliOk(dest)');
+    const largeStart = src.indexOf('if (large)');
+    const largeEnd = src.indexOf('const modelPath');
+    const largeBlock = src.slice(largeStart, largeEnd);
+    expect(largeBlock).toContain('fileSha256(largePath)');
+    expect(largeBlock).toContain('STT_LARGE_SHA256');
+  });
+
   it('skips --large re-download when a valid large file is present (L7-229)', async () => {
     const src = await readFile(
       new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
@@ -365,6 +385,8 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeBlock.indexOf('existingLargeOk(largePath, STT_LARGE_MIN_BYTES)')).toBeLessThan(
       largeBlock.indexOf('await fetch(STT_LARGE_MODEL_URL')
     );
+    expect(largeBlock).toContain('fileSha256(largePath)');
+    expect(largeBlock).toContain('STT_LARGE_SHA256');
     const fnStart = src.indexOf('function existingLargeOk');
     const fnEnd = src.indexOf('async function ensureSmallFallback');
     expect(fnStart).toBeGreaterThan(-1);

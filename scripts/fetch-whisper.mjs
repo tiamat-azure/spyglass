@@ -235,6 +235,15 @@ async function fileSha256(path) {
   return hash.digest('hex');
 }
 
+async function existingCliDigestOk(dest, cli) {
+  const expected = expectedCliSha256(cli);
+  if (expected === undefined) {
+    return false;
+  }
+  const actual = await fileSha256(dest);
+  return actual === expected;
+}
+
 /** After extract+size, before chmod/success. Fail closed: rm dest, throw. */
 async function assertCliIntegrity(dest, cli) {
   const expected = expectedCliSha256(cli);
@@ -251,7 +260,7 @@ async function assertCliIntegrity(dest, cli) {
 
 /**
  * C26a: plain fetch and `--large` both leave a usable whisper-cli when a
- * prebuilt URL exists. Skip only a valid existing binary.
+ * prebuilt URL exists. Skip only a size+digest-valid existing binary (L7-244).
  */
 async function ensureWhisperCli() {
   const cli = cliAsset();
@@ -262,7 +271,7 @@ async function ensureWhisperCli() {
     return;
   }
   const dest = join(outDir, cli.name);
-  if (existingCliOk(dest)) {
+  if (existingCliOk(dest) && (await existingCliDigestOk(dest, cli))) {
     process.stdout.write(`whisper-cli already present: ${dest}\n`);
     return;
   }
@@ -306,7 +315,7 @@ function existingSmallOk(dest) {
   }
 }
 
-/** L7-229: skip only a valid large file; truncated files/dirs are re-fetched. */
+/** L7-229 / L7-244: skip only a valid large file whose digest matches the pin. */
 function existingLargeOk(dest, minBytes) {
   try {
     const st = statSync(dest);
@@ -347,7 +356,10 @@ async function main() {
       '../packages/stt/src/upgrade.ts'
     );
     const largePath = join(outDir, STT_LARGE_MODEL_FILE);
-    if (existingLargeOk(largePath, STT_LARGE_MIN_BYTES)) {
+    if (
+      existingLargeOk(largePath, STT_LARGE_MIN_BYTES) &&
+      (await fileSha256(largePath)) === STT_LARGE_SHA256
+    ) {
       process.stdout.write(`large already present: ${largePath}\n`);
     } else {
       process.stdout.write(`Downloading ${STT_LARGE_MODEL_FILE} (optional STT upgrade, ~575MB)…\n`);

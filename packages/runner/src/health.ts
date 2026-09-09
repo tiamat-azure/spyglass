@@ -95,7 +95,7 @@ export async function loadHealth(sessionDir: string, sessionId: string): Promise
   if (!checked.valid) {
     throw new Error('corrupt health.json: schema validation failed');
   }
-  const health = parsed as ScenarioHealth;
+  const health = (checked.data ?? parsed) as ScenarioHealth;
   if (health.sessionId !== sessionId) {
     throw new Error(`health.json sessionId mismatch: ${health.sessionId} !== ${sessionId}`);
   }

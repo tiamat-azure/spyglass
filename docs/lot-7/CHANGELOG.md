@@ -1262,6 +1262,28 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user queue: clear.
 
+## Pass-34 adversarial fixes (L7-240 … L7-246)
+
+- **L7-240:** `docs/contracts/ipc.md` documents `datasetPath?` on
+  `spyglass:replay:start` (R32b / F-48).
+- **L7-241:** `validateHealth` returns the migrated payload on `data`.
+  `loadHealth` uses `checked.data` after migrate-before-validate so a
+  valid load is not the legacy object without `runIds`.
+- **L7-242:** `migrateHealthPatchCandidates` fills `runIds` only when the
+  field is missing. Current-schema records (empty slots, overflow
+  `consecutiveRuns`, …) stay fail-closed.
+- **L7-243:** `resolveScenarioPath` resolves `--repo` to an absolute path
+  before the `isInsideRepo` check against the absolute scenario path.
+- **L7-244:** `fetch-whisper` will not skip an existing whisper-cli or
+  large model on size alone; SHA-256 must match the I30a / large pins.
+- **L7-245:** Whisper model candidates count as available only when
+  `statSync` says they are regular files (a directory must not shadow
+  the basename).
+- **L7-246:** Missing recorded step still uses `originalWithoutLiveFillArgs`
+  (L7-236); live fill args are not persisted as patch `original`.
+
+Ask-user still held: **D34**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

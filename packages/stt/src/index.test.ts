@@ -96,6 +96,23 @@ describe('@spyglass/stt', () => {
     expect(missing?.model).toBe(large);
   });
 
+  it('ignores a directory that shadows a model filename (L7-245)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7245-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(bin, 'stub');
+    await mkdir(small);
+    expect(
+      resolveWhisperPaths({
+        STT_BIN: bin,
+        STT_MODEL_DIR: dir,
+        SPYGLASS_STT_RESOURCES: dir
+      })
+    ).toBeUndefined();
+    expect(whisperAvailable({ STT_BIN: bin, STT_MODEL_DIR: dir })).toBe(false);
+  });
+
   it('does not let large basename override an existing STT_MODEL_FILE (M18a)', () => {
     const small = '/res/ggml-small-q5_1.bin';
     const large = '/res/ggml-large-v3-turbo-q5_0.bin';

@@ -1,10 +1,12 @@
 /**
  * R28a / H21a: in-memory upgrade of pre-Lot-7 `patchCandidates` that omit
- * usable `runIds`. Defaults from existing non-empty string items, else
- * `lastRunId`. Does not bump `schemaVersion`. Leaves candidates without any
- * derivable run id unchanged so schema validation still fails.
+ * `runIds`. Fills from `lastRunId`. Does not bump `schemaVersion`. Leaves
+ * candidates without a derivable run id unchanged so schema validation still
+ * fails.
  * L7-214: consecutiveRuns is capped to the migrated `runIds` window so a
  * legacy counter cannot auto-qualify (`>= confirmRuns`) from a single id.
+ * L7-242: do not rewrite a candidate that already has `runIds` (empty/corrupt
+ * current-schema records stay fail-closed).
  */
 export function migrateHealthPatchCandidates(parsed: unknown): unknown {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -42,13 +44,8 @@ function migratePatchCandidateRunIds(entry: unknown): unknown {
 }
 
 function derivedCandidateRunIds(candidate: Record<string, unknown>): string[] | undefined {
-  if (Array.isArray(candidate.runIds)) {
-    const usable = candidate.runIds.filter(
-      (id): id is string => typeof id === 'string' && id.length > 0
-    );
-    if (usable.length > 0) {
-      return usable;
-    }
+  if (Object.hasOwn(candidate, 'runIds')) {
+    return undefined;
   }
   const lastRunId = candidate.lastRunId;
   if (typeof lastRunId === 'string' && lastRunId.length > 0) {

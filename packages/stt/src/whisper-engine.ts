@@ -1,5 +1,5 @@
 import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
-import { closeSync, existsSync, openSync, readSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -62,6 +62,15 @@ function configuredSttModelFile(env: NodeJS.ProcessEnv): string | undefined {
   return name.endsWith('.bin') ? name : `${name}.bin`;
 }
 
+/** L7-245: a directory named like a model must not count as available. */
+function isExistingRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): string[] {
   const explicit = env.STT_MODEL_PATH;
   const dir = env.STT_MODEL_DIR;
@@ -97,7 +106,7 @@ export function resolveWhisperPaths(
   env: NodeJS.ProcessEnv = process.env
 ): WhisperPaths | undefined {
   const bin = whisperCandidateBins(env).find((path) => existsSync(path));
-  const existing = whisperCandidateModels(env).filter((path) => existsSync(path));
+  const existing = whisperCandidateModels(env).filter((path) => isExistingRegularFile(path));
   const model = pickPreferredWhisperModel(existing, env);
   if (bin === undefined || model === undefined) {
     return undefined;
@@ -211,7 +220,7 @@ export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean 
   if (!whisperCandidateBins(env).some((path) => existsSync(path))) {
     return false;
   }
-  const existing = whisperCandidateModels(env).filter((path) => existsSync(path));
+  const existing = whisperCandidateModels(env).filter((path) => isExistingRegularFile(path));
   if (existing.length === 0) {
     return false;
   }
