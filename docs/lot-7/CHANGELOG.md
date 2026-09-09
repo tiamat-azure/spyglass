@@ -1087,6 +1087,9 @@ Ask-user still held: N29, D29, O29.
 - **L7-225:** After extract+copy, `ensureWhisperCli` requires
   `existingCliOk` / `CLI_MIN_BYTES` before chmod/success.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**707 passed**, 1 skipped (62 files).
+
 Ask-user still held: N29, D29, O29, A30, I30.
 
 ## CI — macOS Electron e2e close hang
