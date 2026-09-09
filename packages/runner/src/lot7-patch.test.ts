@@ -681,7 +681,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenario: scn,
       scenarioPath,
       policy,
-      git
+      git,
+      hasOpenPr: async () => false
     });
     expect(first.ok).toBe(false);
     if (first.ok) {
@@ -701,7 +702,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       scenario: scn,
       scenarioPath,
       policy,
-      git
+      git,
+      hasOpenPr: async () => false
     });
     expect(second.ok).toBe(false);
     if (second.ok) {
@@ -711,6 +713,65 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(second.branch).toBe(first.branch);
     expect(deletedRemote).toBe(true);
     expect(upstreamPushes).toBe(3);
+  });
+
+  it('refuses remote delete/recreate when an open PR exists (P14a)', async () => {
+    const dir = await tempDir('spyglass-lot7-p14a-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let deletedRemote = false;
+    let listedBranch: string | undefined;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'push' && args.includes('--delete')) {
+        deletedRemote = true;
+        return { stdout: '', stderr: '', code: 0 };
+      }
+      if (args[0] === 'push' && args.includes('-u')) {
+        return {
+          stdout: '',
+          stderr: '! [rejected] spyglass/patch (non-fast-forward)',
+          code: 1
+        };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      hasOpenPr: async (input) => {
+        listedBranch = input.branch;
+        return true;
+      }
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('open-pr');
+    expect(result.reason).toMatch(/open PR exists/);
+    expect(result.reason).toMatch(/remote left unchanged/);
+    expect(deletedRemote).toBe(false);
+    expect(result.health?.appliedPatches).toBe(0);
+    expect(result.branch).toBeDefined();
+    expect(listedBranch).toBe(result.branch);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe(result.branch);
   });
 
   it('restores the starting branch when dangling patch-branch delete fails (L7-099)', async () => {

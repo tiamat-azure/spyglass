@@ -397,8 +397,7 @@ patches vs document residual).
   an explicit `parameterRef` of `__proto__` (or other prototype keys) is
   extracted, parsed, exemplified, and applied.
 
-Ask-user still held: **P12**, **P13**, **P14** (remote force-delete vs
-gate on open PR).
+Ask-user still held: **P14** (remote force-delete vs gate on open PR).
 
 ## Captain lock P12a (PR-prep failure is ok:false)
 
@@ -419,7 +418,17 @@ Ask-user still held: **P14** (remote force-delete vs gate on open PR).
   patch artifacts. Recovery still overlays live dataset args to act.
   Non-parameterized fill args and navigate URLs are kept.
 
-Ask-user still held: **P14** (remote force-delete vs gate on open PR).
+## Captain lock P14a (gate remote patch delete on no open PR)
+
+- **P14a:** On non-fast-forward in `pushPatchBranch`, remote
+  `spyglass/patch-*` delete+repush is allowed only when no open PR uses
+  that head (`gh pr list --head --state open`, injectable `hasOpenPr`).
+  An open PR (or `gh` unable to prove none) returns
+  `{ ok: false, code: 'open-pr' }`, leaves the remote branch, keeps the
+  local commit (P12a), and does not increment health (H5b). No open PR
+  keeps L7-094 retry recoverability.
+
+Ask-user still held: none for P12–P14.
 
 ## CI — macOS Electron e2e close hang
 

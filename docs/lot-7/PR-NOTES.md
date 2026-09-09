@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **554 passed**, 1 skipped (60 files) |
+| `pnpm test` | **555 passed**, 1 skipped (60 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (42), `patch-redact.test.ts` (7), `lot7-parameters.test.ts` (35),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (43), `patch-redact.test.ts` (7), `lot7-parameters.test.ts` (35),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -148,6 +148,8 @@ Captain lock **P12a** (PR-prep failure is `ok: false` / `pr-prep-failed`)
 is in `CHANGELOG.md`.
 Captain lock **P13a** (strip proposed-side secret args before patch
 persistence) is in `CHANGELOG.md`.
+Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
+`CHANGELOG.md`.
 
 ## Residuals
 
@@ -171,4 +173,7 @@ persistence) is in `CHANGELOG.md`.
   stripped (same condition as L7-038 originals). Dataset-materialized
   secrets never land on disk in patch artifacts. Recovery still fills
   the live value.
-- **P14** ask-user: remote force-delete vs gate on open PR (unchanged).
+- **P14a:** Non-fast-forward `git push` of `spyglass/patch-*` deletes and
+  recreates the remote branch only when no open PR uses that head. An
+  open PR is `ok: false` / `code: 'open-pr'`; remote is left alone.
+  Local branch stays for resume. Health is not incremented (H5b / P12a).

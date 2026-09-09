@@ -43,8 +43,9 @@ export type AssistedApplyRefusal = {
     | 'git-error'
     | 'internal-error'
     | 'type-mismatch'
-    | 'pr-prep-failed';
-  /** P12a: set when the local patch commit succeeded but PR prep failed. */
+    | 'pr-prep-failed'
+    | 'open-pr';
+  /** P12a / P14a: set when the local patch commit succeeded but PR prep / remote recreate failed. */
   branch?: string;
   commit?: string;
   health?: ScenarioHealth;
@@ -72,6 +73,9 @@ export type PreparePr = (input: {
   title: string;
   body: string;
 }) => Promise<{ url?: string }>;
+
+/** P14a: true when an open PR already uses this spyglass/patch-* head. */
+export type HasOpenPr = (input: { repo: string; branch: string }) => Promise<boolean>;
 
 /**
  * F-62: only action.descriptor may be assisted-applied. Verification and
@@ -171,6 +175,7 @@ export async function applyAssistedPatches(input: {
   env?: NodeJS.ProcessEnv;
   git?: GitExec;
   preparePr?: PreparePr;
+  hasOpenPr?: HasOpenPr;
   now?: Date;
 }): Promise<AssistedApplyResult> {
   const env = input.env ?? process.env;
@@ -410,13 +415,19 @@ export async function applyAssistedPatches(input: {
       });
     }
   } else {
-    const pushed = await pushPatchBranch(git, repoRoot, branch);
-    if (!pushed) {
-      return prPrepFailed({
+    const pushed = await pushPatchBranch(
+      git,
+      repoRoot,
+      branch,
+      input.hasOpenPr ?? defaultHasOpenPr
+    );
+    if (!pushed.ok) {
+      return afterLocalCommitRefusal({
         branch,
         commit,
         health: input.health,
-        reason: 'git push failed'
+        code: pushed.code,
+        reason: pushed.reason
       });
     }
     const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
@@ -579,21 +590,31 @@ async function restoreStartingBranch(
   return revertError;
 }
 
-/** P12a: local commit stays; PR prep failure is ok:false and does not increment health. */
+/** P12a / P14a: local commit stays; PR prep / remote recreate failure does not increment health. */
+function afterLocalCommitRefusal(input: {
+  branch: string;
+  commit: string;
+  health: ScenarioHealth;
+  code: 'pr-prep-failed' | 'open-pr';
+  reason: string;
+}): AssistedApplyRefusal {
+  return {
+    ok: false,
+    code: input.code,
+    reason: input.reason,
+    branch: input.branch,
+    commit: input.commit,
+    health: input.health
+  };
+}
+
 function prPrepFailed(input: {
   branch: string;
   commit: string;
   health: ScenarioHealth;
   reason: string;
 }): AssistedApplyRefusal {
-  return {
-    ok: false,
-    code: 'pr-prep-failed',
-    reason: input.reason,
-    branch: input.branch,
-    commit: input.commit,
-    health: input.health
-  };
+  return afterLocalCommitRefusal({ ...input, code: 'pr-prep-failed' });
 }
 
 function refusalWithRestore(
@@ -638,23 +659,62 @@ function isNonFastForwardPush(stderr: string): boolean {
   return /non-fast-forward|\[rejected\]|fetch first/iu.test(stderr);
 }
 
-async function pushPatchBranch(git: GitExec, repoRoot: string, branch: string): Promise<boolean> {
+const GH_PR_CREATE_TIMEOUT_MS = 120_000;
+
+async function pushPatchBranch(
+  git: GitExec,
+  repoRoot: string,
+  branch: string,
+  hasOpenPr: HasOpenPr
+): Promise<{ ok: true } | { ok: false; code: 'pr-prep-failed' | 'open-pr'; reason: string }> {
   const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
   if (pushed.code === 0) {
-    return true;
+    return { ok: true };
   }
   if (!isNonFastForwardPush(pushed.stderr)) {
-    return false;
+    return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
+  }
+  const openPr = await hasOpenPr({ repo: repoRoot, branch });
+  if (openPr) {
+    return {
+      ok: false,
+      code: 'open-pr',
+      reason: `open PR exists for ${branch}; remote left unchanged`
+    };
   }
   const deleted = await git(['push', 'origin', '--delete', branch], repoRoot);
   if (deleted.code !== 0) {
-    return false;
+    return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
   }
   const retried = await git(['push', '-u', 'origin', branch], repoRoot);
-  return retried.code === 0;
+  if (retried.code === 0) {
+    return { ok: true };
+  }
+  return { ok: false, code: 'pr-prep-failed', reason: 'git push failed' };
 }
 
-const GH_PR_CREATE_TIMEOUT_MS = 120_000;
+/** P14a fail-closed: if `gh` cannot prove there is no open PR, do not delete remote. */
+async function defaultHasOpenPr(input: { repo: string; branch: string }): Promise<boolean> {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileAsync = promisify(execFile);
+  try {
+    const result = await execFileAsync(
+      'gh',
+      ['pr', 'list', '--head', input.branch, '--state', 'open', '--json', 'number'],
+      {
+        cwd: input.repo,
+        encoding: 'utf8',
+        timeout: GH_PR_CREATE_TIMEOUT_MS,
+        killSignal: 'SIGKILL'
+      }
+    );
+    const parsed = JSON.parse(result.stdout) as unknown;
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return true;
+  }
+}
 
 async function tryGhPrCreate(input: {
   repo: string;
