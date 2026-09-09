@@ -606,7 +606,8 @@ sessions/<sessionId>/
 | `STT_LANGUAGE` | Langue de dictée | `fr` |
 | `STT_MODEL_DIR` | Répertoire de cache des modèles de transcription | données applicatives standard de la plateforme |
 | `STT_UPGRADE_PROMPT_AFTER` | Segments corrigés manuellement déclenchant la proposition de montée en précision | `10` |
-| `STT_MAX_LATENCY_MS` | Budget de latence au-delà duquel le repli sur `small` est automatique | `2000` |
+| `STT_WHISPER_TIMEOUT_MS` | Timeout du processus `whisper-cli` (L27b). Distinct du budget first-use | `8000` |
+| `STT_MAX_LATENCY_MS` | Budget de latence first-use au-delà duquel le repli sur `small` est automatique (F-39). Ne règle pas le timeout `whisper-cli` | `2000` |
 | `SESSIONS_DIR` | Répertoire de stockage des sessions | `./sessions` |
 | `MAX_AI_RETRIES` | Tentatives de rattrapage par étape | `3` |
 | `SCREENSHOT_RETENTION` | Nombre d'étapes récentes conservées en capture | `10` |

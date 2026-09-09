@@ -32,6 +32,7 @@ export function parseUpgradePromptAfter(env: NodeJS.ProcessEnv = process.env): n
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : STT_UPGRADE_PROMPT_AFTER_DEFAULT;
 }
 
+/** L27b: first-use large→small budget. Does not set whisper-cli process timeout. */
 export function parseMaxLatencyMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env.STT_MAX_LATENCY_MS;
   if (raw === undefined || raw.trim().length === 0) {

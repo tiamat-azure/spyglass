@@ -80,4 +80,6 @@ a session with the same `sessionId` already exists (I7a).
 After `STT_UPGRADE_PROMPT_AFTER` (default 10) manual transcript edits, a
 banner offers `large-v3-turbo`. **Refuser définitivement** never shows
 again. `small` remains on disk. First-use latency above
-`STT_MAX_LATENCY_MS` writes `large-fallback.json` and returns to `small`.
+`STT_MAX_LATENCY_MS` (default 2000) writes `large-fallback.json` and
+returns to `small`. That budget is not the `whisper-cli` process timeout:
+use `STT_WHISPER_TIMEOUT_MS` (default 8000) for that (L27b).

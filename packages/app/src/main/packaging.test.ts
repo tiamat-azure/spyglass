@@ -286,6 +286,10 @@ describe('packaged Observe', () => {
     expect(resolveEngine).toContain('largeFallbackMarkerDirs');
     expect(resolveEngine).toContain('readAlignedLargeFallbackSync');
     expect(resolveEngine).toContain('explicitIsLargeFile');
+    expect(resolveEngine).toContain('parseWhisperTimeoutMs(env)');
+    expect(resolveEngine).toContain('parseMaxLatencyMs(env)');
+    expect(resolveEngine).not.toContain('env.STT_MAX_LATENCY_MS');
+    expect(resolveEngine).not.toContain('STT_WHISPER_TIMEOUT_MS');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');

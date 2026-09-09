@@ -924,6 +924,16 @@ Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: L27.
 
+## Captain lock L27b (split STT timeout vs first-use latency)
+
+- **L27b:** Dual-use of `STT_MAX_LATENCY_MS` is split. `STT_WHISPER_TIMEOUT_MS`
+  (default 8000, `WHISPER_TIMEOUT_MS_DEFAULT`) is the whisper-cli process
+  timeout in `beginWhisperFromEnv`. `STT_MAX_LATENCY_MS` (default 2000)
+  remains the first-use large→small fallback budget (`parseMaxLatencyMs`).
+  Setting one does not change the other. Existing `STT_MAX_LATENCY_MS`
+  first-use setups keep working; process timeout uses 8000 unless
+  `STT_WHISPER_TIMEOUT_MS` is set.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

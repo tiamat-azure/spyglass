@@ -4,6 +4,20 @@ export const PARTIAL_WINDOW_MS = 400;
 export const WHISPER_TIMEOUT_MS_DEFAULT = 8_000;
 /** stopCapture flush: whisper timeout plus journal settle. Must be ≥ whisper timeout. */
 export const VOICE_FLUSH_MS = WHISPER_TIMEOUT_MS_DEFAULT + 2_000;
+
+/**
+ * L27b: whisper-cli process timeout (`beginWhisperFromEnv`). Distinct from
+ * `STT_MAX_LATENCY_MS` (first-use large→small budget). Unset/invalid → 8000.
+ */
+export function parseWhisperTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.STT_WHISPER_TIMEOUT_MS;
+  if (raw === undefined || raw.trim().length === 0) {
+    return WHISPER_TIMEOUT_MS_DEFAULT;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed >= 1 ? parsed : WHISPER_TIMEOUT_MS_DEFAULT;
+}
+
 export const VOICE_CORRELATION_MS_DEFAULT = 8_000;
 export const DEFAULT_MOCK_TRANSCRIPTS = [
   'Je vais cliquer sur Démarrer',

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parseWhisperTimeoutMs, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
 import {
   createEngineFromEnv,
   createEngineFromEnvAsync,
@@ -10,6 +11,7 @@ import {
 import {
   chooseWhisperModel,
   largeFallbackMarkerDirs,
+  parseMaxLatencyMs,
   parseUpgradePromptAfter,
   readLargeFallback,
   readLargeFallbackSync,
@@ -18,6 +20,7 @@ import {
   STT_FALLBACK_MARKER,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_SHA256,
+  STT_MAX_LATENCY_MS_DEFAULT,
   STT_SMALL_MODEL_FILE,
   shouldProposeUpgrade,
   writeLargeFallback
@@ -91,6 +94,25 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
   it('reads STT_UPGRADE_PROMPT_AFTER', () => {
     expect(parseUpgradePromptAfter({ STT_UPGRADE_PROMPT_AFTER: '3' })).toBe(3);
     expect(parseUpgradePromptAfter({})).toBe(10);
+  });
+
+  it('splits whisper-cli timeout from first-use latency budget (L27b)', () => {
+    expect(parseWhisperTimeoutMs({})).toBe(WHISPER_TIMEOUT_MS_DEFAULT);
+    expect(parseWhisperTimeoutMs({ STT_WHISPER_TIMEOUT_MS: '40000' })).toBe(40_000);
+    expect(parseWhisperTimeoutMs({ STT_MAX_LATENCY_MS: '1500' })).toBe(WHISPER_TIMEOUT_MS_DEFAULT);
+    expect(parseWhisperTimeoutMs({ STT_WHISPER_TIMEOUT_MS: '0' })).toBe(WHISPER_TIMEOUT_MS_DEFAULT);
+    expect(parseWhisperTimeoutMs({ STT_WHISPER_TIMEOUT_MS: 'nope' })).toBe(
+      WHISPER_TIMEOUT_MS_DEFAULT
+    );
+    expect(parseMaxLatencyMs({})).toBe(STT_MAX_LATENCY_MS_DEFAULT);
+    expect(parseMaxLatencyMs({ STT_MAX_LATENCY_MS: '1500' })).toBe(1500);
+    expect(parseMaxLatencyMs({ STT_WHISPER_TIMEOUT_MS: '40000' })).toBe(STT_MAX_LATENCY_MS_DEFAULT);
+    expect(
+      parseWhisperTimeoutMs({ STT_WHISPER_TIMEOUT_MS: '40000', STT_MAX_LATENCY_MS: '1500' })
+    ).toBe(40_000);
+    expect(parseMaxLatencyMs({ STT_WHISPER_TIMEOUT_MS: '40000', STT_MAX_LATENCY_MS: '1500' })).toBe(
+      1500
+    );
   });
 });
 

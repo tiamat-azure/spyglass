@@ -42,7 +42,8 @@ blocks further assisted apply.
 
 Optional STT `large-v3-turbo` after `STT_UPGRADE_PROMPT_AFTER` (10) manual
 corrections (F-38). Refusable permanently. `small` stays as fallback if
-first-use latency exceeds `STT_MAX_LATENCY_MS` (F-39 / ADR-0017).
+first-use latency exceeds `STT_MAX_LATENCY_MS` (F-39 / ADR-0017). The
+`whisper-cli` process timeout is `STT_WHISPER_TIMEOUT_MS` (L27b).
 
 Session autonomous folder export/import (F-47). In-app Rejouer **pas à
 pas** (F-59). Parameterized fill/select via `datasets/*.json` and
@@ -252,6 +253,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   after `[0]`. Extract still strips the recorded dataset value (L7-070);
   apply replaces `[0]` only. D20a still fails for a vacant `[0]` without
   `--dataset`.
+- **L27b:** `STT_WHISPER_TIMEOUT_MS` (default 8000) is the whisper-cli
+  process timeout. `STT_MAX_LATENCY_MS` (default 2000) remains the
+  first-use large→small budget. The two no longer share one env.
 
 Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
 refuse gate, distinct `runIds` membership, non-force restore, leftover
@@ -279,4 +283,5 @@ response type, `GH_PROMPT_DISABLED`, dest-lock same-promise cleanup,
 export staging symlink re-check, aligned large-fallback marker dirs.
 **D27a:** relative `--dataset` from `dirname(scenarioPath)`, not cwd
 (breaking for cwd-relative paths). **A27b:** keep trailing fill/select
-`arguments` through parameterize/apply. Held: L27.
+`arguments` through parameterize/apply. **L27b:** split
+`STT_WHISPER_TIMEOUT_MS` (process) from `STT_MAX_LATENCY_MS` (first-use).

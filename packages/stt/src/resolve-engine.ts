@@ -4,8 +4,8 @@ import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
   parseMockTranscripts,
-  type SttEngineName,
-  WHISPER_TIMEOUT_MS_DEFAULT
+  parseWhisperTimeoutMs,
+  type SttEngineName
 } from './protocol.ts';
 import {
   chooseWhisperModel,
@@ -106,11 +106,7 @@ function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildCo
   }
   const language =
     env.STT_LANGUAGE === undefined || env.STT_LANGUAGE.length === 0 ? 'fr' : env.STT_LANGUAGE;
-  const timeoutRaw = env.STT_MAX_LATENCY_MS;
-  const timeoutMs =
-    timeoutRaw === undefined || timeoutRaw.length === 0
-      ? WHISPER_TIMEOUT_MS_DEFAULT
-      : Number.parseInt(timeoutRaw, 10);
+  const timeoutMs = parseWhisperTimeoutMs(env);
   const modelDir = resolveSttModelDir(env) ?? dirname(paths.model);
   return {
     paths,
@@ -131,10 +127,7 @@ function finishWhisperFromEnv(
     bin: ctx.paths.bin,
     model,
     language: ctx.language,
-    timeoutMs:
-      Number.isFinite(ctx.timeoutMs) && ctx.timeoutMs > 0
-        ? ctx.timeoutMs
-        : WHISPER_TIMEOUT_MS_DEFAULT
+    timeoutMs: ctx.timeoutMs
   };
   if (ctx.selection.largeOk && sameResolvedPath(model, ctx.selection.largePath)) {
     const budgetMs = parseMaxLatencyMs(env);

@@ -36,6 +36,7 @@ export {
   parseCorrelationMarginMs,
   parseMockTranscripts,
   parseServerMessage,
+  parseWhisperTimeoutMs,
   STT_CHANNELS,
   STT_SAMPLE_RATE,
   VOICE_CORRELATION_MS_DEFAULT,
