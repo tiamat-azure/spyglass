@@ -296,8 +296,11 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **O29b:** Session export refuses a non-directory dest even with
   `overwrite=true` (no move/delete of a file at dest). IPC
   `dest-not-directory`. W26a empty-dir overwrite-false unchanged.
-- **L7-230:** Assisted apply uses live suggested args; persistence
-  redaction is health / suggested-patch / PR only (P13a / P28b).
+- **L7-230 / L36a-scrub:** Health/artifacts stay persistence-redacted
+  (P13a / P28b). The patch-branch `scenario.json` write uses
+  recorded/redacted fill/select args (`persisted.suggested`), not live
+  dataset secrets. Lifecycle still passes the live suggested patch to
+  `applyAssistedPatches` for F-63 matching.
 - **L7-231:** Replay next/stop IPC returns a structured error instead of
   an unhandled rejection.
 - **A30a:** Assisted apply requires a resolved `sessionDir`. Missing dir
@@ -405,8 +408,9 @@ skip `--large` when valid large exists. **N29a:** vacant parameterized
 `[0]` is JSON `null`. **D29a:** explicit `parameterRef` is not
 unique-ified against selector-derived names (R10a last-write-wins).
 **O29b:** export refuses a file dest even with overwrite. Pass-32
-(L7-230 … L7-231): apply live suggested args (redact for health/artifacts
-only); replay next/stop IPC try/catch. **A30a:** assisted apply requires
+(L7-230 … L7-231): health/artifacts redact live args; **L36a-scrub**
+writes recorded/redacted args to patch-branch `scenario.json`; replay
+next/stop IPC try/catch. **A30a:** assisted apply requires
 sessionDir (structured `missing-session-dir` refusal). **I30a:**
 whisper-cli download SHA-256 after extract, before chmod (fail closed).
 **C31a:** closeElectron SIGKILL timeout-only. **W31a:** skipLarge does
@@ -427,5 +431,7 @@ hung-git timeout above 15s; keep non-string scrub heads; vacant trailing
 slots; per-run dataset-load artifacts; combined recovery secrets;
 structured bundle errors; refuse existing dest unless overwrite; owned
 backup recovery only; regular-file model paths; ensure CLI before large
-download. Held: **L7-P36** (L36a/b/c). **D34a** locked (Darwin skips Unix
-`whisper-cli` ensure).
+download. **D34a** locked (Darwin skips Unix `whisper-cli` ensure).
+**L36a-scrub** locked (patch-branch `scenario.json` is recorded/redacted,
+not live secrets). Held: **L36b** SECRET_NAME matching; **L36c**
+user-stop status.

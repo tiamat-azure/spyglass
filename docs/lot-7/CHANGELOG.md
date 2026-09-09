@@ -1348,6 +1348,21 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 Ask-user still held: **L7-P36** (L36a/b/c pending Firstmate:
 L7-230 live patch args; SECRET_NAME matching; user-stop status).
 
+## Captain lock L36a-scrub (patch-branch scenario.json is recorded/redacted)
+
+- **L36a-scrub:** Assisted apply still matches F-63 hashes on the
+  persistence-redacted descriptor (P13a / P28b) and keeps health /
+  artifacts scrubbed. The patch-branch `scenario.json` write uses
+  `persisted.suggested` (recorded/redacted fill/select args), not live
+  dataset secret values. Selector drift still applies. Parameterized
+  fills omit `[0]` (P13a / N29a). L7-019 unpatched recorded secrets stay.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
+revision.
+
+Ask-user still held: **L36b** SECRET_NAME matching; **L36c** user-stop
+status.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

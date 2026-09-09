@@ -81,7 +81,9 @@ export async function processSuggestedPatch(input: {
   try {
     const applyInput: Parameters<typeof applyAssistedPatches>[0] = {
       health,
-      // L7-230: apply the live suggested patch; `persisted` is health/artifacts only.
+      // L36a-scrub / L7-230: pass the live suggested patch for matching;
+      // apply writes recorded/redacted fill/select args to scenario.json.
+      // `persisted` remains health/artifacts only.
       suggested: input.suggested,
       scenario: input.scenario,
       scenarioPath,

@@ -2879,7 +2879,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(working.steps[1]?.action.descriptor.selector).toBe('#old');
   });
 
-  it('applies live fill args and keeps health/artifacts scrubbed (L7-230)', async () => {
+  it('writes recorded/redacted fill args on the patch branch and keeps health/artifacts scrubbed (L36a-scrub / L7-230)', async () => {
     const root = await tempDir('spyglass-lot7-l7230-');
     const repo = join(root, 'repo');
     const sessionDir = join(root, 'session');
@@ -2940,8 +2940,11 @@ describe('Lot 7 health.json wiring after recovery', () => {
       `${second.assistedApply.branch}:scenario.json`
     );
     expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#password-new');
-    expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).toBe(secret);
-    expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).not.toBeNull();
+    expect(onPatch.steps[0]?.action.parameterRef).toBe('password');
+    expect(JSON.stringify(onPatch)).not.toMatch(secret);
+    expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).not.toBe(secret);
+    // P13a / N29a: parameterized fill args are stripped (vacant), not live.
+    expect(onPatch.steps[0]?.action.descriptor.arguments).toBeUndefined();
     const healthDisk = await loadHealth(sessionDir, 'ses_lot7');
     expect(JSON.stringify(healthDisk)).not.toMatch(secret);
     const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
@@ -2956,6 +2959,10 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(fn.indexOf('suggested: input.suggested')).toBeGreaterThan(
       fn.indexOf('recordSuggestedPatches(health, persisted, policy)')
     );
+    const applySrc = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const toApplyFn = sourceBetween(applySrc, 'const toApply:', 'if (toApply.length === 0)');
+    expect(toApplyFn).toContain('suggested: persisted.suggested');
+    expect(toApplyFn).not.toContain('suggested: patch.suggested');
   });
 
   it('strips dataset secrets from suggested fill args before disk and health (P13a)', async () => {

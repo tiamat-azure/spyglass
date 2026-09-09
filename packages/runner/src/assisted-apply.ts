@@ -245,8 +245,9 @@ export async function applyAssistedPatches(input: {
     if (!allowed.ok) {
       return { ok: false, reason: allowed.reason, code: 'illegal-scope' };
     }
-    // L7-230: match F-63 hashes on the persistence-redacted descriptor (P13a / P28b)
-    // but apply the live suggested args.
+    // L36a-scrub / L7-230: match F-63 hashes on the persistence-redacted
+    // descriptor (P13a / P28b) and write those recorded/redacted fill/select
+    // args into scenario.json — not live dataset secrets.
     const persisted = redactSuggestedPatchEntryForPersistence(
       patch,
       findStepByIndex(input.scenario, candidate.stepIndex)
@@ -255,7 +256,7 @@ export async function applyAssistedPatches(input: {
     if (hash !== candidate.descriptorHash) {
       continue;
     }
-    toApply.push({ stepIndex: candidate.stepIndex, suggested: patch.suggested, hash });
+    toApply.push({ stepIndex: candidate.stepIndex, suggested: persisted.suggested, hash });
   }
   if (toApply.length === 0) {
     return {
