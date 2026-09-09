@@ -1092,6 +1092,14 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: N29, D29, O29, A30, I30.
 
+## Captain lock N29a (vacant [0] is JSON null)
+
+- **N29a:** `unappliedArguments` keeps a vacant fill/select `[0]` as JSON
+  `null` (not omitted, not `""`) so trailing indices stay. D20a still
+  fails for unresolved `[0]`.
+
+Ask-user still held: D29, O29, A30, I30.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

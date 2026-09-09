@@ -81,7 +81,7 @@ describe('P13a patch secret redaction', () => {
     const step = fillStep('#user', 'alice', 'user');
     step.action.descriptor.arguments = ['alice', 'slowly', 'ltr'];
     const original = originalDescriptorForPatch(step);
-    expect(original.arguments?.[0]).toBeUndefined();
+    expect(original.arguments?.[0]).toBeNull();
     expect(original.arguments?.slice(1)).toEqual(['slowly', 'ltr']);
     expect(JSON.stringify(original)).not.toMatch('alice');
   });
@@ -115,9 +115,9 @@ describe('P13a patch secret redaction', () => {
       }
     );
     expect(JSON.stringify(redacted)).not.toMatch(secret);
-    expect(redacted.patches[0]?.original.arguments?.[0]).toBeUndefined();
+    expect(redacted.patches[0]?.original.arguments?.[0]).toBeNull();
     expect(redacted.patches[0]?.original.arguments?.slice(1)).toEqual(['slowly']);
-    expect(redacted.patches[0]?.suggested.arguments?.[0]).toBeUndefined();
+    expect(redacted.patches[0]?.suggested.arguments?.[0]).toBeNull();
     expect(redacted.patches[0]?.suggested.arguments?.slice(1)).toEqual(['slowly']);
   });
 

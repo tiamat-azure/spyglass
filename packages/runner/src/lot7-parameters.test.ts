@@ -23,6 +23,7 @@ import {
   exampleDataset,
   extractScenarioParameters,
   parseDataset,
+  unappliedArguments,
   writeGeneratedDatasets
 } from './parameters.ts';
 import type { Recoverer } from './recover.ts';
@@ -366,7 +367,7 @@ describe('Lot 7 F-48 parameterization', () => {
     const extracted = extractScenarioParameters(scn);
     expect(extracted.dataset.values.user).toBe('alice');
     expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('user');
-    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeUndefined();
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeNull();
     expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.slice(1)).toEqual([
       'slowly',
       'ltr'
@@ -398,6 +399,20 @@ describe('Lot 7 F-48 parameterization', () => {
       secrets: []
     });
     expect(again.steps[0]?.action.descriptor.arguments).toEqual(['carol', 'slowly', 'ltr']);
+  });
+
+  it('keeps vacant [0] as JSON null so trailing indices stay (N29a)', async () => {
+    expect(unappliedArguments(['slowly', 'ltr'])).toEqual([null, 'slowly', 'ltr']);
+    expect(unappliedArguments(['slowly', 'ltr'])[0]).not.toBe('');
+    expect(JSON.stringify(unappliedArguments(['slowly', 'ltr']))).toBe('[null,"slowly","ltr"]');
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('export function unappliedArguments'),
+      src.indexOf('function isUnresolvedParameterArg')
+    );
+    expect(fn).toContain('null');
+    expect(fn).not.toContain('undefined');
+    expect(fn).not.toContain("''");
   });
 
   it('preserves JSON-serializable non-string trailing args (L7-224)', async () => {
@@ -458,7 +473,7 @@ describe('Lot 7 F-48 parameterization', () => {
     };
     const extracted = extractScenarioParameters(scn);
     expect(extracted.dataset.values.country).toBe('fr');
-    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeUndefined();
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.[0]).toBeNull();
     expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.slice(1)).toEqual(['exact']);
     expect(() => assertParameterRefsResolved(extracted.scenario)).toThrow(
       /dataset is missing parameterRef: country/

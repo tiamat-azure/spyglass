@@ -192,9 +192,9 @@ function cloneJsonArg(value: unknown): unknown {
   }
 }
 
-/** Vacant [0] so D20a still fails; JSON.stringify persists it as null. */
-function unappliedArguments(trailing: unknown[]): string[] {
-  return [undefined as unknown as string, ...(trailing as string[])];
+/** N29a: vacant [0] is JSON `null` (not omitted, not `""`) so trailing indices stay. D20a still fails. */
+export function unappliedArguments(trailing: unknown[]): string[] {
+  return [null as unknown as string, ...(trailing as string[])];
 }
 
 function isUnresolvedParameterArg(value: unknown): boolean {

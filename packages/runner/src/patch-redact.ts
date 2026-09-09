@@ -9,7 +9,8 @@ import {
   isSecretParameterName,
   isSecretSelector,
   looksMaskedParameterValue,
-  stripParameterizedArgument
+  stripParameterizedArgument,
+  unappliedArguments
 } from './parameters.ts';
 import { cloneDescriptor } from './scenario.ts';
 
@@ -134,7 +135,7 @@ function scrubKnownValuesFromDescriptor(
     descriptor.arguments = [head, ...trailing];
     return;
   }
-  descriptor.arguments = [undefined as unknown as string, ...trailing];
+  descriptor.arguments = unappliedArguments(trailing);
 }
 
 function knownValuesForPatch(
