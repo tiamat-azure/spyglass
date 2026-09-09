@@ -16,7 +16,16 @@ export type FixtureServer = {
 export async function startFixtureServer(host = '127.0.0.1'): Promise<FixtureServer> {
   const lot6Html = await readFile(join(RUNNER_FIXTURES_DIR, 'lot6-fixture.html'), 'utf8');
   const server = createServer((request, response) => {
-    void handle(request, response, lot6Html);
+    void handle(request, response, lot6Html).catch(() => {
+      if (response.writableEnded) {
+        return;
+      }
+      if (!response.headersSent) {
+        send(response, 500, 'text/plain; charset=utf-8', 'internal error');
+        return;
+      }
+      response.end();
+    });
   });
   await listen(server, host);
   const address = server.address();

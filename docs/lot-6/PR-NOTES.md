@@ -626,6 +626,16 @@ Applied on tip `82534d31852610a8fe50a61eed350c8dfa24f6bd`. Prior locks
 Unit tests after this pass: **414 passed, 1 skipped**, 54 files
 (`pnpm lint`, `pnpm typecheck`, `pnpm test`).
 
+## Adversarial pass 21 (Copilot auto-fix)
+
+Applied on tip `6f162f336c39bb266e54d61ec8d61e34bea4aa3d`. Product decisions
+1–18 and prior locks (incl. P65a, S66b, L6-028) are unchanged.
+
+- **L6-067** Fixture `createServer` handler `.catch`es rejections from
+  `handle(...)` and responds 500 (or ends the response) so a malformed
+  request-target / throw cannot hang the client or become an unhandled
+  rejection.
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.

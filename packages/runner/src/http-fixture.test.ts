@@ -1,5 +1,7 @@
+import { readFile } from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   RUNNER_FIXTURES_DIR,
@@ -16,13 +18,18 @@ function rawGetStatus(origin: string, path: string): Promise<number> {
         hostname: url.hostname,
         port: url.port,
         path,
-        method: 'GET'
+        method: 'GET',
+        timeout: 3000
       },
       (res) => {
         res.resume();
         resolveStatus(res.statusCode ?? 0);
       }
     );
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`request timed out: ${path}`));
+    });
     req.on('error', reject);
     req.end();
   });
@@ -68,6 +75,22 @@ describe('fixture HTML paths (L6-025)', () => {
       expect(await rawGetStatus(server.origin, '/%2E%2E/lot6-fixture.html')).toBe(404);
       const queryDots = await fetch(`${server.origin}/lot6-fixture.html?x=%2e%2e`);
       expect(queryDots.status).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('responds 500 when handle rejects so clients do not hang (L6-067)', async () => {
+    const server = await startFixtureServer();
+    try {
+      expect(await rawGetStatus(server.origin, 'http://[')).toBe(500);
+      expect(await rawGetStatus(server.origin, 'http://[::1')).toBe(500);
+      const src = await readFile(
+        join(dirname(fileURLToPath(import.meta.url)), 'http-fixture.ts'),
+        'utf8'
+      );
+      expect(src).toContain('.catch(() => {');
+      expect(src).toContain("send(response, 500, 'text/plain; charset=utf-8', 'internal error')");
     } finally {
       await server.close();
     }
