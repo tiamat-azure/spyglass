@@ -1244,6 +1244,69 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(onDisk.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
     expect(onDisk.steps[1]?.action.descriptor.selector).toBe('#new');
   });
+
+  it('strips dataset secrets from suggested fill args before disk and health (P13a)', async () => {
+    const root = await tempDir('spyglass-lot7-p13a-');
+    const sessionDir = join(root, 'session');
+    const reportDir = join(sessionDir, 'runs', 'run_p13a');
+    await mkdir(reportDir, { recursive: true });
+    const secret = 'dataset-secret';
+    const datasetPath = join(root, 'dataset.json');
+    await writeFile(
+      datasetPath,
+      `${JSON.stringify({ schemaVersion: 1, name: 'live', values: { password: secret }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    const fill = fillStep(0, '#password', 'recorded-secret', 'password');
+    fill.verification.expected = '#welcome';
+    fill.verification.timeoutMs = 50;
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#password', visible: false },
+        { selector: '#password-new', visible: true, value: '' },
+        { selector: '#welcome', visible: true }
+      ]
+    });
+    driver.failSelectors.add('#password');
+    const inner = new StaticRecoverer(
+      { type: 'fill', selector: '#password-new', arguments: [secret] },
+      'recovered fill'
+    );
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        expect(JSON.stringify(context)).not.toMatch(secret);
+        return await inner.recover(context);
+      }
+    };
+    const result = await runScenario(scenario([fill]), {
+      driver,
+      aiRecovery: true,
+      recoverer,
+      reportDir,
+      sessionDir,
+      datasetPath,
+      runId: 'run_p13a',
+      env: { PATCH_ASSISTED_APPLY: 'false' }
+    });
+    expect(result.exitCode).toBe(0);
+    expect(driver.fills.some((row) => row.value === secret)).toBe(true);
+    expect(JSON.stringify(result.suggestedPatch ?? {})).not.toMatch(secret);
+    expect(result.suggestedPatch?.patches[0]?.suggested.selector).toBe('#password-new');
+    expect(result.suggestedPatch?.patches[0]?.suggested.arguments).toBeUndefined();
+    expect(result.suggestedPatch?.patches[0]?.original.arguments).toBeUndefined();
+    const disk = JSON.parse(
+      await readFile(join(reportDir, 'suggested-patch.json'), 'utf8')
+    ) as SuggestedPatch;
+    expect(JSON.stringify(disk)).not.toMatch(secret);
+    expect(disk.patches[0]?.suggested.arguments).toBeUndefined();
+    const health = await loadHealth(sessionDir, 'ses_lot7');
+    expect(JSON.stringify(health)).not.toMatch(secret);
+    expect(health.patchCandidates).toHaveLength(1);
+    expect(health.patchCandidates[0]?.descriptorHash).toBe(
+      descriptorHash({ type: 'fill', selector: '#password-new' })
+    );
+  });
 });
 
 describe('resolveSessionDir', () => {

@@ -27,6 +27,14 @@ import {
 import { applyDataset, parseDataset } from './parameters.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
 import { processSuggestedPatch } from './patch-lifecycle.ts';
+import {
+  findStepByIndex,
+  hasParameterRef,
+  originalDescriptorForPatch,
+  overlayLiveArgumentsForRecovery,
+  redactSuggestedPatchEntryForPersistence,
+  redactSuggestedPatchForPersistence
+} from './patch-redact.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
 import { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
@@ -334,14 +342,19 @@ async function runScenarioOnDriver(
       if (recovered.ok) {
         verify = { ok: true };
         error = undefined;
-        patches.push({
-          stepIndex: step.index,
-          scope: 'action.descriptor',
-          original: original[index] ?? cloneDescriptor(step.action.descriptor),
-          suggested: recovered.descriptor,
-          diagnosis: recovered.diagnosis,
-          confidence: recovered.confidence
-        });
+        patches.push(
+          redactSuggestedPatchEntryForPersistence(
+            {
+              stepIndex: step.index,
+              scope: 'action.descriptor',
+              original: original[index] ?? cloneDescriptor(step.action.descriptor),
+              suggested: recovered.descriptor,
+              diagnosis: recovered.diagnosis,
+              confidence: recovered.confidence
+            },
+            scenario.steps[index] ?? findStepByIndex(scenario, step.index)
+          )
+        );
         emit(options, {
           runId,
           stepIndex: step.index,
@@ -414,13 +427,16 @@ async function runScenarioOnDriver(
   };
   const suggestedPatch: SuggestedPatch | undefined =
     patches.length > 0
-      ? {
-          schemaVersion: 1,
-          runId,
-          sessionId: executable.sessionId,
-          applied: false,
-          patches
-        }
+      ? redactSuggestedPatchForPersistence(
+          {
+            schemaVersion: 1,
+            runId,
+            sessionId: executable.sessionId,
+            applied: false,
+            patches
+          },
+          scenario
+        )
       : undefined;
 
   let runDir: string | undefined;
@@ -429,6 +445,7 @@ async function runScenarioOnDriver(
     await writeRunArtifacts({
       runDir,
       report,
+      scenario,
       ...(suggestedPatch !== undefined ? { suggestedPatch } : {})
     });
   }
@@ -438,13 +455,16 @@ async function runScenarioOnDriver(
   }
 
   const result: RunScenarioResult = { exitCode: report.exitCode, report };
-  const suggested: SuggestedPatch = {
-    schemaVersion: 1,
-    runId,
-    sessionId: executable.sessionId,
-    applied: false,
-    patches
-  };
+  const suggested: SuggestedPatch = redactSuggestedPatchForPersistence(
+    {
+      schemaVersion: 1,
+      runId,
+      sessionId: executable.sessionId,
+      applied: false,
+      patches
+    },
+    scenario
+  );
   if (suggestedPatch !== undefined) {
     result.suggestedPatch = suggestedPatch;
   }
@@ -550,8 +570,9 @@ async function recoverStep(input: {
       lastError = `recovery produced no patch (attempt ${String(attempt)})`;
       continue;
     }
+    const liveStep = findStepByIndex(input.argumentScenario, input.step.index);
     const descriptor = sanitizeRecoveredDescriptor(
-      input.step.action.descriptor,
+      overlayLiveArgumentsForRecovery(input.step.action.descriptor, liveStep),
       recovered.descriptor
     );
     const acted = await performAction(input.driver, descriptor);
@@ -662,23 +683,9 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function hasParameterRef(step: RefinedStep): boolean {
-  const ref = step.action.parameterRef;
-  return ref !== undefined && ref.length > 0;
-}
-
 /** S11a: do not write fail/recover screenshots when filled parameter values may be visible. */
 function skipParameterizedScreenshots(scenario: Scenario, step: RefinedStep): boolean {
   return hasParameterRef(step) || scenario.steps.some(hasParameterRef);
-}
-
-/** L7-038: persist suggested-patch originals from the recorded scenario, without parameter args. */
-function originalDescriptorForPatch(step: RefinedStep): ReplayDescriptor {
-  const descriptor = cloneDescriptor(step.action.descriptor);
-  if (step.action.parameterRef !== undefined && step.action.parameterRef.length > 0) {
-    delete descriptor.arguments;
-  }
-  return descriptor;
 }
 
 /** L7-037: AI recovery sees the recorded/redacted scenario, not dataset-materialized secrets. */

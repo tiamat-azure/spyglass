@@ -107,6 +107,10 @@ export {
   resolvePatchPolicy
 } from './patch-config.ts';
 export { processSuggestedPatch } from './patch-lifecycle.ts';
+export {
+  originalDescriptorForPatch,
+  redactSuggestedPatchForPersistence
+} from './patch-redact.ts';
 export { runPath, screenshotFileName, traceFileName } from './paths.ts';
 export type { PlaywrightLaunchOptions } from './playwright-driver.ts';
 export {

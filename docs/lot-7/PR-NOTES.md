@@ -61,13 +61,13 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (268 files) |
+| `pnpm lint` | pass (270 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **546 passed**, 1 skipped (59 files) |
+| `pnpm test` | **554 passed**, 1 skipped (60 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (41), `lot7-parameters.test.ts` (35),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (42), `patch-redact.test.ts` (7), `lot7-parameters.test.ts` (35),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -146,6 +146,8 @@ plaintext secrets; gitignored) is in `CHANGELOG.md`.
 Pass-14 (L7-099 … L7-102) is in `CHANGELOG.md`.
 Captain lock **P12a** (PR-prep failure is `ok: false` / `pr-prep-failed`)
 is in `CHANGELOG.md`.
+Captain lock **P13a** (strip proposed-side secret args before patch
+persistence) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -164,6 +166,9 @@ is in `CHANGELOG.md`.
   commit is `ok: false` + `code: 'pr-prep-failed'`. Patch branch remains
   for resume (L7-084). Health increments only when `prPrepared: true`
   (H5b).
-- **P13** ask-user: strip proposed-side secret args in patches vs
-  document residual (unchanged).
+- **P13a:** Proposed/`after` descriptors in `suggested-patch.json` and
+  health candidate hashes have parameterized fill/select `arguments`
+  stripped (same condition as L7-038 originals). Dataset-materialized
+  secrets never land on disk in patch artifacts. Recovery still fills
+  the live value.
 - **P14** ask-user: remote force-delete vs gate on open PR (unchanged).

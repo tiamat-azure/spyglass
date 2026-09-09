@@ -9,6 +9,7 @@ import {
 import { type GitExec, isGitApplyError } from './git-repo.ts';
 import { loadHealth, recordSuggestedPatches, resolveSessionDir, saveHealth } from './health.ts';
 import { type PatchPolicy, resolvePatchPolicy } from './patch-config.ts';
+import { redactSuggestedPatchForPersistence } from './patch-redact.ts';
 
 export type PatchLifecycleResult = {
   health?: ScenarioHealth;
@@ -42,12 +43,13 @@ export async function processSuggestedPatch(input: {
   if (sessionDir === undefined) {
     return {};
   }
-  let health = await loadHealth(sessionDir, input.suggested.sessionId);
+  const suggested = redactSuggestedPatchForPersistence(input.suggested, input.scenario);
+  let health = await loadHealth(sessionDir, suggested.sessionId);
   // L7-028: empty patches still record — a clean run resets F-63 candidates.
-  health = recordSuggestedPatches(health, input.suggested, policy);
+  health = recordSuggestedPatches(health, suggested, policy);
   const healthPath = await saveHealth(sessionDir, health);
   const result: PatchLifecycleResult = { health, healthPath };
-  if (!policy.assistedApply || input.suggested.patches.length === 0) {
+  if (!policy.assistedApply || suggested.patches.length === 0) {
     return result;
   }
   const scenarioPath = resolveScenarioPath(input.scenarioPath, policy.repo);
@@ -63,7 +65,7 @@ export async function processSuggestedPatch(input: {
   try {
     const applyInput: Parameters<typeof applyAssistedPatches>[0] = {
       health,
-      suggested: input.suggested,
+      suggested,
       scenario: input.scenario,
       scenarioPath,
       policy,

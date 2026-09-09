@@ -408,8 +408,18 @@ gate on open PR).
   stays for L7-084 resume. Health is not incremented (H5b). Success
   still has `prPrepared: true`.
 
-Ask-user still held: **P13** (strip proposed-side secret args in patches
-vs document residual), **P14** (remote force-delete vs gate on open PR).
+Ask-user still held: **P14** (remote force-delete vs gate on open PR).
+
+## Captain lock P13a (strip proposed-side secret args)
+
+- **P13a:** Fail-closed: parameterized fill/select `arguments` are
+  stripped from proposed/`after` descriptors before `suggested-patch.json`
+  and before F-63 health candidate hashes (same `parameterRef` condition
+  as L7-038 originals). Dataset-materialized secrets never persist in
+  patch artifacts. Recovery still overlays live dataset args to act.
+  Non-parameterized fill args and navigate URLs are kept.
+
+Ask-user still held: **P14** (remote force-delete vs gate on open PR).
 
 ## CI — macOS Electron e2e close hang
 
