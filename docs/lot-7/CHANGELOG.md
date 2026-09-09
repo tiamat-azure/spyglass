@@ -1386,8 +1386,8 @@ Ask-user still held: **L36c** user-stop status.
   cancelled status. F-63 empty-patch reset does not treat user-stop as a
   clean success. Ask-user queue **CLEAR**.
 
-Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
-revision.
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**748 passed**, 1 skipped (62 files).
 
 Ask-user still held: none.
 
