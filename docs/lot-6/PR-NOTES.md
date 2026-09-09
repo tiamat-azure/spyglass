@@ -595,6 +595,9 @@ Applied on tip `789ec78d8c3ce1fc38dd02ac11f5686bfa33c0ce`. Product decisions
 - **L6-064** Staging `scenario.ts` keeps `writeFile(..., { mode: 0o755 })`
   and drops the redundant follow-up `chmod`.
 
+Unit tests after this pass: **412 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
