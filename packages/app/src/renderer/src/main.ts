@@ -850,6 +850,11 @@ replayRunBtn.addEventListener('click', () => {
         appendLog(log, `replay failed: ${result.error}`);
         return;
       }
+      if (result.status === 'cancelled') {
+        replayStatus.textContent = 'replay stopped by user';
+        replayPanel.dataset.runId = result.runId;
+        return;
+      }
       replayStatus.textContent = `run ${result.runId}`;
       replayPanel.dataset.runId = result.runId;
     })

@@ -157,7 +157,7 @@ export type Scenario = {
 
 export type ExecutionStepMode = 'script' | 'AI';
 
-export type ExecutionStepStatus = 'passed' | 'failed' | 'skipped';
+export type ExecutionStepStatus = 'passed' | 'failed' | 'skipped' | 'cancelled';
 
 export type ExecutionStepReport = {
   index: number;

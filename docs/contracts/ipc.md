@@ -80,7 +80,7 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:refine:get` | invoke | `{}` → révision courante |
 | `spyglass:refine:state` | emit | `{ phase, revision? }` |
 | `spyglass:generate:script` | invoke | `{ sessionId, revision }` → `{ paths: string[] }` |
-| `spyglass:replay:start` | invoke | `{ forceAi?, noAi?, stepByStep?, datasetPath? }` → `{ ok: true, runId }` or `{ ok: false, error }` (F-59, F-60, F-48 / R32b) |
+| `spyglass:replay:start` | invoke | `{ forceAi?, noAi?, stepByStep?, datasetPath? }` → `{ ok: true, runId }` or `{ ok: true, runId, status: 'cancelled' }` (user stop) or `{ ok: false, error }` (F-59, F-60, F-48 / R32b, L36c) |
 | `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt, message }` |
 | `spyglass:replay:next` / `:stop` | invoke | `{}` — pas à pas (F-59) |
 | `spyglass:session:export` | invoke | `{}` → main `dialog.showOpenDialog` (directory, may create) then `{ ok, dest, sessionId }` or `{ ok: false, error }` (`cancelled` if dismissed; refuses a non-empty dest, O7a) (F-47, E4a) |

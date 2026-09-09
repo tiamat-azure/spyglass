@@ -1376,6 +1376,21 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: **L36c** user-stop status.
 
+## Captain lock L36c-cancelled (user stop is cancelled, not failed)
+
+- **L36c-cancelled:** In-app stepwise user stop (stepGate `'stop'`) is
+  `status: 'cancelled'` with `exitCode` 0, not `failed` + exit 1. Progress,
+  `report.json`, and `ReplayStartResponse` (`ok: true`, `status:
+  'cancelled'`) stay distinct from verification failure. Message remains
+  `replay stopped by user`. L7-192 non-stepwise pendingStop is the same
+  cancelled status. F-63 empty-patch reset does not treat user-stop as a
+  clean success. Ask-user queue **CLEAR**.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
+revision.
+
+Ask-user still held: none.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

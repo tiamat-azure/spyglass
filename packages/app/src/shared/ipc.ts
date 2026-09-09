@@ -421,7 +421,7 @@ export type ReplayStartRequest = {
 };
 
 export type ReplayStartResponse =
-  | { ok: true; runId: string }
+  | { ok: true; runId: string; status?: 'cancelled' }
   | { ok: false; error: string; runId?: string };
 
 /** L7-170: next/stop must not report ok when no ReplayEngine is bound. */
@@ -430,7 +430,7 @@ export type ReplayControlResponse = { ok: true } | { ok: false; error: string };
 export type ReplayProgressPayload = {
   runId: string;
   stepIndex: number;
-  status: 'running' | 'passed' | 'failed' | 'recovering';
+  status: 'running' | 'passed' | 'failed' | 'recovering' | 'cancelled';
   mode: 'script' | 'AI';
   attempt: number;
   message: string;

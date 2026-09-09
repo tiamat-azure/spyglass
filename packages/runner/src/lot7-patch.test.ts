@@ -2799,7 +2799,10 @@ describe('Lot 7 health.json wiring after recovery', () => {
         wait: async () => 'stop'
       }
     });
-    expect(stopped.exitCode).toBe(1);
+    expect(stopped.exitCode).not.toBe(1);
+    expect(stopped.cancelled).toBe(true);
+    expect(stopped.report.steps[0]?.status).toBe('cancelled');
+    expect(stopped.report.steps[0]?.error).toMatch(/stopped by user/);
     expect(stopped.suggestedPatch).toBeUndefined();
     health = await loadHealth(sessionDir, 'ses_lot7');
     expect(health.patchCandidates).toHaveLength(1);

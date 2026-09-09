@@ -784,6 +784,10 @@ h1 {
   color: var(--sg-danger);
 }
 
+.replay-step[data-status="cancelled"] {
+  color: var(--sg-text-muted);
+}
+
 .replay-step[data-mode="AI"] {
   border-left: 2px solid #7dd3fc;
   color: var(--sg-warning);

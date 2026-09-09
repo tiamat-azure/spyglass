@@ -304,6 +304,8 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **L36b-bound:** `SECRET_NAME` matches identifier tokens (word/camelCase
   boundaries), not substrings. `#shipping_address` / `#spinner` are not
   `pin`.
+- **L36c-cancelled:** User stop via stepGate is `cancelled` (exit 0), not
+  `failed` + exit 1. Replay start returns `{ ok: true, status: 'cancelled' }`.
 - **L7-231:** Replay next/stop IPC returns a structured error instead of
   an unhandled rejection.
 - **A30a:** Assisted apply requires a resolved `sessionDir`. Missing dir
@@ -437,5 +439,6 @@ backup recovery only; regular-file model paths; ensure CLI before large
 download. **D34a** locked (Darwin skips Unix `whisper-cli` ensure).
 **L36a-scrub** locked (patch-branch `scenario.json` is recorded/redacted,
 not live secrets). **L36b-bound** locked (`SECRET_NAME` token boundaries;
-`#shipping_address` / `#spinner` are not `pin`). Held: **L36c**
-user-stop status.
+`#shipping_address` / `#spinner` are not `pin`). **L36c-cancelled** locked
+(user stop is `cancelled`, not `failed` + exit 1). Ask-user queue
+**CLEAR** (D34a + L36a/b/c).

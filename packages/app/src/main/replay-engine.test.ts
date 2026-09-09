@@ -809,9 +809,9 @@ describe('ReplayEngine', () => {
     engine.next();
     engine.stop();
     const halted = await stopped;
-    expect(halted.ok).toBe(false);
-    if (!halted.ok) {
-      expect(halted.error).toMatch(/stopped by user/);
+    expect(halted.ok).toBe(true);
+    if (halted.ok) {
+      expect(halted.status).toBe('cancelled');
     }
   });
 
@@ -992,9 +992,9 @@ describe('ReplayEngine', () => {
     const started = engine.start({ noAi: true });
     engine.stop();
     const halted = await started;
-    expect(halted.ok).toBe(false);
-    if (!halted.ok) {
-      expect(halted.error).toMatch(/stopped by user/);
+    expect(halted.ok).toBe(true);
+    if (halted.ok) {
+      expect(halted.status).toBe('cancelled');
     }
     expect(state).toBe('finalized');
   });

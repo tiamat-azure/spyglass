@@ -42,7 +42,7 @@
         "properties": {
           "index": { "type": "integer", "minimum": 0 },
           "intent": { "type": "string" },
-          "status": { "enum": ["passed", "failed", "skipped"] },
+          "status": { "enum": ["passed", "failed", "skipped", "cancelled"] },
           "durationMs": { "type": "integer", "minimum": 0 },
           "mode": { "enum": ["script", "AI"] },
           "attempts": { "type": "integer", "minimum": 1 },

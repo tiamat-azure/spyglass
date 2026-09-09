@@ -2185,7 +2185,10 @@ describe('Lot 7 F-59 step gate', () => {
       }
     );
     expect(seen).toEqual([0, 1]);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(0);
+    expect(result.cancelled).toBe(true);
+    expect(result.report.steps[1]?.status).toBe('cancelled');
     expect(result.report.steps[1]?.error).toMatch(/stopped by user/);
+    expect(result.report.steps[0]?.status).toBe('passed');
   });
 });

@@ -40,6 +40,8 @@ export type RunScenarioOptions = {
 export type RunScenarioResult = {
   exitCode: number;
   report: import('@spyglass/contracts').ExecutionReport;
+  /** L36c-cancelled: user stop via stepGate; not a failed run. */
+  cancelled?: true;
   suggestedPatch?: import('@spyglass/contracts').SuggestedPatch;
   runDir?: string;
   healthPath?: string;

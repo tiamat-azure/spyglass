@@ -44,7 +44,7 @@ import { verifyStep } from './verify.ts';
 export type ReplayProgress = {
   runId: string;
   stepIndex: number;
-  status: 'running' | 'passed' | 'failed' | 'recovering';
+  status: 'running' | 'passed' | 'failed' | 'recovering' | 'cancelled';
   mode: 'script' | 'AI';
   attempt: number;
   message: string;
@@ -224,6 +224,7 @@ async function runScenarioOnDriver(
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
   let failed = false;
+  let cancelled = false;
 
   const startUrl = joinBaseUrl(resolved.baseUrl, executable.startUrl);
   await options.driver.goto(startUrl);
@@ -250,11 +251,11 @@ async function runScenarioOnDriver(
     if (options.stepGate !== undefined) {
       const gate = await options.stepGate.wait(step.index);
       if (gate === 'stop') {
-        failed = true;
+        cancelled = true;
         stepReports.push({
           index: step.index,
           intent: step.intent,
-          status: 'failed',
+          status: 'cancelled',
           durationMs: Date.now() - stepStarted,
           mode: 'script',
           attempts: 1,
@@ -264,7 +265,7 @@ async function runScenarioOnDriver(
         emit(options, {
           runId,
           stepIndex: step.index,
-          status: 'failed',
+          status: 'cancelled',
           mode: 'script',
           attempt: 1,
           message: 'replay stopped by user'
@@ -272,7 +273,7 @@ async function runScenarioOnDriver(
         for (let rest = index + 1; rest < executable.steps.length; rest += 1) {
           const skipped = executable.steps[rest];
           if (skipped !== undefined) {
-            stepReports.push(skippedReport(skipped));
+            stepReports.push(skippedReport(skipped, 'skipped after user stop'));
           }
         }
         break;
@@ -454,6 +455,9 @@ async function runScenarioOnDriver(
   }
 
   const result: RunScenarioResult = { exitCode: report.exitCode, report };
+  if (cancelled) {
+    result.cancelled = true;
+  }
   if (patches.length > 0) {
     result.suggestedPatch = suggestedPatch;
   }
@@ -492,8 +496,9 @@ async function runScenarioOnDriver(
     lifecycleInput.createPr = options.createPr;
   }
   // L7-153: empty patches reset F-63 candidates only on a successful (clean) run.
+  // L36c-cancelled: user-stop is not a clean success (do not reset candidates).
   // L7-216: health load/write must not crash after report/suggested-patch exist.
-  if (suggestedPatch.patches.length > 0 || report.exitCode === 0) {
+  if (suggestedPatch.patches.length > 0 || (report.exitCode === 0 && !cancelled)) {
     try {
       const lifecycle = await processSuggestedPatch(lifecycleInput);
       if (lifecycle.healthPath !== undefined) {
@@ -635,7 +640,10 @@ function emit(
   options.onProgress?.(event);
 }
 
-function skippedReport(step: RefinedStep): ExecutionStepReport {
+function skippedReport(
+  step: RefinedStep,
+  reason = 'skipped after previous failure'
+): ExecutionStepReport {
   return {
     index: step.index,
     intent: step.intent,
@@ -644,7 +652,7 @@ function skippedReport(step: RefinedStep): ExecutionStepReport {
     mode: 'script',
     attempts: 1,
     verificationOk: false,
-    error: 'skipped after previous failure'
+    error: reason
   };
 }
 
