@@ -274,6 +274,8 @@ describe('P13a patch secret redaction', () => {
     const secret = 'dataset-secret';
     const user = fillStep('#user', 'alice');
     user.action.descriptor.arguments = ['alice', secret, { delay: 1 }] as unknown as string[];
+    const password = fillStep('#password', secret, 'password');
+    password.index = 1;
     const redacted = redactSuggestedPatchForPersistence(
       {
         schemaVersion: 1,
@@ -303,7 +305,7 @@ describe('P13a patch secret redaction', () => {
         schemaVersion: 1,
         sessionId: 'ses_lot7',
         startUrl: 'https://exemple.test/login',
-        steps: [user, fillStep('#password', secret, 'password')]
+        steps: [user, password]
       }
     );
     expect(JSON.stringify(redacted)).not.toMatch(secret);
