@@ -1282,6 +1282,9 @@ Ask-user queue: clear.
 - **L7-246:** Missing recorded step still uses `originalWithoutLiveFillArgs`
   (L7-236); live fill args are not persisted as patch `original`.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**734 passed**, 1 skipped (62 files).
+
 Ask-user still held: **D34**.
 
 ## CI — macOS Electron e2e close hang
