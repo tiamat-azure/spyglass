@@ -1357,8 +1357,8 @@ L7-230 live patch args; SECRET_NAME matching; user-stop status).
   dataset secret values. Selector drift still applies. Parameterized
   fills omit `[0]` (P13a / N29a). L7-019 unpatched recorded secrets stay.
 
-Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts follow this
-revision.
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**745 passed**, 1 skipped (62 files).
 
 Ask-user still held: **L36b** SECRET_NAME matching; **L36c** user-stop
 status.
