@@ -307,6 +307,7 @@ async function runScenarioOnDriver(
       }
       const recovered = await recoverStep({
         scenario: scenarioForRecovery(scenario),
+        argumentScenario: executable,
         step: stepForRecovery(scenario.steps[index] ?? step),
         driver: options.driver,
         recoverer: options.recoverer,
@@ -479,6 +480,8 @@ async function runScenarioOnDriver(
 
 async function recoverStep(input: {
   scenario: Scenario;
+  /** L7-085: un-stripped scenario (dataset args / remaining recorded args) for text redaction. */
+  argumentScenario?: Scenario;
   step: RefinedStep;
   driver: PageDriver;
   recoverer: Recoverer;
@@ -521,13 +524,14 @@ async function recoverStep(input: {
       input.step.index,
       'recover'
     );
+    const redactFrom = input.argumentScenario ?? input.scenario;
     const context = {
       scenario: input.scenario,
       step: input.step,
       attempt,
       error: lastError,
-      beforeDom: redactSnapshotForRecovery(input.beforeDom, input.scenario),
-      afterDom: redactSnapshotForRecovery(afterDom, input.scenario),
+      beforeDom: redactSnapshotForRecovery(input.beforeDom, redactFrom),
+      afterDom: redactSnapshotForRecovery(afterDom, redactFrom),
       multimodal: input.multimodal,
       ...(screenshotRef !== undefined ? { screenshotPath: screenshotRef } : {})
     };

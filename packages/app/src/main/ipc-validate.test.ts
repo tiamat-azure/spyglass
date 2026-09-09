@@ -17,7 +17,8 @@ import {
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
-  parseVoiceStartPayload
+  parseVoiceStartPayload,
+  sessionBundleIpcError
 } from './ipc-validate.ts';
 import {
   clampBrowserBoundsToChrome,
@@ -210,5 +211,28 @@ describe('refineSourceBanner (LOT4-R1)', () => {
     expect(smart.tone).toBe('smart');
     expect(smart.text).toMatch(/smart/i);
     expect(smart.text).not.toMatch(/repli/i);
+  });
+});
+
+describe('sessionBundleIpcError (L7-088)', () => {
+  it('maps known bundle refusals to stable codes without leaking paths', () => {
+    expect(
+      sessionBundleIpcError(new Error('export refused: destination is not empty'), 'export-failed')
+    ).toBe('dest-not-empty');
+    expect(
+      sessionBundleIpcError(new Error('import refused: session already exists'), 'import-failed')
+    ).toBe('session-exists');
+    expect(
+      sessionBundleIpcError(new Error('import refused: invalid sessionId'), 'import-failed')
+    ).toBe('invalid-session');
+    expect(
+      sessionBundleIpcError(new Error('ENOENT: no such file /home/alice/secret'), 'export-failed')
+    ).toBe('export-failed');
+    const missing = new Error('no such file /abs/path/session') as NodeJS.ErrnoException;
+    missing.code = 'ENOENT';
+    expect(sessionBundleIpcError(missing, 'import-failed')).toBe('not-found');
+    expect(
+      sessionBundleIpcError(new Error('import refused: symlinks are not allowed'), 'import-failed')
+    ).toBe('symlink');
   });
 });

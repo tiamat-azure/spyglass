@@ -137,6 +137,7 @@ before `beginReplay`) are in `CHANGELOG.md`.
 Pass-11 (L7-076 … L7-082) plus Captain lock **R10a** (shared explicit
 `parameterRef` last-write-wins on extract; no conflict warn/error) are
 in `CHANGELOG.md`.
+Pass-12 (L7-083 … L7-090) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -150,3 +151,5 @@ in `CHANGELOG.md`.
   recovery steps (unchanged).
 - **D11** ask-user: gitignore `datasets/recorded.json` vs document
   plaintext-on-disk risk (unchanged).
+- **P12** ask-user: PR-prep failure remains `ok: true` +
+  `prPrepared: false` (H5b). L7-084 only makes a retry recoverable.

@@ -901,13 +901,14 @@ sttUpgradeAccept.addEventListener('click', () => {
   void api.sttUpgrade
     .decide('accept')
     .then((result) => {
-      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
       if (result.ok) {
         sttUpgrade.hidden = true;
+        return;
       }
+      sttUpgradeCopy.textContent = result.error ?? 'Mise à jour vocale indisponible. Réessayez.';
     })
     .catch(() => {
-      sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
     })
     .finally(() => {
       sttUpgradeAccept.disabled = false;

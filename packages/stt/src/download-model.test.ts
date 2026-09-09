@@ -126,6 +126,16 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeBlock).toMatch(/STT_LARGE_SHA256/);
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
+
+  it('does not statically import TypeScript modules (L7-086)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const header = src.slice(0, src.indexOf('async function main'));
+    expect(header).not.toMatch(/packages\/stt/);
+    expect(src).toMatch(/await import\(\s*'\.\.\/packages\/stt\/src\/download-model\.ts'/);
+  });
 });
 
 describe('Lot 7 first-use latency isolation (L7-008)', () => {

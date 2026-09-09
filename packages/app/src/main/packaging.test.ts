@@ -218,6 +218,21 @@ describe('packaged Observe', () => {
     const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 700);
     expect(refuseHandler).toContain('result.ok');
     expect(refuseHandler).toContain('sttUpgrade.hidden = true');
+    const acceptIdx = renderer.indexOf('sttUpgradeAccept.addEventListener');
+    expect(acceptIdx).toBeGreaterThan(-1);
+    const acceptHandler = renderer.slice(acceptIdx, acceptIdx + 900);
+    expect(acceptHandler).toContain('result.ok');
+    expect(acceptHandler).toContain('result.error');
+    expect(acceptHandler).toContain('sttUpgradeAccept.disabled = false');
+    expect(main).toContain("error: 'bad-request'");
+    expect(main).toContain("error: 'forbidden'");
+    expect(main).toContain('sessionBundleIpcError');
+    expect(main).toContain("error: 'export-failed'");
+    const resolveEngine = readFileSync(
+      join(appRoot, '../../packages/stt/src/resolve-engine.ts'),
+      'utf8'
+    );
+    expect(resolveEngine).toContain('return recordFirstUseLatency');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');

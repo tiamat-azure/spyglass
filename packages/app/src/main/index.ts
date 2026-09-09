@@ -56,7 +56,8 @@ import {
   parseSessionStartPayload,
   parseSttUpgradeDecide,
   parseVoiceEditPayload,
-  parseVoiceStartPayload
+  parseVoiceStartPayload,
+  sessionBundleIpcError
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { isLlmOffline } from './llm-transport.ts';
@@ -985,7 +986,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       const exported = await exportSessionFolder(sessionDir, destDir);
       return { ok: true, dest: exported.dest, sessionId: exported.sessionId };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, error: sessionBundleIpcError(error, 'export-failed') };
     }
   });
 
@@ -1004,7 +1005,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       );
       return { ok: true, sessionId: imported.sessionId, sessionDir: imported.sessionDir };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, error: sessionBundleIpcError(error, 'import-failed') };
     }
   });
 
@@ -1054,11 +1055,11 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
 
   ipcMain.handle(IPC.sttUpgradeDecide, async (event, raw: unknown) => {
     if (rejectForeignIpc(event, winRef, IPC.sttUpgradeDecide)) {
-      return { ok: false };
+      return { ok: false, error: 'forbidden' };
     }
     const action = parseSttUpgradeDecide(raw);
     if (action === undefined) {
-      return { ok: false };
+      return { ok: false, error: 'bad-request' };
     }
     let store: SttUpgradeStore;
     try {

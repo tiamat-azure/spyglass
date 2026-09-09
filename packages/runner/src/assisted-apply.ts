@@ -245,17 +245,36 @@ export async function applyAssistedPatches(input: {
   const hash = toApply[0]?.hash ?? 'patch';
   const branch = patchBranchName(input.suggested.sessionId, hash);
 
-  let scenario = input.scenario;
-  if (startingBranch !== defaultBranch) {
-    const switched = await checkoutOrGitError(git, repoRoot, startingBranch, [
-      'checkout',
-      defaultBranch
-    ]);
-    if (switched !== undefined) {
-      return switched;
+  // L7-084: a prior ok:true / prPrepared:false attempt leaves spyglass/patch-* around.
+  // Reuse it and resume PR prep instead of failing checkout -b.
+  let skipMutate = false;
+  if (await localBranchExists(git, repoRoot, branch)) {
+    const ontoPatch = await checkoutOrGitError(git, repoRoot, startingBranch, ['checkout', branch]);
+    if (ontoPatch !== undefined) {
+      return ontoPatch;
     }
     try {
-      scenario = await loadScenarioJson(scenarioPath);
+      const onPatch = await loadScenarioJson(scenarioPath);
+      if (scenarioHasAppliedPatches(onPatch, toApply)) {
+        skipMutate = true;
+      } else {
+        const ontoDefault = await checkoutOrGitError(git, repoRoot, startingBranch, [
+          'checkout',
+          '-f',
+          defaultBranch
+        ]);
+        if (ontoDefault !== undefined) {
+          return ontoDefault;
+        }
+        const deleted = await git(['branch', '-D', branch], repoRoot);
+        if (deleted.code !== 0) {
+          return {
+            ok: false,
+            code: 'git-error',
+            reason: deleted.stderr.trim() || `git branch -D ${branch} failed`
+          };
+        }
+      }
     } catch (error) {
       const revertError = await restoreStartingBranch(git, repoRoot, startingBranch);
       return refusalWithRestore(
@@ -269,120 +288,168 @@ export async function applyAssistedPatches(input: {
       );
     }
   }
-  const created = await checkoutOrGitError(git, repoRoot, startingBranch, [
-    'checkout',
-    '-b',
-    branch
-  ]);
-  if (created !== undefined) {
-    return created;
-  }
-  const onBranch = await currentBranch(git, repoRoot);
-  if (isDefaultBranchName(onBranch, defaultBranch)) {
-    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
-    return refusalWithRestore(
-      { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' },
-      revertError,
-      startingBranch
-    );
-  }
 
-  const typeMismatch = typeMismatchForApply(scenario, toApply);
-  if (typeMismatch !== undefined) {
-    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
-    return refusalWithRestore(typeMismatch, revertError, startingBranch);
-  }
-
-  try {
-    const patched = applyDescriptorsToScenario(scenario, toApply, {
-      runId: input.suggested.runId,
-      date: (input.now ?? new Date()).toISOString(),
-      branch
-    });
-    await writeFile(scenarioPath, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
-
-    const rel = relative(resolvedScenario.repoReal, scenarioPath).split(sep).join('/');
-    await gitOkOrThrow(git, repoRoot, ['add', '--', rel]);
-    const message = `fix(spyglass): assisted action.descriptor patch for ${input.suggested.sessionId}\n\nHuman review required (F-64). CI green is not merge.`;
-    await gitOkOrThrow(git, repoRoot, ['commit', '-m', message]);
-    const commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
-
-    const title = `spyglass: assisted descriptor patch (${input.suggested.sessionId})`;
-    const body = [
-      'Assisted apply of an `action.descriptor` patch (ADR-0008 / F-62–F-64).',
-      '',
-      `- Session: \`${input.suggested.sessionId}\``,
-      `- Run: \`${input.suggested.runId}\``,
-      `- Steps: ${toApply.map((item) => String(item.stepIndex)).join(', ')}`,
-      '',
-      '**Do not merge without human review.** A green CI does not validate a scenario that changed itself.',
-      '',
-      'Verification criteria and scenario structure remain proposal-only (CA-14 / F-62).'
-    ].join('\n');
-
-    let prUrl: string | undefined;
-    let prPrepared = false;
-    if (input.preparePr !== undefined) {
+  let scenario = input.scenario;
+  let commit: string;
+  if (skipMutate) {
+    commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
+  } else {
+    if (startingBranch !== defaultBranch) {
+      const headNow = await currentBranch(git, repoRoot);
+      if (headNow !== defaultBranch) {
+        const switched = await checkoutOrGitError(git, repoRoot, startingBranch, [
+          'checkout',
+          defaultBranch
+        ]);
+        if (switched !== undefined) {
+          return switched;
+        }
+      }
       try {
-        const prepared = await input.preparePr({
-          repo: repoRoot,
-          branch,
-          defaultBranch,
-          title,
-          body
-        });
-        prPrepared = true;
-        if (prepared.url !== undefined && prepared.url.length > 0) {
-          prUrl = prepared.url;
-        }
-      } catch {
-        prPrepared = false;
-      }
-    } else {
-      const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
-      if (pushed.code === 0) {
-        const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
-        if (gh.ok) {
-          prPrepared = true;
-          if (gh.url !== undefined && gh.url.length > 0) {
-            prUrl = gh.url;
-          }
-        }
+        scenario = await loadScenarioJson(scenarioPath);
+      } catch (error) {
+        const revertError = await restoreStartingBranch(git, repoRoot, startingBranch);
+        return refusalWithRestore(
+          {
+            ok: false,
+            code: 'internal-error',
+            reason: error instanceof Error ? error.message : String(error)
+          },
+          revertError,
+          startingBranch
+        );
       }
     }
-
-    const health = prPrepared
-      ? incrementAppliedPatches(
-          input.health,
-          toApply.map((item) => item.stepIndex),
-          policy
-        )
-      : input.health;
-
-    const result: AssistedApplySuccess = {
-      ok: true,
-      branch,
-      defaultBranch,
-      commit,
-      scenarioPath,
-      prPrepared,
-      merged: false,
-      appliedStepIndexes: toApply.map((item) => item.stepIndex),
-      health
-    };
-    if (prUrl !== undefined) {
-      result.prUrl = prUrl;
+    const created = await checkoutOrGitError(git, repoRoot, startingBranch, [
+      'checkout',
+      '-b',
+      branch
+    ]);
+    if (created !== undefined) {
+      return created;
     }
-    return result;
-  } catch (error) {
-    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
-    if (revertError === undefined) {
-      throw error;
+    const onBranch = await currentBranch(git, repoRoot);
+    if (isDefaultBranchName(onBranch, defaultBranch)) {
+      const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+      return refusalWithRestore(
+        { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' },
+        revertError,
+        startingBranch
+      );
     }
-    const base = error instanceof Error ? error.message : String(error);
-    const message = `${base}; also failed to restore ${startingBranch}: ${revertError}`;
-    throw isGitApplyError(error) ? new GitApplyError(message) : new Error(message);
+
+    const typeMismatch = typeMismatchForApply(scenario, toApply);
+    if (typeMismatch !== undefined) {
+      const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+      return refusalWithRestore(typeMismatch, revertError, startingBranch);
+    }
+
+    try {
+      const patched = applyDescriptorsToScenario(scenario, toApply, {
+        runId: input.suggested.runId,
+        date: (input.now ?? new Date()).toISOString(),
+        branch
+      });
+      await writeFile(scenarioPath, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
+
+      const rel = relative(resolvedScenario.repoReal, scenarioPath).split(sep).join('/');
+      await gitOkOrThrow(git, repoRoot, ['add', '--', rel]);
+      const message = `fix(spyglass): assisted action.descriptor patch for ${input.suggested.sessionId}\n\nHuman review required (F-64). CI green is not merge.`;
+      await gitOkOrThrow(git, repoRoot, ['commit', '-m', message]);
+      commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
+    } catch (error) {
+      const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+      if (revertError === undefined) {
+        throw error;
+      }
+      const base = error instanceof Error ? error.message : String(error);
+      const thrown = `${base}; also failed to restore ${startingBranch}: ${revertError}`;
+      throw isGitApplyError(error) ? new GitApplyError(thrown) : new Error(thrown);
+    }
   }
+
+  const title = `spyglass: assisted descriptor patch (${input.suggested.sessionId})`;
+  const body = [
+    'Assisted apply of an `action.descriptor` patch (ADR-0008 / F-62–F-64).',
+    '',
+    `- Session: \`${input.suggested.sessionId}\``,
+    `- Run: \`${input.suggested.runId}\``,
+    `- Steps: ${toApply.map((item) => String(item.stepIndex)).join(', ')}`,
+    '',
+    '**Do not merge without human review.** A green CI does not validate a scenario that changed itself.',
+    '',
+    'Verification criteria and scenario structure remain proposal-only (CA-14 / F-62).'
+  ].join('\n');
+
+  let prUrl: string | undefined;
+  let prPrepared = false;
+  if (input.preparePr !== undefined) {
+    try {
+      const prepared = await input.preparePr({
+        repo: repoRoot,
+        branch,
+        defaultBranch,
+        title,
+        body
+      });
+      prPrepared = true;
+      if (prepared.url !== undefined && prepared.url.length > 0) {
+        prUrl = prepared.url;
+      }
+    } catch {
+      prPrepared = false;
+    }
+  } else {
+    const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
+    if (pushed.code === 0) {
+      const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
+      if (gh.ok) {
+        prPrepared = true;
+        if (gh.url !== undefined && gh.url.length > 0) {
+          prUrl = gh.url;
+        }
+      }
+    }
+  }
+
+  const health = prPrepared
+    ? incrementAppliedPatches(
+        input.health,
+        toApply.map((item) => item.stepIndex),
+        policy
+      )
+    : input.health;
+
+  const result: AssistedApplySuccess = {
+    ok: true,
+    branch,
+    defaultBranch,
+    commit,
+    scenarioPath,
+    prPrepared,
+    merged: false,
+    appliedStepIndexes: toApply.map((item) => item.stepIndex),
+    health
+  };
+  if (prUrl !== undefined) {
+    result.prUrl = prUrl;
+  }
+  return result;
+}
+
+async function localBranchExists(git: GitExec, cwd: string, branch: string): Promise<boolean> {
+  const result = await git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], cwd);
+  return result.code === 0;
+}
+
+function scenarioHasAppliedPatches(
+  scenario: Scenario,
+  patches: ReadonlyArray<{ stepIndex: number; hash: string }>
+): boolean {
+  return patches.every((patch) => {
+    const step = scenario.steps.find((entry) => entry.index === patch.stepIndex);
+    return step !== undefined && descriptorHash(step.action.descriptor) === patch.hash;
+  });
 }
 
 function applyDescriptorsToScenario(

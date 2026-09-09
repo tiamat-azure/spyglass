@@ -4,6 +4,10 @@
  * Not run in CI — binaries/models are too heavy; the mock engine covers tests.
  *
  * Usage: node scripts/fetch-whisper.mjs [--large]
+ *
+ * L7-086: the default (non-`--large`) path uses only Node builtins so a plain
+ * `node` invocation does not fail at import time. `--large` dynamically imports
+ * the STT TypeScript modules (Node 24 type stripping).
  */
 import { createWriteStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -11,15 +15,6 @@ import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
-import {
-  downloadResponseToFileAtomic,
-  STT_LARGE_DOWNLOAD_TIMEOUT_MS
-} from '../packages/stt/src/download-model.ts';
-import {
-  STT_LARGE_MODEL_FILE,
-  STT_LARGE_MODEL_URL,
-  STT_LARGE_SHA256
-} from '../packages/stt/src/upgrade.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'vendor/whisper');
@@ -62,6 +57,12 @@ async function main() {
   const large = process.argv.includes('--large');
   await mkdir(outDir, { recursive: true });
   if (large) {
+    const { downloadResponseToFileAtomic, STT_LARGE_DOWNLOAD_TIMEOUT_MS } = await import(
+      '../packages/stt/src/download-model.ts'
+    );
+    const { STT_LARGE_MODEL_FILE, STT_LARGE_MODEL_URL, STT_LARGE_SHA256 } = await import(
+      '../packages/stt/src/upgrade.ts'
+    );
     const largePath = join(outDir, STT_LARGE_MODEL_FILE);
     process.stdout.write(`Downloading ${STT_LARGE_MODEL_FILE} (optional STT upgrade, ~575MB)…\n`);
     const response = await fetch(STT_LARGE_MODEL_URL, {

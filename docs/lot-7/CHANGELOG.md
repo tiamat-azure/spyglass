@@ -302,6 +302,34 @@ Ask-user still held: **S11** (screenshot skip/blur vs accept for
 parameterRef recovery steps), **D11** (gitignore `recorded.json` vs
 document plaintext-on-disk risk).
 
+## Pass-12 adversarial fixes (L7-083 … L7-090)
+
+- **L7-083:** STT upgrade accept surfaces `result.error` on `ok: false`,
+  re-enables the button, and does not hide the banner (same as refuse).
+- **L7-084:** If `spyglass/patch-*` already exists after a prior
+  `ok: true` / `prPrepared: false` attempt, assisted apply checks out
+  that branch and resumes PR preparation instead of failing
+  `git checkout -b`. Invalid leftovers are deleted and recreated.
+  H5b / P12 contract unchanged (`ok: true`, `prPrepared: false` on
+  preparePr failure; health increments only when `prPrepared`).
+- **L7-085:** Recovery redaction reads remaining / dataset arguments
+  from the un-stripped executable scenario, not `scenarioForRecovery`
+  (which had already deleted them).
+- **L7-086:** `node scripts/fetch-whisper.mjs` no longer statically
+  imports `.ts` modules. `--large` dynamically imports STT TypeScript.
+- **L7-087:** `sttUpgradeDecide` foreign IPC is `forbidden`; invalid
+  payload is `bad-request` (both `{ ok: false, error }`).
+- **L7-088:** Session export/import IPC maps failures to stable codes
+  (`dest-not-empty`, `session-exists`, `export-failed`, …) instead of
+  raw `error.message` paths.
+- **L7-089:** `extractScenarioParameters` dedupes `dataset.secrets`
+  under shared R10a `parameterRef`.
+- **L7-090:** Whisper `onFirstUseLatency` returns the
+  `recordFirstUseLatency` promise so L7-008 isolation applies.
+
+Ask-user still held: **S11**, **D11**, **P12** (whether PR-prep failure
+should be `ok: false` vs `ok: true` + `prPrepared: false`).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

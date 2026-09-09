@@ -53,7 +53,9 @@ export function extractScenarioParameters(scenario: Scenario): {
     // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
     values[name] = value;
     if (isSecretName(name) || looksMasked(value)) {
-      secrets.push(name);
+      if (!secrets.includes(name)) {
+        secrets.push(name);
+      }
     }
     const descriptor = cloneDescriptor(step.action.descriptor);
     delete descriptor.arguments;

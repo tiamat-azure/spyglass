@@ -101,6 +101,7 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.scenario.steps[0]?.action.parameterRef).toBe('password');
     expect(extracted.scenario.steps[1]?.action.parameterRef).toBe('password');
     expect(extracted.dataset.values.password).toBe('second');
+    expect(extracted.dataset.secrets).toEqual(['password']);
   });
 
   it('still uniquifies generated selector-derived names (R4a)', () => {
@@ -311,6 +312,56 @@ describe('Lot 7 F-48 parameterization', () => {
         { selector: '#gone', visible: false }
       ]
     });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.values['#password']).toBe('');
+      expect(snap.text).not.toContain(secret);
+    }
+  });
+
+  it('redacts remaining recorded arguments when live values are empty (L7-085)', async () => {
+    const secret = 's3cret-password';
+    const step = fillStep(0, '#password', secret, 'password');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ text: string; values: Record<string, string> }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({ text: context.afterDom.text, values: { ...context.afterDom.values } });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: `visible ${secret} on page`,
+      elements: [
+        { selector: '#password', visible: true, value: '', text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const originalSnapshot = driver.snapshot.bind(driver);
+    driver.snapshot = async () => {
+      const snap = await originalSnapshot();
+      return { ...snap, values: { '#password': '' } };
+    };
     const result = await runScenario(
       {
         schemaVersion: 1,

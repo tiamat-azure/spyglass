@@ -326,3 +326,37 @@ export function parseSttUpgradeDecide(input: unknown): 'accept' | 'refuse' | und
   const action = (input as { action?: unknown }).action;
   return action === 'accept' || action === 'refuse' ? action : undefined;
 }
+
+/** L7-088: session export/import IPC returns stable codes, not absolute paths. */
+export function sessionBundleIpcError(
+  error: unknown,
+  fallback: 'export-failed' | 'import-failed'
+): string {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'ENOENT') {
+    return 'not-found';
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message.includes('destination is not empty') ||
+    message.includes('destination already exists')
+  ) {
+    return 'dest-not-empty';
+  }
+  if (message.includes('session already exists')) {
+    return 'session-exists';
+  }
+  if (message.includes('invalid sessionId')) {
+    return 'invalid-session';
+  }
+  if (message.includes('must not be the source') || message.includes('must not overlap')) {
+    return 'overlap';
+  }
+  if (message.includes('symlinks are not allowed')) {
+    return 'symlink';
+  }
+  if (message.includes('missing sessionId')) {
+    return 'invalid-meta';
+  }
+  return fallback;
+}
