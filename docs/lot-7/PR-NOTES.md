@@ -427,4 +427,5 @@ hung-git timeout above 15s; keep non-string scrub heads; vacant trailing
 slots; per-run dataset-load artifacts; combined recovery secrets;
 structured bundle errors; refuse existing dest unless overwrite; owned
 backup recovery only; regular-file model paths; ensure CLI before large
-download. Held: **D34**, **L7-P36** (L36a/b/c).
+download. Held: **L7-P36** (L36a/b/c). **D34a** locked (Darwin skips Unix
+`whisper-cli` ensure).

@@ -1332,6 +1332,22 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 Ask-user still held: **D34**, **L7-P36** (L36a/b/c pending Firstmate:
 L7-230 live patch args; SECRET_NAME matching; user-stop status).
 
+## Captain lock D34a (Darwin does not require Unix whisper-cli)
+
+- **D34a:** `scripts/fetch-whisper.mjs` skips CLI ensure on Darwin.
+  ggml-org Darwin assets are an xcframework, not a Unix `whisper-cli`.
+  Do not require that basename and do not invent a fail-closed fake pin
+  (the old `whisper-bin-x64.zip:whisper-cli` Linux digest is gone).
+  Linux/Windows keep I30a / L7-244 size+SHA-256 pins (`whisper-cli` /
+  `whisper-cli.exe`). Models still fetch on Darwin; copy a locally built
+  `whisper-cli` into `vendor/whisper/` if needed.
+
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**745 passed**, 1 skipped (62 files).
+
+Ask-user still held: **L7-P36** (L36a/b/c pending Firstmate:
+L7-230 live patch args; SECRET_NAME matching; user-stop status).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

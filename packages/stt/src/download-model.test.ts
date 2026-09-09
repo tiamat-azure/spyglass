@@ -279,7 +279,9 @@ describe('W3a fetch-whisper --large', () => {
     );
     const winStart = src.indexOf("if (plat === 'win32')");
     expect(winStart).toBeGreaterThan(-1);
-    const winBlock = src.slice(winStart, src.indexOf('return undefined;'));
+    const winEnd = src.indexOf('return undefined;', winStart);
+    expect(winEnd).toBeGreaterThan(winStart);
+    const winBlock = src.slice(winStart, winEnd);
     expect(winBlock).toContain('.zip');
     expect(winBlock).not.toContain('.tar.gz');
     const extractStart = src.indexOf('function extractArchive');
@@ -299,6 +301,34 @@ describe('W3a fetch-whisper --large', () => {
     expect(zipFn).toContain('Expand-Archive');
     expect(zipFn).toContain('powershell.exe');
     expect(src).toContain("['-xf', archivePath, '-C', extractDir]");
+  });
+
+  it('skips Darwin CLI ensure instead of requiring Unix whisper-cli (D34a)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const assetStart = src.indexOf('function cliAsset()');
+    const assetEnd = src.indexOf('async function download(');
+    expect(assetStart).toBeGreaterThan(-1);
+    expect(assetEnd).toBeGreaterThan(assetStart);
+    const asset = src.slice(assetStart, assetEnd);
+    const darwinStart = asset.indexOf("plat === 'darwin'");
+    const winStart = asset.indexOf("plat === 'win32'");
+    expect(darwinStart).toBeGreaterThan(-1);
+    expect(winStart).toBeGreaterThan(darwinStart);
+    const darwinBlock = asset.slice(darwinStart, winStart);
+    expect(darwinBlock).toContain('return undefined');
+    expect(darwinBlock).not.toContain("name: 'whisper-cli'");
+    expect(src).not.toMatch(/'whisper-bin-x64\.zip:whisper-cli':/);
+    const fnStart = src.indexOf('async function ensureWhisperCli');
+    const fnEnd = src.indexOf('const SMALL_MIN_BYTES');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain("process.platform === 'darwin'");
+    expect(body).toContain('Skipping CLI ensure');
+    expect(body).not.toContain("name: 'whisper-cli'");
   });
 
   it('rejects extracted whisper-cli smaller than CLI_MIN_BYTES (L7-225)', async () => {
@@ -328,7 +358,7 @@ describe('W3a fetch-whisper --large', () => {
     expect(src).toContain("createHash('sha256')");
     expect(src).toMatch(/'whisper-bin-x64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
     expect(src).toMatch(/'whisper-bin-arm64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
-    expect(src).toMatch(/'whisper-bin-x64\.zip:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).not.toMatch(/'whisper-bin-x64\.zip:whisper-cli':/);
     expect(src).toMatch(/'whisper-bin-x64\.zip:whisper-cli\.exe':\s*'[0-9a-f]{64}'/);
     const helpersStart = src.indexOf('function expectedCliSha256');
     const fnStart = src.indexOf('async function ensureWhisperCli');

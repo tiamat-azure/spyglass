@@ -10,10 +10,13 @@
  * the STT TypeScript modules (Node 24 type stripping).
  * W18a: `--large` ensures `ggml-small-q5_1.bin` (F-39 fallback) before returning.
  * C26a: `--large` also ensures whisper-cli (same as a plain fetch), not models-only.
- * W28b: `cliAsset()` is `.zip` on Windows (and darwin). `extractArchive` is
- * format-aware — Expand-Archive for zip on win32, not always `tar -xf`.
+ * W28b: `cliAsset()` is `.zip` on Windows. `extractArchive` is format-aware —
+ * Expand-Archive for zip on win32, not always `tar -xf`.
  * I30a: extracted whisper-cli is SHA-256-checked before chmod/success.
  * Pins below; non-empty `STT_WHISPER_CLI_SHA256` overrides (S4a-style).
+ * D34a: Darwin skips CLI ensure. ggml-org Darwin assets are an xcframework,
+ * not a Unix `whisper-cli` binary — do not require that basename or invent a
+ * fail-closed fake pin.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -44,21 +47,19 @@ const CLI_MIN_BYTES = 10_000;
  * ggml-org v1.7.5 did not publish `whisper-bin-*` (xcframework only). Pins are
  * the extracted binaries from ggml-org/whisper.cpp v1.9.2:
  * `whisper-bin-ubuntu-x64.tar.gz` / `whisper-bin-ubuntu-arm64.tar.gz` /
- * `whisper-bin-x64.zip` (`whisper-cli.exe`). Darwin's zip has no unix
- * `whisper-cli`; that pin is the v1.9.2 Linux x64 `whisper-cli` so a PE/HTML
- * stub fails closed. Non-empty `STT_WHISPER_CLI_SHA256` overrides (trim),
- * same idea as unpackaged `STT_LARGE_SHA256` (S4a / E18a). This script is
- * unpackaged Node — packaged ignore of the large env does not apply here.
- * Missing pin or mismatch: rm dest, throw (fail closed). Do not skip the
- * check when the expected digest is empty.
+ * `whisper-bin-x64.zip` (`whisper-cli.exe`). Darwin is not pinned: ggml-org
+ * Darwin assets are an xcframework, not a Unix `whisper-cli` (D34a).
+ * Non-empty `STT_WHISPER_CLI_SHA256` overrides (trim), same idea as unpackaged
+ * `STT_LARGE_SHA256` (S4a / E18a). This script is unpackaged Node — packaged
+ * ignore of the large env does not apply here. Missing pin or mismatch: rm
+ * dest, throw (fail closed). Do not skip the check when the expected digest
+ * is empty.
  */
 const CLI_SHA256 = {
   'whisper-bin-x64.tar.gz:whisper-cli':
     '61fa94d25ba9a4695118883011f35e8521c158145ec73bcd8805a7c11760e6d7',
   'whisper-bin-arm64.tar.gz:whisper-cli':
     '00cf54e258e9c7560666e5ae7d16e01ee02210b9ee5e943172e7df5f2ece4c80',
-  'whisper-bin-x64.zip:whisper-cli':
-    '61fa94d25ba9a4695118883011f35e8521c158145ec73bcd8805a7c11760e6d7',
   'whisper-bin-x64.zip:whisper-cli.exe':
     '95e3c0b0e778ad9499eb0125f97c1dcf437dd9eb4ea77050b043574f93c2631d'
 };
@@ -72,11 +73,10 @@ function cliAsset() {
       name: 'whisper-cli'
     };
   }
+  // D34a: ggml-org Darwin assets are xcframework-only (no Unix whisper-cli).
+  // Skip ensure rather than requiring that basename or inventing a fake pin.
   if (plat === 'darwin') {
-    return {
-      url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.5/whisper-bin-x64.zip',
-      name: 'whisper-cli'
-    };
+    return undefined;
   }
   if (plat === 'win32') {
     return {
@@ -206,7 +206,7 @@ function extractZip(archivePath, extractDir) {
   extractTar(archivePath, extractDir);
 }
 
-/** W28b: zip when `cliAsset()` yields `.zip` (win32/darwin); tar for `.tar.gz`. */
+/** W28b: zip when `cliAsset()` yields `.zip` (win32); tar for `.tar.gz`. */
 function extractArchive(archivePath, extractDir) {
   if (/\.zip$/i.test(archivePath)) {
     extractZip(archivePath, extractDir);
@@ -265,6 +265,12 @@ async function assertCliIntegrity(dest, cli) {
 async function ensureWhisperCli() {
   const cli = cliAsset();
   if (cli === undefined) {
+    if (process.platform === 'darwin') {
+      process.stdout.write(
+        'D34a: ggml-org Darwin assets have no Unix whisper-cli (xcframework only). Skipping CLI ensure. Build whisper.cpp and copy whisper-cli into vendor/whisper/ if needed.\n'
+      );
+      return;
+    }
     process.stdout.write(
       'No prebuilt whisper-cli URL for this platform. Build whisper.cpp and copy whisper-cli into vendor/whisper/.\n'
     );
