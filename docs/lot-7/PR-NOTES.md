@@ -153,7 +153,9 @@ Captain lock **P14a** (non-ff remote delete gated on no open PR) is in
 `CHANGELOG.md`.
 Pass-15 (L7-103 … L7-108) is in `CHANGELOG.md`.
 Windows CI: L7-108 backoff starts after the second failed first-use persist
-so L7-097 can still sample a later non-overlapping finalize.
+so L7-097 can still sample a later non-overlapping finalize. The skip
+window is `FIRST_USE_BACKOFF_MS` (2s) so Windows stub spawn cannot leak a
+third persist.
 Pass-16 (L7-109 … L7-116) is in `CHANGELOG.md`.
 Pass-17 (L7-117 … L7-125) is in `CHANGELOG.md`.
 Captain lock **B16a** (checkout starting branch after assisted-apply

@@ -366,7 +366,14 @@ export async function runWhisperCli(options: {
 }
 
 /** L7-108: cap first-use persist retries for the engine lifetime. */
-const FIRST_USE_RETRY_LIMIT = 3;
+export const FIRST_USE_RETRY_LIMIT = 3;
+/**
+ * L7-108: after two failed persists, wait before another attempt.
+ * 250ms was shorter than Windows whisper-cli stub spawn, so a sequential
+ * third finalize always slipped through (CI: expected 2, received 3).
+ */
+export const FIRST_USE_BACKOFF_MS = 2_000;
+export const FIRST_USE_BACKOFF_MAX_MS = 8_000;
 
 /**
  * L7-008: first-use latency persistence must not fail transcription.
@@ -476,7 +483,10 @@ export function createWhisperEngine(options: {
         // L7-097: do not back off after the first failed persist so a second
         // finalize can still write its own sample when the two finals did not overlap.
         if (firstUseAttempts >= 2) {
-          const delayMs = Math.min(250 * 2 ** (firstUseAttempts - 2), 4_000);
+          const delayMs = Math.min(
+            FIRST_USE_BACKOFF_MS * 2 ** (firstUseAttempts - 2),
+            FIRST_USE_BACKOFF_MAX_MS
+          );
           firstUseBackoffUntil = Date.now() + delayMs;
         }
       })();

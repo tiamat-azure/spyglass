@@ -81,6 +81,8 @@ export { concatPcm, pcm16ToWav } from './wav.ts';
 export type { WhisperPaths } from './whisper-engine.ts';
 export {
   createWhisperEngine,
+  FIRST_USE_BACKOFF_MS,
+  FIRST_USE_RETRY_LIMIT,
   isCancelledTranscription,
   notifyFirstUseLatency,
   pickPreferredWhisperModel,

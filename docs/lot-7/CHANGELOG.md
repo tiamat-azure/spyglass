@@ -734,4 +734,7 @@ Ask-user still held: none for these captain locks.
 - Windows: after close timeout, `taskkill /T /F` the Electron pid so
   renderer/GPU children cannot block worker teardown. Empty-shell
   `start.html` URL poll is 20s (same as later `example.com` poll).
+- Windows L7-108: first-use persist backoff after two failures is 2s
+  (`FIRST_USE_BACKOFF_MS`), long enough that a sequential third
+  whisper-cli stub finalize stays inside the skip window.
 

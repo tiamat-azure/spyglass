@@ -24,6 +24,7 @@ import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } fr
 import { pcm16ToWav } from './wav.ts';
 import {
   createWhisperEngine,
+  FIRST_USE_BACKOFF_MS,
   isCancelledTranscription,
   pickPreferredWhisperModel,
   resolveWhisperPaths,
@@ -752,9 +753,7 @@ describe('@spyglass/stt', () => {
           setTimeout(resolve, 20);
         });
       }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      expect(calls).toBe(2);
       engine.begin('u3');
       engine.pushPcm('u3', Buffer.alloc(6400, 3), () => undefined);
       await engine.finalize('u3');
@@ -762,8 +761,11 @@ describe('@spyglass/stt', () => {
         setTimeout(resolve, 50);
       });
       // First isolated failure does not back off (L7-097). The second starts
-      // backoff; the third is skipped while that window is open.
+      // backoff (FIRST_USE_BACKOFF_MS); the third is skipped while that
+      // window is open. Do not insert extra delay after the second persist —
+      // Windows stub spawn already consumes part of the window.
       expect(calls).toBe(2);
+      expect(FIRST_USE_BACKOFF_MS).toBeGreaterThanOrEqual(2_000);
     } finally {
       engine.dispose?.();
     }
