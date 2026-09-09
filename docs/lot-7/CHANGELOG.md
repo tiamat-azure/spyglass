@@ -889,6 +889,10 @@ Ask-user still held: none.
   (`STT_MODEL_DIR` and `STT_MODEL_PATH` dirname) so those two cannot
   disagree when large fallback applies.
 
+Local: `pnpm lint` 274 files, `pnpm typecheck` 6 packages, `pnpm test`
+**669 passed**, 1 skipped (62 files). `lot7-patch.test.ts` 79,
+`lot7-parameters.test.ts` 57, `upgrade.test.ts` 30.
+
 Ask-user still held: D27, A27, L27 (not assumed).
 
 ## CI — macOS Electron e2e close hang
