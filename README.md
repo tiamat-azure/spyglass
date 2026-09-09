@@ -68,11 +68,12 @@ running the app detached, with a pidfile and captured logs.
 make               # or `make help`: list every target
 make install       # corepack + pnpm install + doctor
 make test          # check + unit + e2e, sequential, stops on first failure
-make start         # build and launch the app in the background
+make start         # build and launch the dev app in the background
+make run           # launch the packaged binary produced by `make package`
 make status        # process, CDP endpoint, current log, build artefacts
 make log           # follow the current run log (make log N=200 for a plain tail)
 make restart       # stop, wait for the exit, start again
-make stop          # terminate the app started by `make start`
+make stop          # terminate the app started by `make start` or `make run`
 make package       # unsigned installer for the current OS
 make clean         # remove out/, release/, coverage/ and .spyglass/
 ```
@@ -87,10 +88,22 @@ make clean         # remove out/, release/, coverage/ and .spyglass/
 | `make test-e2e` | `pnpm test:e2e` |
 | `make test` | `check` then `test-unit` then `test-e2e` |
 | `make start` | `pnpm start` (its `prestart` runs `doctor`, and `electron-vite preview` rebuilds before launching) |
+| `make run` | none - launches the packaged binary directly |
 | `make package` | `pnpm package` |
 
 `check`, `test-unit` and `test-e2e` stay callable on their own for a faster
 loop; `make test` is the gate that chains all three.
+
+`make run` is the packaged counterpart of `make start`: it picks the binary
+produced by `make package` (`packages/app/release/linux-unpacked/spyglass`,
+`release/mac*/Spyglass.app/Contents/MacOS/spyglass`,
+`release/win-unpacked/spyglass.exe`), launches it through the same supervision
+(pidfile, log, CDP readiness probe), so `make status`, `make log` and `make
+stop` apply unchanged. Override the binary with `SPYGLASS_BIN=/path/to/exe make
+run`. On Linux the unpacked tree ships `chrome-sandbox` without the setuid bit,
+so `make run` falls back to `--no-sandbox` and says so; installing the `.deb`
+(`sudo apt install ./packages/app/release/Spyglass-*.deb`, then `spyglass`)
+gives a fully sandboxed run.
 
 The e2e target drives a real Electron window. On Linux, CI runs it under
 `xvfb-run --auto-servernum` (a virtual X server, no physical display), and a
