@@ -1035,6 +1035,15 @@ Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: W28.
 
+## Captain lock W28b (zip-aware whisper-cli extract)
+
+- **W28b:** `scripts/fetch-whisper.mjs` `extractArchive` follows the
+  downloaded archive format. When `cliAsset()` yields a `.zip` (Windows,
+  darwin), extract uses `Expand-Archive` on win32 (not always
+  `tar -xf`). Linux `.tar.gz` still uses `tar`.
+
+Ask-user still held: none.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

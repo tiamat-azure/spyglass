@@ -247,6 +247,39 @@ describe('W3a fetch-whisper --large', () => {
     expect(body).toContain('findNamedFile');
     expect(src.slice(largeEnd)).toContain('await ensureWhisperCli()');
   });
+
+  it('extracts zip archives without always tar -xf (W28b)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    expect(src).toContain("plat === 'win32'");
+    expect(src).toContain(
+      "url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.5/whisper-bin-x64.zip'"
+    );
+    const winStart = src.indexOf("if (plat === 'win32')");
+    expect(winStart).toBeGreaterThan(-1);
+    const winBlock = src.slice(winStart, src.indexOf('return undefined;'));
+    expect(winBlock).toContain('.zip');
+    expect(winBlock).not.toContain('.tar.gz');
+    const extractStart = src.indexOf('function extractArchive');
+    const extractEnd = src.indexOf('async function ensureWhisperCli');
+    expect(extractStart).toBeGreaterThan(-1);
+    expect(extractEnd).toBeGreaterThan(extractStart);
+    const extract = src.slice(extractStart, extractEnd);
+    expect(extract).toContain('/\\.zip$/i.test(archivePath)');
+    expect(extract).toContain('extractZip');
+    expect(extract).not.toMatch(
+      /function extractArchive\([^)]*\) \{\s*const result = spawnSync\('tar'/
+    );
+    const zipStart = src.indexOf('function extractZip');
+    expect(zipStart).toBeGreaterThan(-1);
+    const zipFn = src.slice(zipStart, extractStart);
+    expect(zipFn).toContain("process.platform === 'win32'");
+    expect(zipFn).toContain('Expand-Archive');
+    expect(zipFn).toContain('powershell.exe');
+    expect(src).toContain("['-xf', archivePath, '-C', extractDir]");
+  });
 });
 
 describe('Lot 7 first-use latency isolation (L7-008)', () => {

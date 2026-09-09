@@ -10,6 +10,8 @@
  * the STT TypeScript modules (Node 24 type stripping).
  * W18a: `--large` ensures `ggml-small-q5_1.bin` (F-39 fallback) before returning.
  * C26a: `--large` also ensures whisper-cli (same as a plain fetch), not models-only.
+ * W28b: `cliAsset()` is `.zip` on Windows (and darwin). `extractArchive` is
+ * format-aware — Expand-Archive for zip on win32, not always `tar -xf`.
  */
 import { spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, createWriteStream, readdirSync, statSync } from 'node:fs';
@@ -100,12 +102,62 @@ function findNamedFile(dir, name) {
   return undefined;
 }
 
-function extractArchive(archivePath, extractDir) {
-  const result = spawnSync('tar', ['-xf', archivePath, '-C', extractDir], { encoding: 'utf8' });
+function spawnExtract(command, args, failLabel, extraEnv) {
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    env: extraEnv === undefined ? process.env : { ...process.env, ...extraEnv }
+  });
   if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || String(result.status)).trim();
-    throw new Error(`tar extract failed: ${detail}`);
+    const detail = (
+      result.error?.message ||
+      result.stderr ||
+      result.stdout ||
+      String(result.status)
+    ).trim();
+    throw new Error(`${failLabel}: ${detail}`);
   }
+}
+
+function extractTar(archivePath, extractDir) {
+  spawnExtract('tar', ['-xf', archivePath, '-C', extractDir], 'tar extract failed');
+}
+
+function extractZip(archivePath, extractDir) {
+  if (process.platform === 'win32') {
+    spawnExtract(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        'Expand-Archive -LiteralPath $env:SPYGLASS_WHISPER_ZIP -DestinationPath $env:SPYGLASS_WHISPER_OUT -Force'
+      ],
+      'zip extract failed',
+      {
+        SPYGLASS_WHISPER_ZIP: archivePath,
+        SPYGLASS_WHISPER_OUT: extractDir
+      }
+    );
+    return;
+  }
+  const unzip = spawnSync('unzip', ['-o', '-q', archivePath, '-d', extractDir], {
+    encoding: 'utf8'
+  });
+  if (unzip.status === 0) {
+    return;
+  }
+  extractTar(archivePath, extractDir);
+}
+
+/** W28b: zip when `cliAsset()` yields `.zip` (win32/darwin); tar for `.tar.gz`. */
+function extractArchive(archivePath, extractDir) {
+  if (/\.zip$/i.test(archivePath)) {
+    extractZip(archivePath, extractDir);
+    return;
+  }
+  extractTar(archivePath, extractDir);
 }
 
 /**

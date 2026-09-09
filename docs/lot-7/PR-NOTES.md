@@ -257,6 +257,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **F28b:** `onFirstUseLatency` attaches whenever the selected Whisper
   file is the large model (basename), including `STT_MODEL_PATH` copies
   outside `join(modelDir, STT_LARGE…)`.
+- **W28b:** `fetch-whisper.mjs` `extractArchive` is zip-aware when
+  `cliAsset()` yields `.zip` (Windows Expand-Archive; not always
+  `tar -xf`). `.tar.gz` still uses `tar`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -316,4 +319,6 @@ scrubs known secrets by value even without `parameterRef`. **S28b:**
 `resolveScenarioPath` fails when the path resolves outside `--repo`.
 **X28a:** `withDestLock` is single-process (in-memory Map); no
 cross-process lockfile. **F28b:** first-use latency hook follows any
-selected large model, not only `join(modelDir, STT_LARGE…)`. Held: W28.
+selected large model, not only `join(modelDir, STT_LARGE…)`. **W28b:**
+whisper-cli extract is zip-aware for `cliAsset()` `.zip` (Windows
+Expand-Archive, not always `tar -xf`). Held: none.
