@@ -69,6 +69,16 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
     expect(choice.file).toContain('large-v3-turbo');
   });
 
+  it('returns smallModelPath when smallPath is omitted (L7-073)', () => {
+    const choice = chooseWhisperModel({
+      largeFallback: true,
+      modelDir: '/opt/whisper'
+    });
+    expect(choice.kind).toBe('small');
+    expect(choice.file).toBe(join('/opt/whisper', STT_SMALL_MODEL_FILE));
+    expect(choice.file).not.toBe(STT_SMALL_MODEL_FILE);
+  });
+
   it('reads STT_UPGRADE_PROMPT_AFTER', () => {
     expect(parseUpgradePromptAfter({ STT_UPGRADE_PROMPT_AFTER: '3' })).toBe(3);
     expect(parseUpgradePromptAfter({})).toBe(10);

@@ -254,12 +254,16 @@ export async function applyAssistedPatches(input: {
     try {
       scenario = await loadScenarioJson(scenarioPath);
     } catch (error) {
-      await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
-      return {
-        ok: false,
-        code: 'internal-error',
-        reason: error instanceof Error ? error.message : String(error)
-      };
+      const revertError = await restoreStartingBranch(git, repoRoot, startingBranch);
+      return refusalWithRestore(
+        {
+          ok: false,
+          code: 'internal-error',
+          reason: error instanceof Error ? error.message : String(error)
+        },
+        revertError,
+        startingBranch
+      );
     }
   }
   const created = await checkoutOrGitError(git, repoRoot, startingBranch, [
@@ -272,14 +276,18 @@ export async function applyAssistedPatches(input: {
   }
   const onBranch = await currentBranch(git, repoRoot);
   if (isDefaultBranchName(onBranch, defaultBranch)) {
-    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
-    return { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' };
+    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+    return refusalWithRestore(
+      { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' },
+      revertError,
+      startingBranch
+    );
   }
 
   const typeMismatch = typeMismatchForApply(scenario, toApply);
   if (typeMismatch !== undefined) {
-    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
-    return typeMismatch;
+    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+    return refusalWithRestore(typeMismatch, revertError, startingBranch);
   }
 
   try {
@@ -364,8 +372,12 @@ export async function applyAssistedPatches(input: {
     }
     return result;
   } catch (error) {
-    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
-    throw error;
+    const revertError = await restoreStartingBranch(git, repoRoot, startingBranch, branch);
+    if (revertError === undefined) {
+      throw error;
+    }
+    const base = error instanceof Error ? error.message : String(error);
+    throw new Error(`${base}; also failed to restore ${startingBranch}: ${revertError}`);
   }
 }
 
@@ -439,6 +451,58 @@ async function gitOkOrThrow(git: GitExec, cwd: string, args: readonly string[]):
   return result.stdout;
 }
 
+/** L7-066 / L7-067: restore HEAD, then best-effort delete a patch branch we created. */
+async function restoreStartingBranch(
+  git: GitExec,
+  cwd: string,
+  startingBranch: string,
+  danglingPatchBranch?: string
+): Promise<string | undefined> {
+  let revertError: string | undefined;
+  try {
+    const restored = await git(['checkout', '-f', startingBranch], cwd);
+    if (restored.code !== 0) {
+      revertError = restored.stderr.trim() || `git checkout -f ${startingBranch} failed`;
+    }
+  } catch (error) {
+    revertError = error instanceof Error ? error.message : String(error);
+  }
+  if (revertError !== undefined) {
+    console.error(`[spyglass] failed to restore ${startingBranch}: ${revertError}`);
+  }
+  if (danglingPatchBranch !== undefined && danglingPatchBranch.length > 0) {
+    try {
+      const deleted = await git(['branch', '-D', danglingPatchBranch], cwd);
+      if (deleted.code !== 0) {
+        console.error(
+          `[spyglass] failed to delete dangling ${danglingPatchBranch}: ${deleted.stderr.trim()}`
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[spyglass] failed to delete dangling ${danglingPatchBranch}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+  return revertError;
+}
+
+function refusalWithRestore(
+  refusal: AssistedApplyRefusal,
+  revertError: string | undefined,
+  startingBranch: string
+): AssistedApplyRefusal {
+  if (revertError === undefined) {
+    return refusal;
+  }
+  return {
+    ...refusal,
+    reason: `${refusal.reason}; also failed to restore ${startingBranch}: ${revertError}`
+  };
+}
+
 async function checkoutOrGitError(
   git: GitExec,
   cwd: string,
@@ -449,12 +513,16 @@ async function checkoutOrGitError(
     await gitOkOrThrow(git, cwd, args);
     return undefined;
   } catch (error) {
-    await git(['checkout', '-f', startingBranch], cwd).catch(() => undefined);
-    return {
-      ok: false,
-      code: 'git-error',
-      reason: error instanceof Error ? error.message : String(error)
-    };
+    const revertError = await restoreStartingBranch(git, cwd, startingBranch);
+    return refusalWithRestore(
+      {
+        ok: false,
+        code: 'git-error',
+        reason: error instanceof Error ? error.message : String(error)
+      },
+      revertError,
+      startingBranch
+    );
   }
 }
 

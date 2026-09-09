@@ -11,7 +11,13 @@ export async function runCli(
   argv: readonly string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env
 ): Promise<number> {
-  const parsed = parseRunnerArgv(argv, env);
+  let parsed: ReturnType<typeof parseRunnerArgv>;
+  try {
+    parsed = parseRunnerArgv(argv, env);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
   if (parsed.help) {
     process.stdout.write(spyglassRunHelpText());
     return 0;

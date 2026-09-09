@@ -2,11 +2,12 @@ import { mkdir, mkdtemp, readFile, rename, rm, symlink, utimes, writeFile } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { writeGeneratedPackage } from './generate.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import {
   applyDataset,
+  exampleDataset,
   extractScenarioParameters,
   parseDataset,
   writeGeneratedDatasets
@@ -17,6 +18,19 @@ import {
   importSessionFolder,
   SESSION_BUNDLE_MANIFEST
 } from './session-bundle.ts';
+
+const tmpDirs: string[] = [];
+
+async function tempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  tmpDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  const dirs = tmpDirs.splice(0);
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 function fillStep(index: number, selector: string, value: string, ref?: string): RefinedStep {
   const step: RefinedStep = {
@@ -57,6 +71,8 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(extracted.dataset.values.user).toBe('alice');
     expect(extracted.dataset.values.password).toBe('s3cret');
     expect(extracted.dataset.secrets).toContain('password');
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments).toBeUndefined();
+    expect(extracted.scenario.steps[1]?.action.descriptor.arguments).toBeUndefined();
   });
 
   it('preserves duplicate explicit parameterRef as a shared variable (R4a)', () => {
@@ -124,7 +140,7 @@ describe('Lot 7 F-48 parameterization', () => {
   });
 
   it('applies --dataset from JSON on disk', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-ds-'));
+    const dir = await tempDir('spyglass-lot7-ds-');
     const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
     const datasetPath = join(dir, 'bob.json');
     await writeFile(
@@ -149,7 +165,7 @@ describe('Lot 7 F-48 parameterization', () => {
   });
 
   it('writes datasets next to the generated package', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-gends-'));
+    const dir = await tempDir('spyglass-lot7-gends-');
     const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
     const paths = await writeGeneratedDatasets(dir, extracted.dataset);
     const recorded = parseDataset(JSON.parse(await readFile(paths.recorded, 'utf8')));
@@ -161,7 +177,7 @@ describe('Lot 7 F-48 parameterization', () => {
   });
 
   it('writeGeneratedPackage emits datasets/recorded.json and example.json', async () => {
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-genpkg-'));
+    const sessionDir = await tempDir('spyglass-lot7-genpkg-');
     const paths = await writeGeneratedPackage({
       sessionDir,
       scenario: loginScenario('alice', 's3cret')
@@ -180,8 +196,7 @@ describe('Lot 7 F-48 parameterization', () => {
 
   it('fails fast when a dataset omits a required parameterRef (P2a)', () => {
     const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
-    const recordedSecret = extracted.scenario.steps[1]?.action.descriptor.arguments?.[0];
-    expect(recordedSecret).toBe('s3cret');
+    expect(extracted.scenario.steps[1]?.action.descriptor.arguments).toBeUndefined();
     expect(() =>
       applyDataset(extracted.scenario, {
         schemaVersion: 1,
@@ -190,7 +205,7 @@ describe('Lot 7 F-48 parameterization', () => {
         secrets: ['password']
       })
     ).toThrow(/dataset is missing parameterRef: password/);
-    expect(extracted.scenario.steps[1]?.action.descriptor.arguments?.[0]).toBe('s3cret');
+    expect(extracted.scenario.steps[1]?.action.descriptor.arguments).toBeUndefined();
   });
 
   it('applies an empty-string value that is present in the dataset (P2a)', () => {
@@ -204,8 +219,39 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(applied.steps[1]?.action.descriptor.arguments?.[0]).toBe('');
   });
 
+  it('strips descriptor.arguments when assigning parameterRef (L7-070)', () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    expect(extracted.dataset.values.password).toBe('s3cret');
+    for (const step of extracted.scenario.steps) {
+      expect(step.action.descriptor.arguments).toBeUndefined();
+    }
+  });
+
+  it('blanks otp/pin/cvv/apikey/ssn in the example dataset (L7-071)', () => {
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/pay',
+      steps: [
+        fillStep(0, '#otp', '111111'),
+        fillStep(1, '#pin', '4321'),
+        fillStep(2, '#cvv', '123'),
+        fillStep(3, '#apikey', 'live-key'),
+        fillStep(4, '#ssn', '123-45-6789')
+      ]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.dataset.secrets).toEqual(['otp', 'pin', 'cvv', 'apikey', 'ssn']);
+    const example = exampleDataset(extracted.dataset);
+    expect(example.values.otp).toBe('');
+    expect(example.values.pin).toBe('');
+    expect(example.values.cvv).toBe('');
+    expect(example.values.apikey).toBe('');
+    expect(example.values.ssn).toBe('');
+  });
+
   it('resolves a relative dataset path from scriptDir (L7-014)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-scriptdir-'));
+    const dir = await tempDir('spyglass-lot7-scriptdir-');
     const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
     await writeFile(
       join(dir, 'bob.json'),
@@ -232,7 +278,7 @@ describe('Lot 7 F-48 parameterization', () => {
 
 describe('Lot 7 F-47 session export/import', () => {
   it('round-trips an autonomous session folder', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-sess-'));
+    const root = await tempDir('spyglass-lot7-sess-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -258,7 +304,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses path-traversal session ids', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-badid-'));
+    const root = await tempDir('spyglass-lot7-badid-');
     await writeFile(
       join(root, 'meta.json'),
       `${JSON.stringify({ sessionId: '../escape', schemaVersion: 1 }, null, 2)}\n`,
@@ -270,7 +316,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses dot-segment session ids and does not rm the sessions root (L7-007)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-dotid-'));
+    const root = await tempDir('spyglass-lot7-dotid-');
     const sessionsRoot = join(root, 'sessions');
     await mkdir(sessionsRoot, { recursive: true });
     const marker = join(sessionsRoot, 'keep.txt');
@@ -291,7 +337,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses import when dest is the source session (L7-013)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-overlap-'));
+    const root = await tempDir('spyglass-lot7-overlap-');
     const sessionDir = join(root, 'ses_overlap');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -308,7 +354,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses export when dest is inside the source session (L7-020)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-export-in-'));
+    const root = await tempDir('spyglass-lot7-export-in-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -325,7 +371,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('replaces an existing dest when overwrite is set so stale files are not kept (L7-020)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-reexport-'));
+    const root = await tempDir('spyglass-lot7-reexport-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -346,7 +392,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses export to a non-empty destination without overwrite (O7a)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-export-busy-'));
+    const root = await tempDir('spyglass-lot7-export-busy-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -363,7 +409,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses import when a session with the same id already exists (I7a)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-import-exists-'));
+    const root = await tempDir('spyglass-lot7-import-exists-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -383,7 +429,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses import when the bundle contains a symlink (L7-039)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-symlink-import-'));
+    const root = await tempDir('spyglass-lot7-symlink-import-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -398,7 +444,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('refuses a symlink meta.json before reading it (L7-064)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-meta-symlink-'));
+    const root = await tempDir('spyglass-lot7-meta-symlink-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -416,7 +462,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('recovers an orphaned backup then refuses to overwrite it (L7-040 / L7-063)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-orphan-'));
+    const root = await tempDir('spyglass-lot7-orphan-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(
@@ -436,7 +482,7 @@ describe('Lot 7 F-47 session export/import', () => {
   });
 
   it('restores the newest orphaned backup when dest is missing (L7-058)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-orphan-mtime-'));
+    const root = await tempDir('spyglass-lot7-orphan-mtime-');
     const sessionDir = join(root, 'ses_export');
     await mkdir(sessionDir, { recursive: true });
     await writeFile(

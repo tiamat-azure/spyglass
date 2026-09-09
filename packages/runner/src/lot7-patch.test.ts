@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -9,7 +9,7 @@ import type {
   SuggestedPatch,
   SuggestedPatchEntry
 } from '@spyglass/contracts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   applyAssistedPatches,
   assertAssistedApplyAllowed,
@@ -32,6 +32,18 @@ import { type Recoverer, StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
 const execFileAsync = promisify(execFile);
+const tmpDirs: string[] = [];
+
+async function tempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  tmpDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  const dirs = tmpDirs.splice(0);
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 function clickStep(index: number, selector: string): RefinedStep {
   return {
@@ -241,7 +253,7 @@ describe('Lot 7 F-62 / CA-14 illegal scopes', () => {
 
 describe('Lot 7 F-64 assisted git/PR path', () => {
   it('does not apply when PATCH_ASSISTED_APPLY is false', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-off-'));
+    const dir = await tempDir('spyglass-lot7-off-');
     const scenarioPath = join(dir, 'scenario.json');
     const scn = scenario([clickStep(0, '#old')]);
     await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
@@ -265,7 +277,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('refuses a dirty worktree and never commits the default branch', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-git-'));
+    const dir = await tempDir('spyglass-lot7-git-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -294,7 +306,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('creates a dedicated branch and prepares a PR without merging after two matching runs', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-pr-'));
+    const dir = await tempDir('spyglass-lot7-pr-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -345,7 +357,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('does not claim PR preparation when git push fails (L7-002)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-pushfail-'));
+    const dir = await tempDir('spyglass-lot7-pushfail-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -382,7 +394,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('replaces the descriptor with the confirmed suggestion only (L7-003)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-desc-'));
+    const dir = await tempDir('spyglass-lot7-desc-');
     await initGitRepo(dir);
     const stale = clickStep(0, '#old');
     stale.action.descriptor.fallbackSelectors = ['#stale'];
@@ -417,7 +429,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('refuses a scenario.json symlink that escapes --repo (L7-009)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-symlink-'));
+    const root = await tempDir('spyglass-lot7-symlink-');
     const repo = join(root, 'repo');
     const outside = join(root, 'outside');
     await mkdir(repo, { recursive: true });
@@ -451,7 +463,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('refuses when the scenario parent cannot be realpath-ed (L7-056)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-missing-parent-'));
+    const dir = await tempDir('spyglass-lot7-missing-parent-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'nope', 'nested', 'scenario.json');
@@ -475,7 +487,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('resolves a relative scenario path against the repo root (L7-036)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-relpath-'));
+    const dir = await tempDir('spyglass-lot7-relpath-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -501,7 +513,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('keeps ok:true without incrementing health when preparePr throws (H5b)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-prthrow-'));
+    const dir = await tempDir('spyglass-lot7-prthrow-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -538,7 +550,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-commitfail-'));
+    const dir = await tempDir('spyglass-lot7-commitfail-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -570,7 +582,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('returns git-error when checkout -b fails and restores starting branch (L7-025)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-checkout-b-'));
+    const dir = await tempDir('spyglass-lot7-checkout-b-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -610,7 +622,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('reloads scenario.json from the default branch after checkout (L7-048)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-reload-default-'));
+    const dir = await tempDir('spyglass-lot7-reload-default-');
     await initGitRepo(dir);
     const mainStep = clickStep(0, '#old');
     mainStep.intent = 'from-main';
@@ -646,7 +658,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
   });
 
   it('refuses a fill step with a click suggestion without rewriting type (L7-049)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-type-mismatch-'));
+    const dir = await tempDir('spyglass-lot7-type-mismatch-');
     await initGitRepo(dir);
     const scn = scenario([fillStep(0, '#email', 'recorded', 'email')]);
     const scenarioPath = join(dir, 'scenario.json');
@@ -688,6 +700,10 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     }
     const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
     expect(branch.stdout.trim()).toBe('main');
+    const dangling = await execFileAsync('git', ['branch', '--list', 'spyglass/patch-*'], {
+      cwd: dir
+    });
+    expect(dangling.stdout.trim()).toBe('');
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.type).toBe('fill');
     expect(onDisk.steps[0]?.action.descriptor.type).toBe('fill');
@@ -696,8 +712,59 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
     ).toEqual({ type: 'fill', selector: '#email', arguments: ['recorded'] });
   });
 
+  it('surfaces checkout -f restore failure in the refusal reason (L7-066)', async () => {
+    const dir = await tempDir('spyglass-lot7-restore-fail-');
+    await initGitRepo(dir);
+    const scn = scenario([fillStep(0, '#email', 'recorded', 'email')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    const suggested: SuggestedPatch = {
+      schemaVersion: 1,
+      runId: 'run_b',
+      sessionId: 'ses_lot7',
+      applied: false,
+      patches: [
+        {
+          stepIndex: 0,
+          scope: 'action.descriptor',
+          original: { type: 'fill', selector: '#email', arguments: ['recorded'] },
+          suggested: { type: 'click', selector: '#new' },
+          diagnosis: 'type drift',
+          confidence: 0.9
+        }
+      ]
+    };
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, { ...suggested, runId: 'run_a' }, policy);
+    health = recordSuggestedPatches(health, suggested, policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'checkout' && args[1] === '-f') {
+        return { stdout: '', stderr: 'fatal: cannot checkout starting branch', code: 128 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested,
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('type-mismatch');
+      expect(result.reason).toMatch(/also failed to restore main/);
+      expect(result.reason).toMatch(/cannot checkout starting branch/);
+    }
+  });
+
   it('maps non-git apply failures to internal-error (L7-052)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-internal-'));
+    const root = await tempDir('spyglass-lot7-internal-');
     const repo = join(root, 'repo');
     const sessionDir = join(root, 'session');
     await mkdir(repo, { recursive: true });
@@ -744,7 +811,7 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
 
 describe('Lot 7 health.json wiring after recovery', () => {
   it('records a candidate after a recovered run and does not mutate suggested-patch applied', async () => {
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-health-'));
+    const sessionDir = await tempDir('spyglass-lot7-health-');
     const reportDir = join(sessionDir, 'runs', 'run_lot7');
     await mkdir(reportDir, { recursive: true });
     const driver = new MemoryPageDriver({
@@ -774,7 +841,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
   });
 
   it('resets candidates after a clean success so a later recovery does not promote (L7-028)', async () => {
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-clean-run-'));
+    const sessionDir = await tempDir('spyglass-lot7-clean-run-');
     const broken = clickStep(0, '#target');
     broken.verification.expected = '#alive';
     broken.verification.timeoutMs = 50;
@@ -831,7 +898,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
   });
 
   it('does not write dataset secrets into scenario.json on assisted apply (L7-019)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-dataset-persist-'));
+    const root = await tempDir('spyglass-lot7-dataset-persist-');
     const repo = join(root, 'repo');
     const sessionDir = join(root, 'session');
     await mkdir(repo, { recursive: true });
@@ -905,7 +972,7 @@ describe('resolveSessionDir', () => {
 
 describe('saveHealth schema', () => {
   it('round-trips a valid health.json', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-save-'));
+    const dir = await tempDir('spyglass-lot7-save-');
     const health = emptyHealth('ses_lot7');
     await saveHealth(dir, health);
     const disk = JSON.parse(await readFile(join(dir, 'health.json'), 'utf8')) as unknown;
@@ -913,13 +980,13 @@ describe('saveHealth schema', () => {
   });
 
   it('returns empty health when health.json is missing (L7-010)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-enoent-'));
+    const dir = await tempDir('spyglass-lot7-enoent-');
     const health = await loadHealth(dir, 'ses_lot7');
     expect(health).toEqual(emptyHealth('ses_lot7'));
   });
 
   it('throws on corrupt health.json and does not replace the file (L7-010)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-corrupt-'));
+    const dir = await tempDir('spyglass-lot7-corrupt-');
     const path = join(dir, 'health.json');
     await writeFile(path, '{not json', 'utf8');
     await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(/corrupt health.json: invalid JSON/);
@@ -927,7 +994,7 @@ describe('saveHealth schema', () => {
   });
 
   it('throws on schema-invalid health.json (L7-010)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-badschema-'));
+    const dir = await tempDir('spyglass-lot7-badschema-');
     const path = join(dir, 'health.json');
     await writeFile(path, `${JSON.stringify({ schemaVersion: 1 })}\n`, 'utf8');
     await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(
@@ -937,7 +1004,7 @@ describe('saveHealth schema', () => {
   });
 
   it('throws when loaded health.json sessionId does not match (L7-050)', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-session-mismatch-'));
+    const dir = await tempDir('spyglass-lot7-session-mismatch-');
     const foreign = {
       schemaVersion: 1,
       sessionId: 'ses_other',

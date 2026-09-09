@@ -68,6 +68,7 @@ export function chooseWhisperModel(input: {
   largePath?: string;
   smallPath?: string;
   largeFallback: boolean;
+  modelDir?: string;
 }): SttModelChoice {
   if (input.largePath !== undefined && input.largePath.length > 0 && !input.largeFallback) {
     return { file: input.largePath, kind: 'large', fallback: false };
@@ -75,7 +76,8 @@ export function chooseWhisperModel(input: {
   if (input.smallPath !== undefined && input.smallPath.length > 0) {
     return { file: input.smallPath, kind: 'small', fallback: input.largeFallback };
   }
-  return { file: STT_SMALL_MODEL_FILE, kind: 'small', fallback: input.largeFallback };
+  const modelDir = input.modelDir !== undefined && input.modelDir.length > 0 ? input.modelDir : '.';
+  return { file: smallModelPath(modelDir), kind: 'small', fallback: input.largeFallback };
 }
 
 export function shouldFallbackToSmall(latencyMs: number, budgetMs: number): boolean {

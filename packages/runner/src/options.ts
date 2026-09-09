@@ -204,18 +204,18 @@ export function parseRunnerArgv(
       index += 1;
       continue;
     }
-    if (arg === '--repo' && next !== undefined) {
-      repo = next;
+    if (arg === '--repo') {
+      repo = requireFlagValue(arg, next);
       index += 1;
       continue;
     }
-    if (arg === '--dataset' && next !== undefined) {
-      datasetPath = next;
+    if (arg === '--dataset') {
+      datasetPath = requireFlagValue(arg, next);
       index += 1;
       continue;
     }
-    if (arg === '--session-dir' && next !== undefined) {
-      sessionDir = next;
+    if (arg === '--session-dir') {
+      sessionDir = requireFlagValue(arg, next);
       index += 1;
       continue;
     }
@@ -249,16 +249,15 @@ export function parseRunnerArgv(
   if (scenarioPath !== undefined) {
     parsed.scenarioPath = scenarioPath;
   }
-  if (repo !== undefined && repo.length > 0) {
-    parsed.repo = repo;
-  }
-  if (datasetPath !== undefined && datasetPath.length > 0) {
-    parsed.datasetPath = datasetPath;
-  }
-  if (sessionDir !== undefined && sessionDir.length > 0) {
-    parsed.sessionDir = sessionDir;
-  }
   return parsed;
+}
+
+/** L7-069: a following token that looks like a flag means the value was omitted. */
+function requireFlagValue(flag: string, next: string | undefined): string {
+  if (next === undefined || next.startsWith('-')) {
+    throw new Error(`${flag} requires a value`);
+  }
+  return next;
 }
 
 /**

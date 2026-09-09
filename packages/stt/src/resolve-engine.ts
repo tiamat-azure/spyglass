@@ -68,7 +68,8 @@ export async function createEngineFromEnv(
         const choice = chooseWhisperModel({
           ...(largeOk ? { largePath } : {}),
           ...(smallOk ? { smallPath } : {}),
-          largeFallback: fallback
+          largeFallback: fallback,
+          modelDir
         });
         if (choice.kind === 'small') {
           if (explicitOk && basename(explicit) !== STT_LARGE_MODEL_FILE) {

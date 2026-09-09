@@ -13,7 +13,7 @@ export type ScenarioDataset = {
   secrets: string[];
 };
 
-const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp/iu;
+const SECRET_NAME = /pass|secret|token|pwd|motdepasse|mdp|otp|pin|cvv|apikey|api[_-]?key|ssn/iu;
 
 export function parameterNameFromStep(step: RefinedStep, used: Set<string>): string | undefined {
   if (step.action.parameterRef !== undefined && step.action.parameterRef.trim().length > 0) {
@@ -53,12 +53,14 @@ export function extractScenarioParameters(scenario: Scenario): {
     if (isSecretName(name) || looksMasked(value)) {
       secrets.push(name);
     }
+    const descriptor = cloneDescriptor(step.action.descriptor);
+    delete descriptor.arguments;
     return {
       ...step,
       action: {
         ...step.action,
         parameterRef: name,
-        descriptor: cloneDescriptor(step.action.descriptor)
+        descriptor
       }
     };
   });

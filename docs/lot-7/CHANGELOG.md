@@ -231,6 +231,28 @@
 AbortError / cancellation vs first-use latency remains unchanged
 (ask-user).
 
+## Pass-9 adversarial fixes (L7-066 … L7-073)
+
+- **L7-066:** Restoring `startingBranch` with `checkout -f` no longer
+  swallows failure. The error is logged and appended to the refusal
+  reason (`also failed to restore …`).
+- **L7-067:** After a refusal on a created `spyglass/patch-*` branch
+  (type-mismatch / default-branch / apply catch), restore HEAD then
+  best-effort `git branch -D` the dangling patch branch.
+- **L7-068:** Drop dead post-`resolveRunnerOptions` re-assignments of
+  `--repo` / `--dataset` / `--session-dir` (empty values already filtered).
+- **L7-069:** `--repo` / `--dataset` / `--session-dir` reject a missing
+  value when the next token is absent or starts with `-`.
+- **L7-070:** `extractScenarioParameters` deletes `descriptor.arguments`
+  when assigning `parameterRef` (secrets stay in the dataset only).
+- **L7-071:** Example-dataset secret names also match otp / pin / cvv /
+  apikey / api_key / ssn.
+- **L7-072:** `lot7-*.test.ts` remove `mkdtemp` dirs in `afterEach`.
+- **L7-073:** `chooseWhisperModel` final small fallback is
+  `smallModelPath(modelDir)`, not the bare `ggml-small-q5_1.bin` filename.
+
+Ask-user F8 (AbortError / first-use latency) remains unchanged.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

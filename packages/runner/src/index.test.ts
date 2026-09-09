@@ -155,6 +155,18 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
     expect(parsed.datasetPath).toBeUndefined();
     expect(parsed.sessionDir).toBeUndefined();
   });
+
+  it('rejects --repo/--dataset/--session-dir when the next token is a flag (L7-069)', () => {
+    expect(() => parseRunnerArgv(['s.json', '--repo', '--headless'], {})).toThrow(
+      /--repo requires a value/
+    );
+    expect(() => parseRunnerArgv(['s.json', '--dataset', '--no-ai'], {})).toThrow(
+      /--dataset requires a value/
+    );
+    expect(() => parseRunnerArgv(['s.json', '--session-dir', '--trace'], {})).toThrow(
+      /--session-dir requires a value/
+    );
+  });
 });
 
 describe('F-50 deterministic replay without LLM', () => {

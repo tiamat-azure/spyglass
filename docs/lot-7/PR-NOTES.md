@@ -61,14 +61,14 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 
 | Command | Result |
 |---|---|
-| `pnpm lint` | pass (267 files) |
+| `pnpm lint` | pass (268 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **513 passed**, 1 skipped (59 files) |
+| `pnpm test` | **518 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (33), `lot7-parameters.test.ts` (23),
-`upgrade.test.ts` (12), `stt-upgrade-store.test.ts` (5).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (34), `lot7-parameters.test.ts` (25),
+`upgrade.test.ts` (13), `stt-upgrade-store.test.ts` (5).
 
 ### Screenshots (illustrative fixtures)
 
@@ -130,6 +130,7 @@ are in `CHANGELOG.md`.
 Pass-8 (L7-060 … L7-064) is in `CHANGELOG.md`.
 macOS Electron e2e close hang (timeout + `SIGKILL`, popup `noWaitAfter`)
 is in `CHANGELOG.md`.
+Pass-9 (L7-066 … L7-073) is in `CHANGELOG.md`.
 
 ## Residuals
 
