@@ -1196,6 +1196,9 @@ Ask-user still held: I30, C31, W31, R32.
   `STT_LARGE_SHA256` (S4a / E18a). Already-present CLI remains size-only
   skip (L7-225 / L7-229). A30a `missing-session-dir` unchanged.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**717 passed**, 1 skipped (62 files).
+
 Ask-user still held: C31, W31, R32.
 
 ## CI — macOS Electron e2e close hang
