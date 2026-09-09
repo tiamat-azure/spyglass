@@ -2136,7 +2136,10 @@ describe('loadHealth H21a runIds migration', () => {
   it('fills missing runIds from lastRunId without bumping schemaVersion', async () => {
     const dir = await tempDir('spyglass-lot7-h21a-missing-');
     const fixtureText = await readFile(
-      new URL('../../../docs/contracts/examples/invalid/health.missing-runids.json', import.meta.url),
+      new URL(
+        '../../../docs/contracts/examples/invalid/health.missing-runids.json',
+        import.meta.url
+      ),
       'utf8'
     );
     const path = join(dir, 'health.json');
@@ -2240,7 +2243,9 @@ describe('loadHealth H21a runIds migration', () => {
       src.indexOf('export async function saveHealth')
     );
     expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeGreaterThan(-1);
-    expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeLessThan(loadFn.indexOf('validateHealth'));
+    expect(loadFn.indexOf('migrateHealthPatchCandidates')).toBeLessThan(
+      loadFn.indexOf('validateHealth')
+    );
   });
 
   it('does not invent schemaVersion when migrating', () => {

@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (274 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **619 passed**, 1 skipped (62 files) |
+| `pnpm test` | **626 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (60), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (45),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (67), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (45),
 `upgrade.test.ts` (24), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
