@@ -623,6 +623,9 @@ Applied on tip `82534d31852610a8fe50a61eed350c8dfa24f6bd`. Prior locks
   `process.argv.slice(2)` / `process.env` defaults. Documented in JSDoc,
   README, generated README, and this file alongside S44b.
 
+Unit tests after this pass: **414 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
