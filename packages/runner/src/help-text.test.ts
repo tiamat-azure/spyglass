@@ -44,7 +44,8 @@ describe('shared F-58 help text (H29a / L6-029)', () => {
     expect(start).toBeGreaterThan(-1);
     const body = run.slice(start);
     expect(body).toContain('dirname(resolve(scenarioPath))');
-    expect(body).not.toMatch(/\bresolve\(datasetPath\)/);
+    expect(body).toContain('not process.cwd() (D27a)');
+    expect(body).not.toContain('scriptDir ?? fromScenario');
     const cli = await readFile(join(repoRoot(), 'packages/runner/src/cli.ts'), 'utf8');
     expect(cli).toContain('resolve(dirname(scenarioPath), parsed.datasetPath)');
   });
