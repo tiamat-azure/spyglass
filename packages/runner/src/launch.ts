@@ -81,6 +81,8 @@ export async function launchPlaywrightRun(
 /**
  * Report output directory (A19a). Relative `--report` is resolved from `baseDir`
  * (scenario file directory for `spyglass-run` / generated `scriptDir`), not cwd.
+ * Absolute `--report` stays absolute after `resolve(reportDir)` (L6-076 Windows
+ * drive-letter canonicalization).
  */
 export function resolveReportDir(
   reportDir: string | undefined,
@@ -88,7 +90,7 @@ export function resolveReportDir(
   runId: string
 ): string {
   if (reportDir !== undefined && reportDir.length > 0) {
-    return isAbsolute(reportDir) ? reportDir : resolve(baseDir, reportDir);
+    return isAbsolute(reportDir) ? resolve(reportDir) : resolve(baseDir, reportDir);
   }
   return runPath(baseDir, '..', 'runs', runId);
 }

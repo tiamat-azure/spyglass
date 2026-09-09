@@ -117,13 +117,16 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
     }
   });
 
-  it('resolves relative --report from the scenario directory, not cwd (A19a)', () => {
+  it('resolves relative --report from the scenario directory, not cwd (A19a / L6-076)', async () => {
     const scenarioDir = join(tmpdir(), 'spyglass-a19a-scenario');
     expect(resolveReportDir('out', scenarioDir, 'run_x')).toBe(resolve(scenarioDir, 'out'));
     expect(resolveReportDir('/abs/reports', scenarioDir, 'run_x')).toBe(resolve('/abs/reports'));
     expect(resolveReportDir(undefined, scenarioDir, 'run_x')).toBe(
       runPath(scenarioDir, '..', 'runs', 'run_x')
     );
+    const src = await readFile(new URL('./launch.ts', import.meta.url), 'utf8');
+    expect(src).toContain('isAbsolute(reportDir) ? resolve(reportDir)');
+    expect(src).not.toContain('isAbsolute(reportDir) ? reportDir');
   });
 
   it('disables recovery when CI=1 unless --ai, and --no-ai always wins', () => {
