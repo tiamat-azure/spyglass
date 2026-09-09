@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (268 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **542 passed**, 1 skipped (59 files) |
+| `pnpm test` | **543 passed**, 1 skipped (59 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (39), `lot7-parameters.test.ts` (33),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (39), `lot7-parameters.test.ts` (34),
 `upgrade.test.ts` (14), `stt-upgrade-store.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -141,6 +141,8 @@ Pass-12 (L7-083 … L7-090) is in `CHANGELOG.md`.
 Captain lock **S11a** (skip fail/recover screenshots for `parameterRef`
 steps) is in `CHANGELOG.md`.
 Pass-13 (L7-091 … L7-098) is in `CHANGELOG.md`.
+Captain lock **D11a** (`generated/datasets/recorded.json` is local-only
+plaintext secrets; gitignored) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -152,8 +154,9 @@ Pass-13 (L7-091 … L7-098) is in `CHANGELOG.md`.
   `dataset.values[name]`. No conflict warn/error (Captain lock).
 - **S11a:** Recovery/fail screenshots are skipped for parameterized
   scenarios so filled secrets are not written to screenshot artifacts.
-- **D11** ask-user: gitignore `datasets/recorded.json` vs document
-  plaintext-on-disk risk (unchanged).
+- **D11a:** `generated/datasets/recorded.json` is plaintext captured
+  values (including secrets). Gitignored; do not commit. Use
+  `datasets/example.json` as the template.
 - **P12** ask-user: PR-prep failure remains `ok: true` +
   `prPrepared: false` (H5b). L7-084 / L7-094 only make a retry
   recoverable; they do not change the ok/prPrepared contract.

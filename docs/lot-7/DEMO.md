@@ -33,6 +33,9 @@ candidates and leaves `suggested-patch.json` with `applied: false`.
 ## 3. Parameterized replay with distinct datasets
 
 Finalize writes `generated/datasets/recorded.json` and `example.json`.
+`generated/datasets/recorded.json` holds **plaintext captured values**
+(including secrets). It is gitignored (D11a) and must not be committed;
+use `datasets/example.json` as the committed template.
 
 ```bash
 node --experimental-transform-types scenario.ts --no-ai --dataset datasets/recorded.json

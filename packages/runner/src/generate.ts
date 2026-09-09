@@ -12,6 +12,7 @@ export const GENERATED_SCENARIO_JSON = 'scenario.json';
 export const GENERATED_SCENARIO_TS = 'scenario.ts';
 export const GENERATED_README = 'README.md';
 export const GENERATED_PACKAGE_JSON = 'package.json';
+export const GENERATED_GITIGNORE = '.gitignore';
 
 export type WriteGeneratedPackageInput = {
   sessionDir: string;
@@ -97,6 +98,7 @@ export async function writeGeneratedPackage(
       'utf8'
     );
     await writeGeneratedDatasets(staging, extracted.dataset);
+    await writeFile(runPath(staging, GENERATED_GITIGNORE), generatedGitignore(), 'utf8');
     const stagingTs = runPath(staging, GENERATED_SCENARIO_TS);
     await writeFile(stagingTs, generatedScenarioTsSource(), {
       encoding: 'utf8',
@@ -268,6 +270,15 @@ export function generatedPackageManifest(
   };
 }
 
+/** D11a: ignore plaintext captured dataset values in the generated package. */
+export function generatedGitignore(): string {
+  return [
+    '# D11a: plaintext captured fill/select values (including secrets). Local-only; do not commit.',
+    'datasets/recorded.json',
+    ''
+  ].join('\n');
+}
+
 export function generatedReadme(sessionId: string): string {
   return `# Script généré Spyglass
 
@@ -278,6 +289,9 @@ Session \`${sessionId}\`. Artefact **hybride** (ADR-0006, PRD §6.12) :
 | \`scenario.json\` | source de vérité du scénario raffiné |
 | \`scenario.ts\` | script mince : importe \`${RUNNER_PACKAGE}\` \`runScenario\` **sans** \`driver\` (Chromium Playwright autonome ; l'app passe un driver explicite) |
 | \`package.json\` | dépendance déclarée \`${RUNNER_PACKAGE}\` |
+| \`datasets/example.json\` | modèle de jeu de données (secrets vidés) |
+| \`datasets/recorded.json\` | valeurs capturées en clair — **ne pas committer** (D11a) |
+| \`.gitignore\` | ignore \`datasets/recorded.json\` |
 | \`README.md\` | ce mode d'emploi |
 
 Sans \`driver\`, \`runScenario\` lance Chromium Playwright et lit
@@ -362,7 +376,9 @@ répertoire du scénario (arborescence de session PRD §6.14), pas le cwd.
 
 Paramétrage (F-48) : \`datasets/recorded.json\` et \`datasets/example.json\`
 extraient les valeurs \`fill\` / \`select\` (y compris secrets) en variables.
-Rejouer avec un autre fichier :
+Ne commitez pas \`datasets/recorded.json\` : valeurs capturées en clair
+(secrets inclus), fichier local uniquement (D11a). Préférez
+\`datasets/example.json\` comme modèle. Rejouer avec un autre fichier :
 
 \`\`\`bash
 node --experimental-transform-types scenario.ts --no-ai --dataset datasets/example.json

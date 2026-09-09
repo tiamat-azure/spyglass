@@ -26,11 +26,13 @@ export type { GeneratedPackagePaths, WriteGeneratedPackageInput } from './genera
 export {
   discardGeneratedPackage,
   GENERATED_DIR_NAME,
+  GENERATED_GITIGNORE,
   GENERATED_PACKAGE_JSON,
   GENERATED_README,
   GENERATED_SCENARIO_JSON,
   GENERATED_SCENARIO_TS,
   generatedDir,
+  generatedGitignore,
   generatedPackageManifest,
   generatedReadme,
   generatedScenarioJsonPath,

@@ -370,6 +370,19 @@ plaintext-on-disk risk), **P12** (PR-prep `ok: false` vs `ok: true` +
 Ask-user still held: **D11**, **P12**, **P13** (strip proposed-side
 secret args in patches vs document residual).
 
+## Captain lock D11a (recorded.json local-only secrets)
+
+- **D11a:** `generated/datasets/recorded.json` (`GENERATED_DIR_NAME` /
+  `datasets/recorded.json`) holds plaintext captured fill/select values,
+  including secrets. The repo `.gitignore` lists
+  `**/generated/datasets/recorded.json`. Each generated package also
+  writes a `.gitignore` for `datasets/recorded.json`. Do not commit this
+  file; `datasets/example.json` is the blanked template.
+
+Ask-user still held: **P12** (PR-prep `ok: false` vs `ok: true` +
+`prPrepared: false`), **P13** (strip proposed-side secret args in
+patches vs document residual).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

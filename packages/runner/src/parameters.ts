@@ -169,6 +169,7 @@ export async function writeGeneratedDatasets(
   await mkdir(dir, { recursive: true });
   const recordedPath = join(dir, 'recorded.json');
   const examplePath = join(dir, 'example.json');
+  // D11a: recorded.json is plaintext captured values (including secrets). Gitignored.
   await writeFile(recordedPath, `${JSON.stringify(recorded, null, 2)}\n`, 'utf8');
   await writeFile(examplePath, `${JSON.stringify(exampleDataset(recorded), null, 2)}\n`, 'utf8');
   return { recorded: recordedPath, example: examplePath };

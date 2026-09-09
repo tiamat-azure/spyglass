@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, symlink, utimes, writeFile } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
+import { repoRoot } from '@spyglass/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeGeneratedPackage } from './generate.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
@@ -219,6 +220,23 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(generated.steps[0]?.action.parameterRef).toBe('user');
     expect(recorded.values.user).toBe('alice');
     expect(example.values.user).toBe('example_user');
+  });
+
+  it('gitignores generated/datasets/recorded.json as local-only secrets (D11a)', async () => {
+    const gitignore = await readFile(join(repoRoot(), '.gitignore'), 'utf8');
+    expect(gitignore).toContain('**/generated/datasets/recorded.json');
+    expect(gitignore).not.toContain('datasets/example.json');
+    const sessionDir = await tempDir('spyglass-lot7-d11a-');
+    const paths = await writeGeneratedPackage({
+      sessionDir,
+      scenario: loginScenario('alice', 's3cret')
+    });
+    const generatedIgnore = await readFile(join(paths.dir, '.gitignore'), 'utf8');
+    expect(generatedIgnore).toContain('datasets/recorded.json');
+    expect(generatedIgnore).not.toContain('example.json');
+    const readme = await readFile(paths.readme, 'utf8');
+    expect(readme).toMatch(/Ne commitez pas `datasets\/recorded\.json`/);
+    expect(readme).toMatch(/valeurs capturées en clair/);
   });
 
   it('fails fast when a dataset omits a required parameterRef (P2a)', () => {
