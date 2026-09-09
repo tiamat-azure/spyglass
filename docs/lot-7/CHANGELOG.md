@@ -1285,6 +1285,9 @@ Ask-user queue: clear.
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **734 passed**, 1 skipped (62 files).
 
+Windows `verify`: L7-243 containment test uses a cwd-relative `--repo`
+(`path.relative(cwd, tmpdir())` is absolute across drives).
+
 Ask-user still held: **D34**.
 
 ## CI — macOS Electron e2e close hang

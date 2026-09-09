@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   RefinedStep,
@@ -2518,9 +2518,11 @@ describe('resolveScenarioPath S28b', () => {
   });
 
   it('resolves a relative repo before containment (L7-243)', () => {
-    const relativeRepo = relative(process.cwd(), repo);
+    // Cwd-relative (not tmpdir): Windows path.relative() across drives is absolute.
+    const relativeRepo = join('spyglass-s28b-rel-repo');
     expect(isAbsolute(relativeRepo)).toBe(false);
-    const inside = resolve(repo, 'scenario.json');
+    const absRepo = resolve(relativeRepo);
+    const inside = resolve(absRepo, 'scenario.json');
     const result = resolveScenarioPath(inside, relativeRepo);
     expect(result.ok).toBe(true);
     if (result.ok) {
