@@ -701,6 +701,16 @@ Ask-user still held: **R19**, **D20**, **H21**.
 
 Ask-user still held: **D20**, **H21**.
 
+## Captain lock D20a (parameterRef without dataset fails fast)
+
+- **D20a:** A step with `parameterRef` and no resolved fill/select value
+  fails fast even without `--dataset` (same `dataset is missing
+  parameterRef` as P2a). Recorded parameterized scenarios cannot silently
+  replay empty args. An empty string that is present in the dataset remains
+  valid (P2a).
+
+Ask-user still held: **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

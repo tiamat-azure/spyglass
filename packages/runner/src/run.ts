@@ -24,7 +24,7 @@ import {
   resolveRunnerOptions,
   SMART_MODEL_PIN
 } from './options.ts';
-import { applyDataset, parseDataset } from './parameters.ts';
+import { applyDataset, assertParameterRefsResolved, parseDataset } from './parameters.ts';
 import { resolvePatchPolicy } from './patch-config.ts';
 import { loadDatasetFile, processSuggestedPatch } from './patch-lifecycle.ts';
 import {
@@ -820,6 +820,7 @@ async function scenarioWithDataset(
 ): Promise<Scenario> {
   const datasetPath = resolved.datasetPath ?? options.datasetPath;
   if (datasetPath === undefined || datasetPath.length === 0) {
+    assertParameterRefsResolved(scenario);
     return scenario;
   }
   const scriptDir = options.scriptDir;

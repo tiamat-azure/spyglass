@@ -116,10 +116,34 @@ export function applyDataset(scenario: Scenario, dataset: ScenarioDataset): Scen
     };
   });
   if (missing.length > 0) {
-    const unique = [...new Set(missing)];
-    throw new Error(`dataset is missing parameterRef: ${unique.join(', ')}`);
+    throwMissingParameterRefs(missing);
   }
   return { ...scenario, steps };
+}
+
+/**
+ * D20a / P2a: a `parameterRef` must have a resolved fill/select value.
+ * Missing `--dataset` is not a silent empty-arg replay.
+ */
+export function assertParameterRefsResolved(scenario: Scenario): void {
+  const missing: string[] = [];
+  for (const step of scenario.steps) {
+    const ref = step.action.parameterRef;
+    if (ref === undefined || ref.trim().length === 0) {
+      continue;
+    }
+    if (step.action.descriptor.arguments?.[0] === undefined) {
+      missing.push(ref.trim());
+    }
+  }
+  if (missing.length > 0) {
+    throwMissingParameterRefs(missing);
+  }
+}
+
+function throwMissingParameterRefs(refs: string[]): never {
+  const unique = [...new Set(refs)];
+  throw new Error(`dataset is missing parameterRef: ${unique.join(', ')}`);
 }
 
 export function parseDataset(value: unknown): ScenarioDataset {

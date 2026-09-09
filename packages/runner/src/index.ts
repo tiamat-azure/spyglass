@@ -93,6 +93,7 @@ export { RUNNER_PACKAGE, runnerPackageName } from './package-name.ts';
 export type { ScenarioDataset } from './parameters.ts';
 export {
   applyDataset,
+  assertParameterRefsResolved,
   DATASETS_DIR,
   exampleDataset,
   extractScenarioParameters,

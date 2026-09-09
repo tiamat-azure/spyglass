@@ -175,6 +175,8 @@ Captain lock **W18a** (`--large` ensures small F-39 fallback) is in
 `CHANGELOG.md`.
 Captain lock **R19a** (parameterized recovery blanks every
 `snapshot.values` entry) is in `CHANGELOG.md`.
+Captain lock **D20a** (`parameterRef` without a resolved dataset value
+fails fast even without `--dataset`) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -225,3 +227,6 @@ Captain lock **R19a** (parameterized recovery blanks every
   when missing so F-39 small fallback exists after a clean `--large` run.
 - **R19a:** Parameterized recovery blanks every `snapshot.values` entry
   (not only the recorded selector key). Aligns with L7-161.
+- **D20a:** `parameterRef` without a resolved dataset value fails fast
+  even when `--dataset` is omitted (no silent empty fill/select). Same
+  P2a error; empty string present in the dataset is still valid.

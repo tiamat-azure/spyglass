@@ -18,6 +18,7 @@ import { writeGeneratedPackage } from './generate.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import {
   applyDataset,
+  assertParameterRefsResolved,
   exampleDataset,
   extractScenarioParameters,
   parseDataset,
@@ -314,6 +315,14 @@ describe('Lot 7 F-48 parameterization', () => {
       })
     ).toThrow(/dataset is missing parameterRef: password/);
     expect(extracted.scenario.steps[1]?.action.descriptor.arguments).toBeUndefined();
+  });
+
+  it('fails fast when parameterRef has no dataset and no resolved args (D20a)', () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments).toBeUndefined();
+    expect(() => assertParameterRefsResolved(extracted.scenario)).toThrow(
+      /dataset is missing parameterRef: user, password/
+    );
   });
 
   it('applies an empty-string value that is present in the dataset (P2a)', () => {
@@ -739,6 +748,7 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(src.indexOf('skipParameterizedScreenshots(executable)')).toBeLessThan(
       src.indexOf('for (let index = 0; index < executable.steps.length')
     );
+    expect(src).toContain('assertParameterRefsResolved(scenario)');
   });
 
   it('skips fail/recover screenshots for parameterRef steps (S11a)', async () => {
@@ -868,6 +878,27 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(result.exitCode).toBe(1);
     expect(result.report.exitCode).toBe(1);
     expect(result.report.warnings.join('\n')).toMatch(/dataset:/);
+    expect(driver.fills).toEqual([]);
+  });
+
+  it('returns a failed ExecutionReport when parameterRef has no --dataset (D20a)', async () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.report.steps).toEqual([]);
+    expect(result.report.warnings.join('\n')).toMatch(
+      /dataset: dataset is missing parameterRef: user, password/
+    );
     expect(driver.fills).toEqual([]);
   });
 });
