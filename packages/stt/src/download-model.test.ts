@@ -217,6 +217,36 @@ describe('W3a fetch-whisper --large', () => {
     expect(header).not.toMatch(/packages\/stt/);
     expect(src).toMatch(/await import\(\s*'\.\.\/packages\/stt\/src\/download-model\.ts'/);
   });
+
+  it('ensures whisper-cli on --large before returning (C26a)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const largeStart = src.indexOf('if (large)');
+    const largeEnd = src.indexOf('const modelPath');
+    expect(largeStart).toBeGreaterThan(-1);
+    expect(largeEnd).toBeGreaterThan(largeStart);
+    const largeBlock = src.slice(largeStart, largeEnd);
+    expect(largeBlock).toContain('await ensureWhisperCli()');
+    expect(largeBlock.indexOf('await ensureWhisperCli()')).toBeLessThan(
+      largeBlock.lastIndexOf('return')
+    );
+    expect(largeBlock.indexOf('await ensureSmallFallback(')).toBeLessThan(
+      largeBlock.indexOf('await ensureWhisperCli()')
+    );
+    const fnStart = src.indexOf('async function ensureWhisperCli');
+    const fnEnd = src.indexOf('const SMALL_MIN_BYTES');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('existingCliOk');
+    expect(body).toContain('cliAsset()');
+    expect(body).toContain('await download(cli.url, archivePath)');
+    expect(body).toContain('extractArchive');
+    expect(body).toContain('findNamedFile');
+    expect(src.slice(largeEnd)).toContain('await ensureWhisperCli()');
+  });
 });
 
 describe('Lot 7 first-use latency isolation (L7-008)', () => {

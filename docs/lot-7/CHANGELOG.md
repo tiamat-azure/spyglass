@@ -845,6 +845,14 @@ Ask-user still held: W26, C26, I26 (not assumed).
 
 Ask-user still held: C26, I26.
 
+## Captain lock C26a (--large ensures whisper-cli)
+
+- **C26a:** `scripts/fetch-whisper.mjs --large` also ensures/downloads
+  `whisper-cli` (same helper as a plain fetch), not only the large/small
+  models. A clean `--large` run leaves a usable CLI + models.
+
+Ask-user still held: I26.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

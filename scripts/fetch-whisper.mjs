@@ -9,9 +9,11 @@
  * `node` invocation does not fail at import time. `--large` dynamically imports
  * the STT TypeScript modules (Node 24 type stripping).
  * W18a: `--large` ensures `ggml-small-q5_1.bin` (F-39 fallback) before returning.
+ * C26a: `--large` also ensures whisper-cli (same as a plain fetch), not models-only.
  */
-import { createWriteStream, statSync } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, copyFileSync, createWriteStream, readdirSync, statSync } from 'node:fs';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -21,6 +23,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, 'vendor/whisper');
 const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin';
 const MODEL_NAME = 'ggml-small-q5_1.bin';
+/** Skip empty/HTML stubs; a real whisper-cli binary is well above this. */
+const CLI_MIN_BYTES = 10_000;
 
 function cliAsset() {
   const plat = process.platform;
@@ -52,6 +56,96 @@ async function download(url, dest) {
     throw new Error(`GET ${url} → ${String(response.status)}`);
   }
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
+}
+
+function existingCliOk(dest) {
+  try {
+    const st = statSync(dest);
+    return st.isFile() && st.size >= CLI_MIN_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+function findNamedFile(dir, name) {
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) {
+      continue;
+    }
+    let names;
+    try {
+      names = readdirSync(current);
+    } catch {
+      continue;
+    }
+    for (const entry of names) {
+      const path = join(current, entry);
+      let st;
+      try {
+        st = statSync(path);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        stack.push(path);
+        continue;
+      }
+      if (st.isFile() && entry === name) {
+        return path;
+      }
+    }
+  }
+  return undefined;
+}
+
+function extractArchive(archivePath, extractDir) {
+  const result = spawnSync('tar', ['-xf', archivePath, '-C', extractDir], { encoding: 'utf8' });
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || String(result.status)).trim();
+    throw new Error(`tar extract failed: ${detail}`);
+  }
+}
+
+/**
+ * C26a: plain fetch and `--large` both leave a usable whisper-cli when a
+ * prebuilt URL exists. Skip only a valid existing binary.
+ */
+async function ensureWhisperCli() {
+  const cli = cliAsset();
+  if (cli === undefined) {
+    process.stdout.write(
+      'No prebuilt whisper-cli URL for this platform. Build whisper.cpp and copy whisper-cli into vendor/whisper/.\n'
+    );
+    return;
+  }
+  const dest = join(outDir, cli.name);
+  if (existingCliOk(dest)) {
+    process.stdout.write(`whisper-cli already present: ${dest}\n`);
+    return;
+  }
+  await rm(dest, { recursive: true, force: true });
+  const archiveName = cli.url.split('/').pop() ?? 'whisper-cli-archive';
+  const archivePath = join(outDir, `.${archiveName}`);
+  process.stdout.write(`Downloading ${cli.name}…\n`);
+  const extractDir = await mkdtemp(join(outDir, '.whisper-cli-'));
+  try {
+    await download(cli.url, archivePath);
+    extractArchive(archivePath, extractDir);
+    const found = findNamedFile(extractDir, cli.name);
+    if (found === undefined) {
+      throw new Error(`archive did not contain ${cli.name}`);
+    }
+    copyFileSync(found, dest);
+    if (process.platform !== 'win32') {
+      chmodSync(dest, 0o755);
+    }
+    process.stdout.write(`Wrote ${dest}\n`);
+  } finally {
+    await rm(archivePath, { force: true }).catch(() => undefined);
+    await rm(extractDir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 /** Reject truncated HTML/error bodies; real ggml-small-q5_1.bin is ~190MB. */
@@ -113,22 +207,14 @@ async function main() {
     });
     process.stdout.write(`Wrote ${largePath}\n`);
     await ensureSmallFallback(downloadResponseToFileAtomic);
+    await ensureWhisperCli();
     return;
   }
   const modelPath = join(outDir, MODEL_NAME);
   process.stdout.write(`Downloading ${MODEL_NAME} (offline STT weights, ~190MB)…\n`);
   await download(MODEL_URL, modelPath);
   process.stdout.write(`Wrote ${modelPath}\n`);
-  const cli = cliAsset();
-  if (cli === undefined) {
-    process.stdout.write(
-      'No prebuilt whisper-cli URL for this platform. Build whisper.cpp and copy whisper-cli into vendor/whisper/.\n'
-    );
-    return;
-  }
-  process.stdout.write(
-    `Prebuilt CLI URL (manual extract if the archive layout changes):\n  ${cli.url}\nPlace the binary at vendor/whisper/${cli.name}\n`
-  );
+  await ensureWhisperCli();
   process.stdout.write(
     'Then launch with SPYGLASS_STT_ENGINE=whisper (auto-selected when both files exist).\n'
   );

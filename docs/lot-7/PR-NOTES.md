@@ -63,7 +63,7 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (274 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **656 passed**, 1 skipped (62 files) |
+| `pnpm test` | **657 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
@@ -257,4 +257,5 @@ already-exists, skip Content-Length with `content-encoding`, in-process
 `createEngineFromEnv`, parameterized symlink errors, first-use persist
 warn, reuse `largeOk`, trim `STT_MODEL_PATH`. **W26a:** overwrite-false
 export vacates an empty dest before rename (Windows folder picker).
-Held: C26, I26.
+**C26a:** `--large` also ensures whisper-cli (same as a plain fetch).
+Held: I26.
