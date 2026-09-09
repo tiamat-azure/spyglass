@@ -166,11 +166,14 @@ export async function writeGeneratedDatasets(
   recorded: ScenarioDataset
 ): Promise<{ recorded: string; example: string }> {
   const dir = join(generatedDir, DATASETS_DIR);
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   const recordedPath = join(dir, 'recorded.json');
   const examplePath = join(dir, 'example.json');
-  // D11a: recorded.json is plaintext captured values (including secrets). Gitignored.
-  await writeFile(recordedPath, `${JSON.stringify(recorded, null, 2)}\n`, 'utf8');
+  // D11a / L7-137: recorded.json is plaintext captured values (including secrets).
+  await writeFile(recordedPath, `${JSON.stringify(recorded, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600
+  });
   await writeFile(examplePath, `${JSON.stringify(exampleDataset(recorded), null, 2)}\n`, 'utf8');
   return { recorded: recordedPath, example: examplePath };
 }

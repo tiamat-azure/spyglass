@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { writeFileAtomic } from './download-model.ts';
 
 /** Quantized large-v3-turbo (~575 Mo). Optional after install (ADR-0017). */
 export const STT_LARGE_MODEL_FILE = 'ggml-large-v3-turbo-q5_0.bin';
@@ -118,11 +119,8 @@ export async function readLargeFallback(modelDir: string): Promise<boolean> {
 
 export async function writeLargeFallback(modelDir: string, fallback: boolean): Promise<void> {
   await mkdir(modelDir, { recursive: true });
-  await writeFile(
-    join(modelDir, STT_FALLBACK_MARKER),
-    `${JSON.stringify({ fallback, at: new Date().toISOString() }, null, 2)}\n`,
-    'utf8'
-  );
+  const payload = `${JSON.stringify({ fallback, at: new Date().toISOString() }, null, 2)}\n`;
+  await writeFileAtomic(join(modelDir, STT_FALLBACK_MARKER), Buffer.from(payload));
 }
 
 export function largeModelPath(modelDir: string): string {

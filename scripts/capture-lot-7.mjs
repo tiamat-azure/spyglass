@@ -73,7 +73,7 @@ try {
     const htmlPath = join(tmp, htmlName);
     await writeFile(htmlPath, html, 'utf8');
     await driver.goto(pathToFileURL(htmlPath).href);
-    await driver.screenshot(join(shotDir, pngName));
+    await driver.screenshot({ path: join(shotDir, pngName) });
   }
 } finally {
   await driver?.close();

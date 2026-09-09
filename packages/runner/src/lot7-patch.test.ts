@@ -30,6 +30,7 @@ import {
 import {
   emptyHealth,
   healthStatus,
+  incrementAppliedPatches,
   loadHealth,
   recordSuggestedPatches,
   resolveSessionDir,
@@ -192,6 +193,11 @@ describe('Lot 7 F-63 confirmation', () => {
     health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
     expect(health.patchCandidates[0]?.consecutiveRuns).toBe(1);
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
+  });
+
+  it('increments appliedPatches by unique step indexes (L7-136)', () => {
+    const health = incrementAppliedPatches(emptyHealth('ses_lot7'), [0, 0, 1], policy);
+    expect(health.appliedPatches).toBe(2);
   });
 
   it('invalidates a candidate on an intervening run with no patch for that step (L7-001)', () => {
@@ -1371,6 +1377,50 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(working.steps[0]?.intent).toBe('from-feature');
     expect(working.steps[0]?.action.descriptor.selector).toBe('#old');
+    const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(patched.steps[0]?.intent).toBe('from-main');
+    expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
+  });
+
+  it('reloads default-branch scenario after recreating a leftover patch branch (L7-134)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7134-');
+    await initGitRepo(dir);
+    const mainStep = clickStep(0, '#old');
+    mainStep.intent = 'from-main';
+    const mainScn = scenario([mainStep]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(mainScn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const leftover = patchBranchName(
+      'ses_lot7',
+      patchSetHash([{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }])
+    );
+    await execFileAsync('git', ['checkout', '-b', leftover], { cwd: dir });
+    const staleStep = clickStep(0, '#old');
+    staleStep.intent = 'from-stale';
+    const staleScn = scenario([staleStep]);
+    await writeFile(scenarioPath, `${JSON.stringify(staleScn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'stale leftover'], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: staleScn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
     const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
     expect(patched.steps[0]?.intent).toBe('from-main');
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');

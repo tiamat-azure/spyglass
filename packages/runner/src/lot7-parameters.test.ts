@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  utimes,
+  writeFile
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
@@ -234,6 +244,12 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(example.values.user).toBe('example_user');
     expect(example.values.password).toBe('');
     expect(example.values.user).not.toBe(recorded.values.user);
+    if (process.platform !== 'win32') {
+      const dirMode = (await stat(join(dir, 'datasets'))).mode & 0o777;
+      const recordedMode = (await stat(paths.recorded)).mode & 0o777;
+      expect(dirMode).toBe(0o700);
+      expect(recordedMode).toBe(0o600);
+    }
   });
 
   it('writeGeneratedPackage emits datasets/recorded.json and example.json', async () => {
@@ -542,6 +558,9 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(src).not.toMatch(/JSON\.parse\(await readFile\(absolute/);
     expect(src).toContain('return scenario.steps.some(hasParameterRef)');
     expect(src).not.toContain('hasParameterRef(step) ||');
+    expect(src.indexOf('skipParameterizedScreenshots(executable)')).toBeLessThan(
+      src.indexOf('for (let index = 0; index < executable.steps.length')
+    );
   });
 
   it('skips fail/recover screenshots for parameterRef steps (S11a)', async () => {

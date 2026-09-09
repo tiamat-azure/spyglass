@@ -213,11 +213,14 @@ describe('packaged Observe', () => {
     expect(renderer).toContain('importSession');
     expect(renderer).toContain('sttUpgradeCopyDefault');
     expect(renderer).toContain('sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault');
-    const refuseIdx = renderer.indexOf('stt-upgrade-refuse');
+    expect(renderer).toContain('stt-upgrade-refuse');
+    const refuseIdx = renderer.indexOf('sttUpgradeRefuse.addEventListener');
     expect(refuseIdx).toBeGreaterThan(-1);
-    const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 700);
+    const refuseHandler = renderer.slice(refuseIdx, refuseIdx + 900);
     expect(refuseHandler).toContain('result.ok');
     expect(refuseHandler).toContain('sttUpgrade.hidden = true');
+    expect(refuseHandler).toContain('sttUpgradeRefuse.disabled = true');
+    expect(refuseHandler).toContain('sttUpgradeRefuse.disabled = false');
     const acceptIdx = renderer.indexOf('sttUpgradeAccept.addEventListener');
     expect(acceptIdx).toBeGreaterThan(-1);
     const acceptHandler = renderer.slice(acceptIdx, acceptIdx + 900);

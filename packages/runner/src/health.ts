@@ -187,7 +187,7 @@ export function incrementAppliedPatches(
   const applied = new Set(appliedStepIndexes);
   const next: ScenarioHealth = {
     ...health,
-    appliedPatches: health.appliedPatches + appliedStepIndexes.length,
+    appliedPatches: health.appliedPatches + applied.size,
     patchCandidates: health.patchCandidates.filter((entry) => !applied.has(entry.stepIndex))
   };
   next.status = healthStatus(next.appliedPatches, policy);

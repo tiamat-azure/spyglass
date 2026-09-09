@@ -505,6 +505,7 @@ const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
 const sttUpgradeCopy = requireEl<HTMLElement>('stt-upgrade-copy');
 const sttUpgradeCopyDefault = sttUpgradeCopy.innerHTML;
 const sttUpgradeAccept = requireEl<HTMLButtonElement>('stt-upgrade-accept');
+const sttUpgradeRefuse = requireEl<HTMLButtonElement>('stt-upgrade-refuse');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -915,10 +916,11 @@ sttUpgradeAccept.addEventListener('click', () => {
     });
 });
 
-requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () => {
-  if (api === undefined) {
+sttUpgradeRefuse.addEventListener('click', () => {
+  if (api === undefined || sttUpgradeRefuse.disabled) {
     return;
   }
+  sttUpgradeRefuse.disabled = true;
   void api.sttUpgrade
     .decide('refuse')
     .then((result) => {
@@ -930,6 +932,9 @@ requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () 
     })
     .catch(() => {
       sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    })
+    .finally(() => {
+      sttUpgradeRefuse.disabled = false;
     });
 });
 

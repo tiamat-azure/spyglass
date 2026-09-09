@@ -13,7 +13,8 @@ import {
   STT_LARGE_MODEL_FILE,
   STT_LARGE_SHA256,
   STT_SMALL_MODEL_FILE,
-  shouldProposeUpgrade
+  shouldProposeUpgrade,
+  writeLargeFallback
 } from './upgrade.ts';
 
 describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
@@ -132,6 +133,13 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-fb-bad-'));
     await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
     await expect(readLargeFallback(dir)).rejects.toThrow(/corrupt large-fallback.json/);
+  });
+
+  it('replaces a corrupt large-fallback.json atomically (L7-140)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7140-'));
+    await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
+    await writeLargeFallback(dir, true);
+    expect(await readLargeFallback(dir)).toBe(true);
   });
 
   it('ignores a corrupt large-fallback.json on a small-only setup (F16b)', async () => {

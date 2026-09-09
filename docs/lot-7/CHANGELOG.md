@@ -567,6 +567,27 @@ Ask-user still held: **A17**, **E18**, **M18**, **W18**.
 Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**
 (values-map scrub strategy).
 
+## Pass-20 adversarial fixes (L7-134 … L7-141)
+
+- **L7-134:** After deleting a leftover `spyglass/patch-*` and force-checkout
+  to `defaultBranch`, reload `scenario.json` from disk before type-mismatch /
+  commit. Do not keep `input.scenario` from the leftover branch (even when
+  apply started on the default branch).
+- **L7-135:** `stt-upgrade-refuse` is disabled while `decide('refuse')` is in
+  flight (same pattern as accept).
+- **L7-136:** `incrementAppliedPatches` adds `applied.size` (deduped step
+  indexes), not `appliedStepIndexes.length`.
+- **L7-137:** `writeGeneratedDatasets` creates `datasets/` as `0o700` and
+  `recorded.json` as `0o600` (D11a plaintext secrets).
+- **L7-138:** `skipParameterizedScreenshots(executable)` is computed once
+  above the per-step loop.
+- **L7-140:** `writeLargeFallback` publishes via `writeFileAtomic` (temp +
+  rename), not in-place truncate.
+- **L7-141:** `scripts/capture-lot-7.mjs` calls `driver.screenshot({ path })`.
+
+Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**
+(fail-fast missing dataset vs silent empty).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

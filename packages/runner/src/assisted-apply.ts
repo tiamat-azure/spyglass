@@ -285,6 +285,7 @@ export async function applyAssistedPatches(input: {
   // L7-084 / P12a: a prior ok:false / pr-prep-failed attempt leaves spyglass/patch-* around.
   // Reuse it and resume PR prep instead of failing checkout -b.
   let skipMutate = false;
+  let reloadScenarioFromDefault = false;
   if (await localBranchExists(git, repoRoot, branch)) {
     const ontoPatch = await checkoutOrGitError(git, repoRoot, starting, ['checkout', branch]);
     if (ontoPatch !== undefined) {
@@ -316,6 +317,8 @@ export async function applyAssistedPatches(input: {
             starting
           );
         }
+        // L7-134: disk is defaultBranch now; do not keep input.scenario from the leftover patch.
+        reloadScenarioFromDefault = true;
       }
     } catch (error) {
       const revertError = await restoreStartingBranch(git, repoRoot, starting);
@@ -336,7 +339,7 @@ export async function applyAssistedPatches(input: {
   if (skipMutate) {
     commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
   } else {
-    if (starting.name !== defaultBranch) {
+    if (starting.name !== defaultBranch || reloadScenarioFromDefault) {
       const headNow = await currentBranch(git, repoRoot);
       if (headNow !== defaultBranch) {
         const switched = await checkoutOrGitError(git, repoRoot, starting, [

@@ -110,11 +110,17 @@ export class PlaywrightPageDriver implements PageDriver {
     };
   }
 
-  async screenshot(filePath: string, options?: { fullPage?: boolean }): Promise<void> {
+  async screenshot(
+    filePath: string | { path: string; fullPage?: boolean },
+    options?: { fullPage?: boolean }
+  ): Promise<void> {
+    const path = typeof filePath === 'string' ? filePath : filePath.path;
+    const fullPage =
+      typeof filePath === 'string' ? options?.fullPage === true : filePath.fullPage === true;
     await this.page.screenshot({
-      path: filePath,
-      ...screenshotFormatForPath(filePath),
-      fullPage: options?.fullPage === true
+      path,
+      ...screenshotFormatForPath(path),
+      fullPage
     });
   }
 

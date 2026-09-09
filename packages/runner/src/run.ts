@@ -227,6 +227,7 @@ async function runScenarioOnDriver(
 
   const startUrl = joinBaseUrl(resolved.baseUrl, executable.startUrl);
   await options.driver.goto(startUrl);
+  const skipSecretShots = skipParameterizedScreenshots(executable);
 
   for (let index = 0; index < executable.steps.length; index += 1) {
     const step = executable.steps[index];
@@ -288,7 +289,6 @@ async function runScenarioOnDriver(
     let attempts = 1;
     let error: string | undefined = verify.ok ? undefined : verify.error;
     let screenshotRef: string | undefined;
-    const skipSecretShots = skipParameterizedScreenshots(executable);
 
     if (!verify.ok) {
       if (!skipSecretShots) {
