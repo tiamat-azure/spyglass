@@ -278,13 +278,24 @@ export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
   if (typeof input !== 'object') {
     return {};
   }
-  const record = input as { forceAi?: unknown; noAi?: unknown };
+  const record = input as {
+    forceAi?: unknown;
+    noAi?: unknown;
+    stepByStep?: unknown;
+    datasetPath?: unknown;
+  };
   const result: ReplayStartRequest = {};
   if (record.forceAi === true) {
     result.forceAi = true;
   }
   if (record.noAi === true) {
     result.noAi = true;
+  }
+  if (record.stepByStep === true) {
+    result.stepByStep = true;
+  }
+  if (typeof record.datasetPath === 'string' && record.datasetPath.length > 0) {
+    result.datasetPath = record.datasetPath;
   }
   return result;
 }
@@ -310,4 +321,23 @@ export function asPcmFrame(input: unknown, maxBytes = 65_536): Buffer | undefine
     return input;
   }
   return undefined;
+}
+
+export function parsePathPayload(input: unknown, key: 'destDir' | 'bundleDir'): string | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const value = (input as Record<string, unknown>)[key];
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined;
+  }
+  return value;
+}
+
+export function parseSttUpgradeDecide(input: unknown): 'accept' | 'refuse' | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const action = (input as { action?: unknown }).action;
+  return action === 'accept' || action === 'refuse' ? action : undefined;
 }

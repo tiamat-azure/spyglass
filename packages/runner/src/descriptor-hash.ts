@@ -1,0 +1,34 @@
+import { createHash } from 'node:crypto';
+import type { ReplayDescriptor } from '@spyglass/contracts';
+
+/** Canonical hash of a corrected action descriptor (F-63). */
+export function descriptorHash(descriptor: ReplayDescriptor): string {
+  const payload = JSON.stringify(canonicalize(descriptor));
+  return `sha256:${createHash('sha256').update(payload).digest('hex')}`;
+}
+
+function canonicalize(descriptor: ReplayDescriptor): Record<string, unknown> {
+  const record: Record<string, unknown> = {
+    type: descriptor.type,
+    selector: descriptor.selector
+  };
+  if (descriptor.selectorStrategy !== undefined) {
+    record.selectorStrategy = descriptor.selectorStrategy;
+  }
+  if (descriptor.description !== undefined) {
+    record.description = descriptor.description;
+  }
+  if (descriptor.fallbackSelectors !== undefined) {
+    record.fallbackSelectors = [...descriptor.fallbackSelectors];
+  }
+  if (descriptor.arguments !== undefined) {
+    record.arguments = [...descriptor.arguments];
+  }
+  if (descriptor.framePath !== undefined) {
+    record.framePath = [...descriptor.framePath];
+  }
+  if (descriptor.shadowPath !== undefined) {
+    record.shadowPath = [...descriptor.shadowPath];
+  }
+  return record;
+}

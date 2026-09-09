@@ -21,6 +21,9 @@ import type { SessionOrchestrator } from './session-orchestrator.ts';
 export type ReplayStartRequest = {
   forceAi?: boolean;
   noAi?: boolean;
+  /** F-59: pause before each step until next()/stop(). */
+  stepByStep?: boolean;
+  datasetPath?: string;
 };
 
 export type ReplayStartResponse =
@@ -43,8 +46,21 @@ export type ReplayEngineDeps = {
 
 export class ReplayEngine {
   private running = false;
+  private waiting: ((action: 'continue' | 'stop') => void) | undefined;
 
   constructor(private readonly deps: ReplayEngineDeps) {}
+
+  next(): void {
+    const waiting = this.waiting;
+    this.waiting = undefined;
+    waiting?.('continue');
+  }
+
+  stop(): void {
+    const waiting = this.waiting;
+    this.waiting = undefined;
+    waiting?.('stop');
+  }
 
   async start(request: ReplayStartRequest = {}): Promise<ReplayStartResponse> {
     if (this.running) {
@@ -90,8 +106,21 @@ export class ReplayEngine {
         env,
         runId,
         closeDriver: false,
+        sessionDir,
+        scenarioPath: generatedScenarioJsonPath(sessionDir),
+        ...(request.datasetPath !== undefined ? { datasetPath: request.datasetPath } : {}),
         ...(recoverer !== undefined ? { recoverer } : {}),
-        onProgress: this.deps.onProgress
+        onProgress: this.deps.onProgress,
+        ...(request.stepByStep === true
+          ? {
+              stepGate: {
+                wait: async () =>
+                  await new Promise<'continue' | 'stop'>((resolve) => {
+                    this.waiting = resolve;
+                  })
+              }
+            }
+          : {})
       });
       if (result.exitCode !== 0) {
         const failed = result.report.steps.find((step) => step.status === 'failed');
@@ -104,6 +133,7 @@ export class ReplayEngine {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
       this.running = false;
+      this.waiting = undefined;
       session.endReplay();
     }
   }

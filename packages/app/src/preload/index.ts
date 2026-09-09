@@ -32,7 +32,7 @@ import type {
 import { IPC } from '../shared/ipc.ts';
 
 const spyglass = {
-  lot: '5' as const,
+  lot: '7' as const,
   versions: {
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -249,16 +249,21 @@ const spyglass = {
     }
   },
   replay: {
-    start: async (forceAi?: boolean, noAi?: boolean) => {
-      const payload: { forceAi?: boolean; noAi?: boolean } = {};
+    start: async (forceAi?: boolean, noAi?: boolean, stepByStep?: boolean) => {
+      const payload: { forceAi?: boolean; noAi?: boolean; stepByStep?: boolean } = {};
       if (forceAi === true) {
         payload.forceAi = true;
       }
       if (noAi === true) {
         payload.noAi = true;
       }
+      if (stepByStep === true) {
+        payload.stepByStep = true;
+      }
       return ipcRenderer.invoke(IPC.replayStart, payload) as Promise<ReplayStartResponse>;
     },
+    next: async () => ipcRenderer.invoke(IPC.replayNext, {}) as Promise<{ ok: boolean }>,
+    stop: async () => ipcRenderer.invoke(IPC.replayStop, {}) as Promise<{ ok: boolean }>,
     onProgress: (callback: (payload: ReplayProgressPayload) => void): (() => void) => {
       const listener = (_event: unknown, payload: ReplayProgressPayload): void => {
         callback(payload);
@@ -266,6 +271,37 @@ const spyglass = {
       ipcRenderer.on(IPC.replayProgress, listener);
       return () => {
         ipcRenderer.removeListener(IPC.replayProgress, listener);
+      };
+    }
+  },
+  sessionBundle: {
+    exportTo: async (destDir: string) =>
+      ipcRenderer.invoke(IPC.sessionExport, { destDir }) as Promise<
+        { ok: true; dest: string; sessionId: string } | { ok: false; error: string }
+      >,
+    importFrom: async (bundleDir: string) =>
+      ipcRenderer.invoke(IPC.sessionImport, { bundleDir }) as Promise<
+        { ok: true; sessionId: string; sessionDir: string } | { ok: false; error: string }
+      >
+  },
+  sttUpgrade: {
+    status: async () =>
+      ipcRenderer.invoke(IPC.sttUpgradeStatus, {}) as Promise<{
+        correctionCount: number;
+        refusedPermanently: boolean;
+        largeAvailable: boolean;
+        propose: boolean;
+        fallback: boolean;
+      }>,
+    decide: async (action: 'accept' | 'refuse') =>
+      ipcRenderer.invoke(IPC.sttUpgradeDecide, { action }) as Promise<{ ok: boolean }>,
+    onOffer: (callback: (payload: { propose: boolean }) => void): (() => void) => {
+      const listener = (_event: unknown, payload: { propose: boolean }): void => {
+        callback(payload);
+      };
+      ipcRenderer.on(IPC.sttUpgradeOffer, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC.sttUpgradeOffer, listener);
       };
     }
   }

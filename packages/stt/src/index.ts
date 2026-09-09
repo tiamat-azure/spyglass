@@ -36,6 +36,21 @@ export {
 export { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
 export type { SidecarHandle } from './sidecar.ts';
 export { runSidecarMain, startSidecarServer } from './sidecar.ts';
+export type { SttModelChoice, SttUpgradeDecision } from './upgrade.ts';
+export {
+  chooseWhisperModel,
+  largeModelPath,
+  largeModelPresent,
+  parseMaxLatencyMs,
+  parseUpgradePromptAfter,
+  recordFirstUseLatency,
+  STT_LARGE_MODEL_FILE,
+  STT_LARGE_MODEL_URL,
+  STT_MAX_LATENCY_MS_DEFAULT,
+  STT_SMALL_MODEL_FILE,
+  STT_UPGRADE_PROMPT_AFTER_DEFAULT,
+  shouldProposeUpgrade
+} from './upgrade.ts';
 export type { VadState, VadUtteranceGate } from './vad.ts';
 export {
   createVadState,

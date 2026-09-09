@@ -2,7 +2,7 @@
   "name": "spyglass",
   "version": "0.0.0",
   "private": true,
-  "description": "Spyglass monorepo — Lot 6 generated script + Lot 5 runner + refine + voice + observer + capture + Electron shell",
+  "description": "Spyglass monorepo — Lot 7 finition + Lot 6 generated script + Lot 5 runner + refine + voice + observer + capture + Electron shell",
   "type": "module",
   "packageManager": "pnpm@10.33.3",
   "engines": {

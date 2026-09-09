@@ -7,7 +7,7 @@ import type { ParsedRunnerArgv, RunScenarioResult } from './options.ts';
 import { runPath, traceFileName } from './paths.ts';
 import { createPlaywrightDriver } from './playwright-driver.ts';
 import { LlmRecoverer, type Recoverer } from './recover.ts';
-import { newRunId, type ReplayProgress, runScenario } from './run.ts';
+import { newRunId, type ReplayProgress, runScenario, type StepGate } from './run.ts';
 
 export type LaunchPlaywrightRunInput = {
   scenario: Scenario;
@@ -20,6 +20,7 @@ export type LaunchPlaywrightRunInput = {
   recoverer?: Recoverer;
   /** L6-073: forwarded into runScenario for driver-less callers. */
   onProgress?: (event: ReplayProgress) => void;
+  stepGate?: StepGate;
 };
 
 /**
@@ -62,9 +63,14 @@ export async function launchPlaywrightRun(
       env,
       runId,
       closeDriver: false,
+      ...(parsed.scenarioPath !== undefined ? { scenarioPath: parsed.scenarioPath } : {}),
       ...(parsed.baseUrl !== undefined ? { baseUrl: parsed.baseUrl } : {}),
+      ...(parsed.repo !== undefined ? { repo: parsed.repo } : {}),
+      ...(parsed.datasetPath !== undefined ? { datasetPath: parsed.datasetPath } : {}),
+      ...(parsed.sessionDir !== undefined ? { sessionDir: parsed.sessionDir } : {}),
       ...(recoverer !== undefined ? { recoverer } : {}),
-      ...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {})
+      ...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
+      ...(input.stepGate !== undefined ? { stepGate: input.stepGate } : {})
     });
     if (input.proofScreenshot !== undefined && input.proofScreenshot.length > 0) {
       await mkdir(dirname(input.proofScreenshot), { recursive: true });

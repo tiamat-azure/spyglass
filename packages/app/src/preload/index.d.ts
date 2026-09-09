@@ -29,7 +29,7 @@ import type {
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '5';
+  lot: '7';
   versions: {
     electron: string;
     chrome: string;
@@ -103,8 +103,35 @@ export type SpyglassPreloadApi = {
     onState: (callback: (payload: RefineStatePayload) => void) => () => void;
   };
   replay: {
-    start: (forceAi?: boolean, noAi?: boolean) => Promise<ReplayStartResponse>;
+    start: (
+      forceAi?: boolean,
+      noAi?: boolean,
+      stepByStep?: boolean
+    ) => Promise<ReplayStartResponse>;
+    next: () => Promise<{ ok: boolean }>;
+    stop: () => Promise<{ ok: boolean }>;
     onProgress: (callback: (payload: ReplayProgressPayload) => void) => () => void;
+  };
+  sessionBundle: {
+    exportTo: (
+      destDir: string
+    ) => Promise<{ ok: true; dest: string; sessionId: string } | { ok: false; error: string }>;
+    importFrom: (
+      bundleDir: string
+    ) => Promise<
+      { ok: true; sessionId: string; sessionDir: string } | { ok: false; error: string }
+    >;
+  };
+  sttUpgrade: {
+    status: () => Promise<{
+      correctionCount: number;
+      refusedPermanently: boolean;
+      largeAvailable: boolean;
+      propose: boolean;
+      fallback: boolean;
+    }>;
+    decide: (action: 'accept' | 'refuse') => Promise<{ ok: boolean }>;
+    onOffer: (callback: (payload: { propose: boolean }) => void) => () => void;
   };
 };
 

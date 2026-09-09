@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spyglassRunHelpText } from './help-text.ts';
 import { launchPlaywrightRun, resolveReportDir } from './launch.ts';
@@ -21,6 +21,15 @@ export async function runCli(
     return 2;
   }
   const scenarioPath = resolve(parsed.scenarioPath);
+  parsed.scenarioPath = scenarioPath;
+  if (parsed.repo !== undefined) {
+    parsed.repo = resolve(parsed.repo);
+  }
+  if (parsed.datasetPath !== undefined && parsed.datasetPath.length > 0) {
+    parsed.datasetPath = isAbsolute(parsed.datasetPath)
+      ? parsed.datasetPath
+      : resolve(dirname(scenarioPath), parsed.datasetPath);
+  }
   try {
     const scenario = await loadScenarioFile(scenarioPath);
     const runId = newRunId();

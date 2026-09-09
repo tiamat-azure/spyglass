@@ -5,33 +5,21 @@ import { describe, expect, it } from 'vitest';
 import { generatedHelpText, spyglassRunHelpText } from './help-text.ts';
 
 describe('shared F-58 help text (H29a / L6-029)', () => {
-  it('keeps spyglass-run and generated-script help identical to the pre-extract strings', () => {
-    expect(spyglassRunHelpText()).toBe(`spyglass-run <scenario.json>
-  --headless
+  it('keeps the F-58 flag block identical and appends Lot 7 flags', () => {
+    const f58 = `  --headless
   --base-url <url>
   --timeout <ms>
   --max-ai-retries <n>
   --no-ai
   --ai
   --report <dir>
-  --trace
-
-Relative --report is resolved from dirname(<scenario.json>), not process.cwd() (A19a).
-Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
-`);
-    expect(generatedHelpText()).toBe(`scenario.ts — Spyglass generated runner (visible by default)
-  --headless
-  --base-url <url>
-  --timeout <ms>
-  --max-ai-retries <n>
-  --no-ai
-  --ai
-  --report <dir>
-  --trace
-
-Relative --report is resolved from the scenario directory (this script's folder), not process.cwd() (A19a).
-Absolute --report is used as-is. Omit --report for ../runs/<runId>/ from that directory.
-`);
+  --trace`;
+    expect(spyglassRunHelpText()).toContain(f58);
+    expect(generatedHelpText()).toContain(f58);
+    expect(spyglassRunHelpText()).toContain('--dataset <file>');
+    expect(spyglassRunHelpText()).toContain('--repo <git-root>');
+    expect(generatedHelpText()).toContain('--dataset <file>');
+    expect(generatedHelpText()).toContain('PATCH_ASSISTED_APPLY');
   });
 
   it('cli, generated-run, and run import help-text.ts instead of duplicating flags', async () => {

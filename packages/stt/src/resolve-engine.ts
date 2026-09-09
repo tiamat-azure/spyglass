@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
@@ -5,6 +7,15 @@ import {
   type SttEngineName,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
+import {
+  chooseWhisperModel,
+  parseMaxLatencyMs,
+  recordFirstUseLatency,
+  resolveSttModelDir,
+  STT_FALLBACK_MARKER,
+  STT_LARGE_MODEL_FILE,
+  STT_SMALL_MODEL_FILE
+} from './upgrade.ts';
 import { createWhisperEngine, resolveWhisperPaths, whisperAvailable } from './whisper-engine.ts';
 
 export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttEngineName {
@@ -33,9 +44,37 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
       timeoutRaw === undefined || timeoutRaw.length === 0
         ? WHISPER_TIMEOUT_MS_DEFAULT
         : Number.parseInt(timeoutRaw, 10);
+    const modelDir = resolveSttModelDir(env);
+    let model = paths.model;
+    if (modelDir !== undefined) {
+      const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
+      const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
+      const fallback =
+        env.STT_LARGE_FALLBACK === '1' || existsSync(join(modelDir, STT_FALLBACK_MARKER));
+      const choice = chooseWhisperModel({
+        ...(existsSync(largePath) ? { largePath } : {}),
+        smallPath: existsSync(smallPath) ? smallPath : paths.model,
+        largeFallback: fallback
+      });
+      model = choice.file;
+      const engineOpts: Parameters<typeof createWhisperEngine>[0] = {
+        bin: paths.bin,
+        model,
+        language,
+        timeoutMs:
+          Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT
+      };
+      if (choice.kind === 'large') {
+        const budgetMs = parseMaxLatencyMs(env);
+        engineOpts.onFirstUseLatency = (latencyMs) => {
+          void recordFirstUseLatency({ modelDir, latencyMs, budgetMs });
+        };
+      }
+      return createWhisperEngine(engineOpts);
+    }
     return createWhisperEngine({
       bin: paths.bin,
-      model: paths.model,
+      model,
       language,
       timeoutMs:
         Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : WHISPER_TIMEOUT_MS_DEFAULT

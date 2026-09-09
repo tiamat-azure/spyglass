@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { join } from 'node:path';
 import type { Scenario } from '@spyglass/contracts';
 import { RUNNER_PACKAGE } from './package-name.ts';
+import { extractScenarioParameters, writeGeneratedDatasets } from './parameters.ts';
 import { runPath } from './paths.ts';
 import { scenarioFromRevision } from './scenario.ts';
 
@@ -85,15 +86,17 @@ export async function writeGeneratedPackage(
     const readme = runPath(dir, GENERATED_README);
     const packageJson = runPath(dir, GENERATED_PACKAGE_JSON);
     const version = input.runnerVersion ?? '0.0.0';
-    const scenario: Scenario = {
+    const extracted = extractScenarioParameters({
       ...input.scenario,
       generatedAt: input.scenario.generatedAt ?? new Date().toISOString()
-    };
+    });
+    const scenario: Scenario = extracted.scenario;
     await writeFile(
       runPath(staging, GENERATED_SCENARIO_JSON),
       `${JSON.stringify(scenario, null, 2)}\n`,
       'utf8'
     );
+    await writeGeneratedDatasets(staging, extracted.dataset);
     const stagingTs = runPath(staging, GENERATED_SCENARIO_TS);
     await writeFile(stagingTs, generatedScenarioTsSource(), {
       encoding: 'utf8',
@@ -350,17 +353,33 @@ absolu — or les scénarios capturés le sont. Avec \`--base-url\` :
 | \`--ai\` | force le rattrapage (même en CI) |
 | \`--report <dir>\` | dossier du rapport (\`report.json\`). Chemin **relatif** : répertoire de \`scenario.json\` / \`scenario.ts\`, **pas** \`process.cwd()\` (A19a). Chemin absolu inchangé. |
 | \`--trace\` | écrit \`trace.zip\` (chemin Windows-safe) |
+| \`--dataset <file>\` | jeu de données JSON (F-48). Relatif au répertoire du script. Distinct datasets replay the same parameterized scenario. |
+| \`--repo <git-root>\` | dépôt **cible** pour l'application assistée (F-64). Arbre sale refusé. |
+| \`--session-dir <dir>\` | session Spyglass (\`health.json\`) si le rapport n'est pas sous \`runs/<runId>\` |
 
 Rapports par défaut (sans \`--report\`) : \`../runs/<runId>/\` depuis le
 répertoire du scénario (arborescence de session PRD §6.14), pas le cwd.
 
+Paramétrage (F-48) : \`datasets/recorded.json\` et \`datasets/example.json\`
+extraient les valeurs \`fill\` / \`select\` (y compris secrets) en variables.
+Rejouer avec un autre fichier :
+
+\`\`\`bash
+node --experimental-transform-types scenario.ts --no-ai --dataset datasets/example.json
+\`\`\`
+
 Variables d'environnement (amorçage, PRD §7) : \`LLM_SMART_*\` seulement si
-\`--ai\` ; \`MAX_AI_RETRIES\` ; \`CI\`.
+\`--ai\` ; \`MAX_AI_RETRIES\` ; \`CI\` ; \`PATCH_ASSISTED_APPLY\` (défaut
+\`false\`) ; \`PATCH_CONFIRM_RUNS\` ; \`PATCH_WARN_THRESHOLD\` ;
+\`PATCH_STALE_THRESHOLD\` ; \`PATCH_TARGET_REPO\`.
 
 ## Invariants
 
-- L'IA n'est qu'un rattrapage borné. Jamais d'application automatique de patch
-  (F-57, F-62–F-65 : lot 7, hors v1).
+- L'IA n'est qu'un rattrapage borné. \`suggested-patch.json\` reste
+  \`applied: false\` (F-57). L'application assistée (lot 7) n'ouvre qu'une
+  branche et une PR sur \`action.descriptor\` après 2 exécutions
+  consécutives identiques (F-62–F-64). Vérification et structure restent
+  proposition-only, sans échappatoire (CA-14).
 - Ne commitez pas de clés d'API. Le chemin \`--no-ai\` est mockable en CI.
 `;
 }

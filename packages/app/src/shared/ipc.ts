@@ -1,4 +1,4 @@
-export const SHELL_LOT = '5' as const;
+export const SHELL_LOT = '7' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -48,7 +48,14 @@ export const IPC = {
   refineGet: 'spyglass:refine:get',
   refineState: 'spyglass:refine:state',
   replayStart: 'spyglass:replay:start',
-  replayProgress: 'spyglass:replay:progress'
+  replayProgress: 'spyglass:replay:progress',
+  replayNext: 'spyglass:replay:next',
+  replayStop: 'spyglass:replay:stop',
+  sessionExport: 'spyglass:session:export',
+  sessionImport: 'spyglass:session:import',
+  sttUpgradeStatus: 'spyglass:stt:upgrade-status',
+  sttUpgradeOffer: 'spyglass:stt:upgrade-offer',
+  sttUpgradeDecide: 'spyglass:stt:upgrade-decide'
 } as const;
 
 export type NavState = {
@@ -408,6 +415,8 @@ export type RefineStatePayload = {
 export type ReplayStartRequest = {
   forceAi?: boolean;
   noAi?: boolean;
+  stepByStep?: boolean;
+  datasetPath?: string;
 };
 
 export type ReplayStartResponse =
@@ -421,4 +430,32 @@ export type ReplayProgressPayload = {
   mode: 'script' | 'AI';
   attempt: number;
   message: string;
+};
+
+export type SessionExportRequest = {
+  destDir: string;
+};
+
+export type SessionExportResponse =
+  | { ok: true; dest: string; sessionId: string }
+  | { ok: false; error: string };
+
+export type SessionImportRequest = {
+  bundleDir: string;
+};
+
+export type SessionImportResponse =
+  | { ok: true; sessionId: string; sessionDir: string }
+  | { ok: false; error: string };
+
+export type SttUpgradeStatus = {
+  correctionCount: number;
+  refusedPermanently: boolean;
+  largeAvailable: boolean;
+  propose: boolean;
+  fallback: boolean;
+};
+
+export type SttUpgradeDecideRequest = {
+  action: 'accept' | 'refuse';
 };

@@ -18,6 +18,7 @@ test-results/
 packages/app/test-results/
 docs/lot-6/corpus-runs/
 docs/lot-6/screenshots/*.html
+docs/lot-7/screenshots/*.html
 vendor/whisper/*.bin
 vendor/whisper/whisper-cli
 vendor/whisper/whisper-cli.exe

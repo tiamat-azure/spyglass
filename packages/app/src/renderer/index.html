@@ -188,7 +188,7 @@
             </div>
             <div>
               <h1>Spyglass</h1>
-              <p class="tagline">Lot 5 — exécution</p>
+              <p class="tagline">Lot 7 — finition</p>
             </div>
           </header>
           <div class="token-meter" id="token-meter" data-level="ok">
@@ -247,8 +247,30 @@
                 <input id="replay-ai" name="replay-ai" type="checkbox" />
                 Forcer le rattrapage IA (--ai)
               </label>
-              <button type="button" class="observe-btn" id="replay-run">Rejouer</button>
+              <label class="toggle" id="replay-stepwise-row">
+                <input id="replay-stepwise" name="replay-stepwise" type="checkbox" />
+                Pas à pas (F-59)
+              </label>
+              <div class="refine-actions">
+                <button type="button" class="observe-btn" id="replay-run">Rejouer</button>
+                <button type="button" class="observe-btn" id="replay-next" disabled>Suivant</button>
+                <button type="button" class="observe-btn" id="replay-halt" disabled>Arrêter</button>
+              </div>
               <ol class="replay-steps" id="replay-steps" aria-live="polite"></ol>
+              <div class="refine-actions">
+                <button type="button" class="observe-btn" id="session-export">Exporter la session</button>
+                <button type="button" class="observe-btn" id="session-import">Importer une session</button>
+              </div>
+            </section>
+            <section class="stt-upgrade" id="stt-upgrade" hidden>
+              <p class="refine-copy" id="stt-upgrade-copy">
+                Plusieurs segments transcrits ont été corrigés. Télécharger le modèle plus précis
+                <code>large-v3-turbo</code> (optionnel, ADR-0017) ?
+              </p>
+              <div class="refine-actions">
+                <button type="button" class="observe-btn" id="stt-upgrade-accept">Télécharger</button>
+                <button type="button" class="observe-btn" id="stt-upgrade-refuse">Refuser définitivement</button>
+              </div>
             </section>
           </section>
           <p class="meta" id="versions">Loading…</p>

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { isAbsolute, resolve } from 'node:path';
 import type {
   ExecutionReport,
   ExecutionStepReport,
@@ -21,6 +22,9 @@ import {
   resolveRunnerOptions,
   SMART_MODEL_PIN
 } from './options.ts';
+import { applyDataset, parseDataset } from './parameters.ts';
+import { resolvePatchPolicy } from './patch-config.ts';
+import { processSuggestedPatch } from './patch-lifecycle.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
 import { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
@@ -35,6 +39,11 @@ export type ReplayProgress = {
   mode: 'script' | 'AI';
   attempt: number;
   message: string;
+};
+
+/** F-59: wait before each step for in-app pas-à-pas replay. */
+export type StepGate = {
+  wait: (stepIndex: number) => Promise<'continue' | 'stop'>;
 };
 
 export type RunScenarioHooks = RunScenarioOptions & {
@@ -52,6 +61,7 @@ export type RunScenarioHooks = RunScenarioOptions & {
   /** F-58 flags for the driver-less generated-script path. */
   argv?: readonly string[];
   scriptDir?: string;
+  stepGate?: StepGate;
 };
 
 const TEXT_ONLY_WARNING =
@@ -115,6 +125,18 @@ async function runScenarioStandalone(
   if (options.reportDir !== undefined) {
     parsed.reportDir = options.reportDir;
   }
+  if (options.repo !== undefined) {
+    parsed.repo = options.repo;
+  }
+  if (options.datasetPath !== undefined) {
+    parsed.datasetPath = options.datasetPath;
+  }
+  if (options.sessionDir !== undefined) {
+    parsed.sessionDir = options.sessionDir;
+  }
+  if (options.scenarioPath !== undefined) {
+    parsed.scenarioPath = options.scenarioPath;
+  }
   if (parsed.help) {
     process.stdout.write(generatedHelpText());
     const runId = options.runId ?? newRunId();
@@ -150,7 +172,8 @@ async function runScenarioStandalone(
     runId,
     ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
     ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
-    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
+    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {}),
+    ...(options.stepGate !== undefined ? { stepGate: options.stepGate } : {})
   });
 }
 
@@ -165,18 +188,19 @@ async function runScenarioOnDriver(
   if (resolved.aiRecovery && !multimodal) {
     warnings.push(TEXT_ONLY_WARNING);
   }
+  const executable = await scenarioWithDataset(scenario, resolved, options);
   const runId = options.runId ?? newRunId();
   const startedAt = new Date();
-  const original = scenario.steps.map((step) => cloneDescriptor(step.action.descriptor));
+  const original = executable.steps.map((step) => cloneDescriptor(step.action.descriptor));
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
   let failed = false;
 
-  const startUrl = joinBaseUrl(resolved.baseUrl, scenario.startUrl);
+  const startUrl = joinBaseUrl(resolved.baseUrl, executable.startUrl);
   await options.driver.goto(startUrl);
 
-  for (let index = 0; index < scenario.steps.length; index += 1) {
-    const step = scenario.steps[index];
+  for (let index = 0; index < executable.steps.length; index += 1) {
+    const step = executable.steps[index];
     if (step === undefined) {
       continue;
     }
@@ -193,6 +217,37 @@ async function runScenarioOnDriver(
       attempt: 1,
       message: `script · ${step.intent}`
     });
+    if (options.stepGate !== undefined) {
+      const gate = await options.stepGate.wait(step.index);
+      if (gate === 'stop') {
+        failed = true;
+        stepReports.push({
+          index: step.index,
+          intent: step.intent,
+          status: 'failed',
+          durationMs: Date.now() - stepStarted,
+          mode: 'script',
+          attempts: 1,
+          verificationOk: false,
+          error: 'replay stopped by user'
+        });
+        emit(options, {
+          runId,
+          stepIndex: step.index,
+          status: 'failed',
+          mode: 'script',
+          attempt: 1,
+          message: 'replay stopped by user'
+        });
+        for (let rest = index + 1; rest < executable.steps.length; rest += 1) {
+          const skipped = executable.steps[rest];
+          if (skipped !== undefined) {
+            stepReports.push(skippedReport(skipped));
+          }
+        }
+        break;
+      }
+    }
     const timeoutMs = step.verification.timeoutMs ?? resolved.timeoutMs;
     const beforeDom = await options.driver.snapshot();
     const acted = await performAction(options.driver, step.action.descriptor);
@@ -231,7 +286,7 @@ async function runScenarioOnDriver(
         warnings.push(TEXT_ONLY_WARNING);
       }
       const recovered = await recoverStep({
-        scenario,
+        scenario: executable,
         step,
         driver: options.driver,
         recoverer: options.recoverer,
@@ -313,7 +368,7 @@ async function runScenarioOnDriver(
   const report: ExecutionReport = {
     schemaVersion: 1,
     runId,
-    sessionId: scenario.sessionId,
+    sessionId: executable.sessionId,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     exitCode: failed ? 1 : 0,
@@ -330,7 +385,7 @@ async function runScenarioOnDriver(
       ? {
           schemaVersion: 1,
           runId,
-          sessionId: scenario.sessionId,
+          sessionId: executable.sessionId,
           applied: false,
           patches
         }
@@ -353,6 +408,34 @@ async function runScenarioOnDriver(
   const result: RunScenarioResult = { exitCode: report.exitCode, report };
   if (suggestedPatch !== undefined) {
     result.suggestedPatch = suggestedPatch;
+    const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
+      suggested: suggestedPatch,
+      scenario: executable,
+      policy: resolvePatchPolicy(options.env ?? process.env, {
+        ...(resolved.repo !== undefined ? { repo: resolved.repo } : {})
+      })
+    };
+    if (options.env !== undefined) {
+      lifecycleInput.env = options.env;
+    }
+    if (resolved.reportDir !== undefined) {
+      lifecycleInput.reportDir = resolved.reportDir;
+    }
+    const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+    if (scenarioPath !== undefined) {
+      lifecycleInput.scenarioPath = scenarioPath;
+    }
+    const sessionDir = resolved.sessionDir ?? options.sessionDir;
+    if (sessionDir !== undefined) {
+      lifecycleInput.sessionDir = sessionDir;
+    }
+    const lifecycle = await processSuggestedPatch(lifecycleInput);
+    if (lifecycle.healthPath !== undefined) {
+      result.healthPath = lifecycle.healthPath;
+    }
+    if (lifecycle.assistedApply !== undefined) {
+      result.assistedApply = lifecycle.assistedApply;
+    }
   }
   if (runDir !== undefined) {
     result.runDir = runDir;
@@ -529,4 +612,22 @@ function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+async function scenarioWithDataset(
+  scenario: Scenario,
+  resolved: ReturnType<typeof resolveRunnerOptions>,
+  options: RunScenarioHooks
+): Promise<Scenario> {
+  const datasetPath = resolved.datasetPath ?? options.datasetPath;
+  if (datasetPath === undefined || datasetPath.length === 0) {
+    return scenario;
+  }
+  const scriptDir = options.scriptDir;
+  const absolute =
+    isAbsolute(datasetPath) || scriptDir === undefined
+      ? resolve(datasetPath)
+      : resolve(scriptDir, datasetPath);
+  const raw = JSON.parse(await readFile(absolute, 'utf8')) as unknown;
+  return applyDataset(scenario, parseDataset(raw));
 }

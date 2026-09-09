@@ -14,6 +14,11 @@ export type RunnerOptions = {
   trace: boolean;
   scenarioPath?: string;
   smartModel: string;
+  /** F-64: target project git repo for assisted apply. */
+  repo?: string;
+  /** F-48: dataset JSON overriding parameterized fill/select values. */
+  datasetPath?: string;
+  sessionDir?: string;
 };
 
 export type RunScenarioOptions = {
@@ -26,6 +31,10 @@ export type RunScenarioOptions = {
   trace?: boolean;
   smartModel?: string;
   env?: NodeJS.ProcessEnv;
+  repo?: string;
+  datasetPath?: string;
+  sessionDir?: string;
+  scenarioPath?: string;
 };
 
 export type RunScenarioResult = {
@@ -33,6 +42,8 @@ export type RunScenarioResult = {
   report: import('@spyglass/contracts').ExecutionReport;
   suggestedPatch?: import('@spyglass/contracts').SuggestedPatch;
   runDir?: string;
+  healthPath?: string;
+  assistedApply?: import('./assisted-apply.ts').AssistedApplyResult;
 };
 
 export type ResolveAiRecoveryInput = {
@@ -110,6 +121,22 @@ export function resolveRunnerOptions(
   if (partial.reportDir !== undefined && partial.reportDir.length > 0) {
     options.reportDir = partial.reportDir;
   }
+  if (partial.repo !== undefined && partial.repo.length > 0) {
+    options.repo = partial.repo;
+  }
+  if (partial.datasetPath !== undefined && partial.datasetPath.length > 0) {
+    options.datasetPath = partial.datasetPath;
+  }
+  if (partial.sessionDir !== undefined && partial.sessionDir.length > 0) {
+    options.sessionDir = partial.sessionDir;
+  }
+  if (partial.scenarioPath !== undefined && partial.scenarioPath.length > 0) {
+    options.scenarioPath = partial.scenarioPath;
+  }
+  const envRepo = env.PATCH_TARGET_REPO;
+  if (options.repo === undefined && envRepo !== undefined && envRepo.trim().length > 0) {
+    options.repo = envRepo.trim();
+  }
   return options;
 }
 
@@ -127,6 +154,9 @@ export function parseRunnerArgv(
   let trace = false;
   let scenarioPath: string | undefined;
   let help = false;
+  let repo: string | undefined;
+  let datasetPath: string | undefined;
+  let sessionDir: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -174,6 +204,21 @@ export function parseRunnerArgv(
       index += 1;
       continue;
     }
+    if (arg === '--repo' && next !== undefined) {
+      repo = next;
+      index += 1;
+      continue;
+    }
+    if (arg === '--dataset' && next !== undefined) {
+      datasetPath = next;
+      index += 1;
+      continue;
+    }
+    if (arg === '--session-dir' && next !== undefined) {
+      sessionDir = next;
+      index += 1;
+      continue;
+    }
     if (!arg.startsWith('-')) {
       scenarioPath = arg;
     }
@@ -188,7 +233,10 @@ export function parseRunnerArgv(
       ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       ...(maxAiRetries !== undefined ? { maxAiRetries } : {}),
       ...(baseUrl !== undefined ? { baseUrl } : {}),
-      ...(reportDir !== undefined ? { reportDir } : {})
+      ...(reportDir !== undefined ? { reportDir } : {}),
+      ...(repo !== undefined ? { repo } : {}),
+      ...(datasetPath !== undefined ? { datasetPath } : {}),
+      ...(sessionDir !== undefined ? { sessionDir } : {})
     },
     env
   );
@@ -200,6 +248,15 @@ export function parseRunnerArgv(
   };
   if (scenarioPath !== undefined) {
     parsed.scenarioPath = scenarioPath;
+  }
+  if (repo !== undefined) {
+    parsed.repo = repo;
+  }
+  if (datasetPath !== undefined) {
+    parsed.datasetPath = datasetPath;
+  }
+  if (sessionDir !== undefined) {
+    parsed.sessionDir = sessionDir;
   }
   return parsed;
 }

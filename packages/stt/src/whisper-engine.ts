@@ -55,14 +55,23 @@ export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): st
     candidates.push(explicit);
   }
   if (dir !== undefined && dir.length > 0) {
-    candidates.push(join(dir, file), join(dir, 'ggml-small-q5_1.bin'));
+    candidates.push(
+      join(dir, file),
+      join(dir, 'ggml-small-q5_1.bin'),
+      join(dir, 'ggml-large-v3-turbo-q5_0.bin')
+    );
   }
   if (resources !== undefined && resources.length > 0) {
-    candidates.push(join(resources, file), join(resources, 'ggml-small-q5_1.bin'));
+    candidates.push(
+      join(resources, file),
+      join(resources, 'ggml-small-q5_1.bin'),
+      join(resources, 'ggml-large-v3-turbo-q5_0.bin')
+    );
   }
   candidates.push(
     join(process.cwd(), 'vendor/whisper', file),
-    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin')
+    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin'),
+    join(process.cwd(), 'vendor/whisper/ggml-large-v3-turbo-q5_0.bin')
   );
   return candidates;
 }
@@ -316,12 +325,15 @@ export function createWhisperEngine(options: {
   model: string;
   language?: string;
   timeoutMs?: number;
+  /** F-39: first successful or failed transcription latency (large model). */
+  onFirstUseLatency?: (latencyMs: number) => void | Promise<void>;
 }): SttEngine {
   const language = options.language ?? 'fr';
   const timeoutMs = options.timeoutMs ?? WHISPER_TIMEOUT_MS_DEFAULT;
   const open = new Map<string, Utterance>();
   const controllers = new Map<string, AbortController>();
   const jobs = new Set<WhisperJob>();
+  let firstUseNoted = false;
 
   const killJobs = (utteranceId?: string): void => {
     for (const job of [...jobs]) {
@@ -348,6 +360,14 @@ export function createWhisperEngine(options: {
     controllers.clear();
   };
 
+  const noteFirstUse = async (latencyMs: number): Promise<void> => {
+    if (firstUseNoted || options.onFirstUseLatency === undefined) {
+      return;
+    }
+    firstUseNoted = true;
+    await options.onFirstUseLatency(latencyMs);
+  };
+
   const transcribe = async (utteranceId: string, pcm: Buffer): Promise<string> => {
     if (pcm.length < 3200) {
       return '';
@@ -356,8 +376,9 @@ export function createWhisperEngine(options: {
     const controller = new AbortController();
     controllers.set(utteranceId, controller);
     const wav = pcm16ToWav(pcm, STT_SAMPLE_RATE);
+    const started = Date.now();
     try {
-      return await runWhisperCli({
+      const text = await runWhisperCli({
         bin: options.bin,
         model: options.model,
         wav,
@@ -372,6 +393,11 @@ export function createWhisperEngine(options: {
           });
         }
       });
+      await noteFirstUse(Date.now() - started);
+      return text;
+    } catch (error) {
+      await noteFirstUse(Date.now() - started);
+      throw error;
     } finally {
       controllers.delete(utteranceId);
     }

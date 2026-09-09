@@ -3,7 +3,7 @@
  * Fetch whisper.cpp CLI + ggml-small-q5_1 weights for packaged/dev (ADR-0013).
  * Not run in CI — binaries/models are too heavy; the mock engine covers tests.
  *
- * Usage: node scripts/fetch-whisper.mjs
+ * Usage: node scripts/fetch-whisper.mjs [--large]
  */
 import { createWriteStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
@@ -50,7 +50,18 @@ async function download(url, dest) {
 }
 
 async function main() {
+  const large = process.argv.includes('--large');
   await mkdir(outDir, { recursive: true });
+  if (large) {
+    const largeName = 'ggml-large-v3-turbo-q5_0.bin';
+    const largeUrl =
+      'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin';
+    const largePath = join(outDir, largeName);
+    process.stdout.write(`Downloading ${largeName} (optional STT upgrade, ~575MB)…\n`);
+    await download(largeUrl, largePath);
+    process.stdout.write(`Wrote ${largePath}\nKeep ggml-small-q5_1.bin as fallback (F-39).\n`);
+    return;
+  }
   const modelPath = join(outDir, MODEL_NAME);
   process.stdout.write(`Downloading ${MODEL_NAME} (offline STT weights, ~190MB)…\n`);
   await download(MODEL_URL, modelPath);

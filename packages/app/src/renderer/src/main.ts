@@ -494,8 +494,14 @@ const refineSteps = requireEl<HTMLOListElement>('refine-steps');
 const replayPanel = requireEl<HTMLElement>('replay-panel');
 const replayStatus = requireEl<HTMLElement>('replay-status');
 const replayAi = requireEl<HTMLInputElement>('replay-ai');
+const replayStepwise = requireEl<HTMLInputElement>('replay-stepwise');
 const replayRunBtn = requireEl<HTMLButtonElement>('replay-run');
+const replayNextBtn = requireEl<HTMLButtonElement>('replay-next');
+const replayHaltBtn = requireEl<HTMLButtonElement>('replay-halt');
 const replaySteps = requireEl<HTMLOListElement>('replay-steps');
+const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
+const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
+const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -633,8 +639,19 @@ if (api !== undefined) {
     item.dataset.mode = payload.mode;
     item.dataset.index = String(payload.stepIndex);
     item.textContent = `étape ${String(payload.stepIndex)} · ${payload.mode} · ${payload.status} · ${payload.message}`;
+    replaySteps.querySelectorAll('.replay-step[data-current="true"]').forEach((el) => {
+      el.removeAttribute('data-current');
+    });
+    item.dataset.current = 'true';
     replaySteps.append(item);
     replayStatus.textContent = payload.message;
+  });
+
+  api.sttUpgrade.onOffer((payload) => {
+    sttUpgrade.hidden = !payload.propose;
+  });
+  void api.sttUpgrade.status().then((status) => {
+    sttUpgrade.hidden = !status.propose;
   });
 
   void api.stagehand.cdp().then((info) => {
@@ -802,8 +819,11 @@ replayRunBtn.addEventListener('click', () => {
   replayRunBtn.disabled = true;
   replaySteps.replaceChildren();
   const forceAi = replayAi.checked;
+  const stepByStep = replayStepwise.checked;
+  replayNextBtn.disabled = !stepByStep;
+  replayHaltBtn.disabled = !stepByStep;
   void api.replay
-    .start(forceAi, !forceAi)
+    .start(forceAi, !forceAi, stepByStep)
     .then((result) => {
       if (!result.ok) {
         replayStatus.textContent = result.error;
@@ -815,7 +835,61 @@ replayRunBtn.addEventListener('click', () => {
     })
     .finally(() => {
       replayRunBtn.disabled = false;
+      replayNextBtn.disabled = true;
+      replayHaltBtn.disabled = true;
     });
+});
+
+replayNextBtn.addEventListener('click', () => {
+  void api?.replay.next();
+});
+
+replayHaltBtn.addEventListener('click', () => {
+  void api?.replay.stop();
+});
+
+sessionExportBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const dest = window.prompt('Dossier d’export autonome (F-47)');
+  if (dest === null || dest.trim().length === 0) {
+    return;
+  }
+  void api.sessionBundle.exportTo(dest.trim()).then((result) => {
+    replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
+  });
+});
+
+sessionImportBtn.addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  const bundle = window.prompt('Dossier de session à importer (F-47)');
+  if (bundle === null || bundle.trim().length === 0) {
+    return;
+  }
+  void api.sessionBundle.importFrom(bundle.trim()).then((result) => {
+    replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
+  });
+});
+
+requireEl<HTMLButtonElement>('stt-upgrade-accept').addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  void api.sttUpgrade.decide('accept').then(() => {
+    sttUpgrade.hidden = true;
+  });
+});
+
+requireEl<HTMLButtonElement>('stt-upgrade-refuse').addEventListener('click', () => {
+  if (api === undefined) {
+    return;
+  }
+  void api.sttUpgrade.decide('refuse').then(() => {
+    sttUpgrade.hidden = true;
+  });
 });
 
 requireEl<HTMLButtonElement>('fast-test').addEventListener('click', () => {

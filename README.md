@@ -283,5 +283,13 @@ PRD §2.2 non-contractual replay rates:
 `--public --j1` runs, Lot 6 **rebuilds from static `PUBLIC_CORPUS`**, not a
 persisted J+0 `scenario.json` (J8c).
 
-**Not** implemented: Lot 7 assisted patch apply / PR to the target repo
-(F-62–F-65). Closed shadow DOM remains out of scope (ADR-0009).
+**Not** implemented: Closed shadow DOM remains out of scope (ADR-0009).
+
+Implemented (Lot 7 / v1.1): assisted patch apply gated by `PATCH_ASSISTED_APPLY`
+(default false). Only `action.descriptor` after **2 consecutive** matching
+runs may open a dedicated git branch + PR against `--repo` (F-62–F-64).
+Verification/structure stay proposal-only forever (CA-14). Cumulative
+patches mark the scenario fragile (at 3) then stale/obsolete (at 5) (F-65).
+Optional STT `large-v3-turbo` upgrade after N manual corrections (F-38/F-39).
+Session folder export/import (F-47). In-app pas-à-pas replay (F-59).
+Parameterized fill/select via `--dataset` (F-48).

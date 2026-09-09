@@ -1,6 +1,8 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
+import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
+import { largeModelPath, STT_LARGE_MODEL_FILE, STT_LARGE_MODEL_URL } from '@spyglass/stt';
 import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
 import type {
   NavState,
@@ -35,6 +37,7 @@ import {
   parseGotoPayload,
   parseGuestVisiblePayload,
   parseObservePayload,
+  parsePathPayload,
   parseRaiseCeilingPayload,
   parseRefineConfirmPayload,
   parseRefineEditPayload,
@@ -43,6 +46,7 @@ import {
   parseReplayStartPayload,
   parseRetractPayload,
   parseSessionStartPayload,
+  parseSttUpgradeDecide,
   parseVoiceEditPayload,
   parseVoiceStartPayload
 } from './ipc-validate.ts';
@@ -56,6 +60,7 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
+import { SttUpgradeStore, sttUpgradeStorePath } from './stt-upgrade-store.ts';
 import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
@@ -83,6 +88,7 @@ let observerRuntime: ObserverRuntime | undefined;
 let activeRefine: RefineEngine | undefined;
 let activeReplay: ReplayEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
+let sttUpgradeStore: SttUpgradeStore | undefined;
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -256,6 +262,16 @@ function createWindow(): BrowserWindow {
       sandbox: true
     }
   });
+}
+
+async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
+  if (sttUpgradeStore !== undefined) {
+    return sttUpgradeStore;
+  }
+  const store = new SttUpgradeStore(sttUpgradeStorePath(app.getPath('userData')), process.env);
+  await store.load();
+  sttUpgradeStore = store;
+  return store;
 }
 
 function emitToChrome(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -764,6 +780,16 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: false };
     }
     const edited = await requireSession().recordVoiceEdited(payload.eventId, payload.text);
+    if (edited !== undefined) {
+      const store = await ensureSttUpgradeStore();
+      await store.recordCorrection();
+      const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+      const snap = store.snapshot(modelDir);
+      const win = winRef.current;
+      if (win !== undefined && snap.decision === 'propose') {
+        emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
+      }
+    }
     return { ok: edited !== undefined };
   });
 
@@ -870,6 +896,112 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     }
     const payload = parseReplayStartPayload(raw);
     return await activeReplay.start(payload);
+  });
+
+  ipcMain.handle(IPC.replayNext, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.replayNext)) {
+      return { ok: false };
+    }
+    activeReplay?.next();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.replayStop, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.replayStop)) {
+      return { ok: false };
+    }
+    activeReplay?.stop();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.sessionExport, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionExport)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const destDir = parsePathPayload(raw, 'destDir');
+    const sessionDir = activeSession?.currentSessionDir();
+    if (destDir === undefined || sessionDir === undefined) {
+      return { ok: false, error: 'no session or destDir' };
+    }
+    try {
+      const exported = await exportSessionFolder(sessionDir, destDir);
+      return { ok: true, dest: exported.dest, sessionId: exported.sessionId };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(IPC.sessionImport, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionImport)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const bundleDir = parsePathPayload(raw, 'bundleDir');
+    if (bundleDir === undefined) {
+      return { ok: false, error: 'bundleDir required' };
+    }
+    try {
+      const imported = await importSessionFolder(
+        bundleDir,
+        sessionsDirFromEnv(app.getPath('userData'))
+      );
+      return { ok: true, sessionId: imported.sessionId, sessionDir: imported.sessionDir };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(IPC.sttUpgradeStatus, async (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.sttUpgradeStatus)) {
+      return {
+        correctionCount: 0,
+        refusedPermanently: false,
+        largeAvailable: false,
+        propose: false,
+        fallback: false
+      };
+    }
+    const store = await ensureSttUpgradeStore();
+    const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+    const snap = store.snapshot(modelDir);
+    return {
+      correctionCount: snap.correctionCount,
+      refusedPermanently: snap.refusedPermanently,
+      largeAvailable: snap.largeAvailable,
+      propose: snap.decision === 'propose',
+      fallback: false
+    };
+  });
+
+  ipcMain.handle(IPC.sttUpgradeDecide, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sttUpgradeDecide)) {
+      return { ok: false };
+    }
+    const action = parseSttUpgradeDecide(raw);
+    if (action === undefined) {
+      return { ok: false };
+    }
+    const store = await ensureSttUpgradeStore();
+    if (action === 'refuse') {
+      await store.refusePermanently();
+      return { ok: true };
+    }
+    const modelDir = process.env.STT_MODEL_DIR ?? join(app.getPath('userData'), 'whisper');
+    await mkdir(modelDir, { recursive: true });
+    const dest = largeModelPath(modelDir);
+    if (process.env.SPYGLASS_STT_UPGRADE_FAKE === '1') {
+      await writeFile(dest, `${STT_LARGE_MODEL_FILE}\n`, 'utf8');
+      return { ok: true };
+    }
+    try {
+      const response = await fetch(STT_LARGE_MODEL_URL, { redirect: 'follow' });
+      if (!response.ok || response.body === null) {
+        return { ok: false };
+      }
+      await writeFile(dest, Buffer.from(await response.arrayBuffer()));
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   });
 }
 

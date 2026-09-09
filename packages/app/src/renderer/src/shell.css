@@ -766,7 +766,12 @@ h1 {
 }
 
 .replay-step[data-mode="AI"] {
+  border-left: 2px solid #7dd3fc;
   color: var(--sg-warning);
+}
+
+.replay-step[data-current="true"] {
+  outline: 1px solid #fbbf24;
 }
 
 .refine-header h2,

@@ -80,8 +80,14 @@ fichiers, à une socket sortante ni aux clés d'API (ADR-0001, ADR-0005).
 | `spyglass:refine:get` | invoke | `{}` → révision courante |
 | `spyglass:refine:state` | emit | `{ phase, revision? }` |
 | `spyglass:generate:script` | invoke | `{ sessionId, revision }` → `{ paths: string[] }` |
-| `spyglass:replay:start` | invoke | `{ forceAi?, noAi? }` → `{ ok: true, runId }` or `{ ok: false, error }` (F-59, F-60) |
+| `spyglass:replay:start` | invoke | `{ forceAi?, noAi?, stepByStep? }` → `{ ok: true, runId }` or `{ ok: false, error }` (F-59, F-60) |
 | `spyglass:replay:progress` | emit | `{ runId, stepIndex, status, mode, attempt, message }` |
+| `spyglass:replay:next` / `:stop` | invoke | `{}` — pas à pas (F-59) |
+| `spyglass:session:export` | invoke | `{ destDir }` → `{ ok, dest, sessionId }` (F-47) |
+| `spyglass:session:import` | invoke | `{ bundleDir }` → `{ ok, sessionId, sessionDir }` (F-47) |
+| `spyglass:stt:upgrade-status` | invoke | `{}` → proposition large-v3-turbo (F-38) |
+| `spyglass:stt:upgrade-decide` | invoke | `{ action: 'accept' \| 'refuse' }` (refus définitif) |
+| `spyglass:stt:upgrade-offer` | emit | `{ propose: true }` |
 
 ## Règles
 
