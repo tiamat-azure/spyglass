@@ -1148,6 +1148,11 @@ Ask-user still held: O29, A30, I30, C31, W31.
   unchanged (L7-020); W26a still vacates an empty directory for
   overwrite-false.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**714 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 70.
+
+Ask-user still held: A30, I30, C31, W31.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
