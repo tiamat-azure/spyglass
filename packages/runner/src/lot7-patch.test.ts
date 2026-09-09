@@ -2846,7 +2846,10 @@ describe('Lot 7 health.json wiring after recovery', () => {
     if (second.assistedApply?.ok !== true) {
       return;
     }
-    const onPatch = await gitShowJson<Scenario>(repo, `${second.assistedApply.branch}:scenario.json`);
+    const onPatch = await gitShowJson<Scenario>(
+      repo,
+      `${second.assistedApply.branch}:scenario.json`
+    );
     expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#password-new');
     expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).toBe(secret);
     expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).not.toBeNull();

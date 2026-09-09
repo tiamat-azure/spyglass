@@ -658,7 +658,9 @@ function scenarioHasAppliedPatches(
         stepIndex: patch.stepIndex,
         scope: ACTION_DESCRIPTOR_SCOPE,
         original: step.action.descriptor,
-        suggested: step.action.descriptor
+        suggested: step.action.descriptor,
+        diagnosis: 'applied',
+        confidence: 1
       },
       step
     );

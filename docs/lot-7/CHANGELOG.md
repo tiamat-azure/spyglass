@@ -1165,6 +1165,11 @@ Ask-user still held: A30, I30, C31, W31.
   `activeReplay.next()` / `stop()` in try/catch and return
   `{ ok: false, error }` instead of an unhandled rejection.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**715 passed**, 1 skipped (62 files).
+
+Ask-user still held: A30, I30, C31, W31, R32.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
