@@ -296,6 +296,10 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **O29b:** Session export refuses a non-directory dest even with
   `overwrite=true` (no move/delete of a file at dest). IPC
   `dest-not-directory`. W26a empty-dir overwrite-false unchanged.
+- **L7-230:** Assisted apply uses live suggested args; persistence
+  redaction is health / suggested-patch / PR only (P13a / P28b).
+- **L7-231:** Replay next/stop IPC returns a structured error instead of
+  an unhandled rejection.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -369,5 +373,6 @@ open-PR re-check before remote delete, min-length secret candidacy,
 skip `--large` when valid large exists. **N29a:** vacant parameterized
 `[0]` is JSON `null`. **D29a:** explicit `parameterRef` is not
 unique-ified against selector-derived names (R10a last-write-wins).
-**O29b:** export refuses a file dest even with overwrite. Held: A30,
-I30, C31, W31.
+**O29b:** export refuses a file dest even with overwrite. Pass-32
+(L7-230 … L7-231): apply live suggested args (redact for health/artifacts
+only); replay next/stop IPC try/catch. Held: A30, I30, C31, W31, R32.

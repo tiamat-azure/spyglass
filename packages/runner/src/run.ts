@@ -28,12 +28,10 @@ import { applyDataset, assertParameterRefsResolved, parseDataset } from './param
 import { resolvePatchPolicy } from './patch-config.ts';
 import { loadDatasetFile, processSuggestedPatch } from './patch-lifecycle.ts';
 import {
-  collectKnownParameterSecretValues,
   findStepByIndex,
   hasParameterRef,
   originalDescriptorForPatch,
   overlayLiveArgumentsForRecovery,
-  redactSuggestedPatchEntryForPersistence,
   redactSuggestedPatchForPersistence
 } from './patch-redact.ts';
 import { runPath, screenshotFileName } from './paths.ts';
@@ -346,23 +344,17 @@ async function runScenarioOnDriver(
       if (recovered.ok) {
         verify = { ok: true };
         error = undefined;
-        patches.push(
-          redactSuggestedPatchEntryForPersistence(
-            {
-              stepIndex: step.index,
-              scope: 'action.descriptor',
-              original:
-                recordedStep !== undefined
-                  ? originalDescriptorForPatch(recordedStep)
-                  : cloneDescriptor(step.action.descriptor),
-              suggested: recovered.descriptor,
-              diagnosis: recovered.diagnosis,
-              confidence: recovered.confidence
-            },
-            recordedStep,
-            collectKnownParameterSecretValues(scenario.steps, executable.steps)
-          )
-        );
+        patches.push({
+          stepIndex: step.index,
+          scope: 'action.descriptor',
+          original:
+            recordedStep !== undefined
+              ? originalDescriptorForPatch(recordedStep)
+              : cloneDescriptor(step.action.descriptor),
+          suggested: recovered.descriptor,
+          diagnosis: recovered.diagnosis,
+          confidence: recovered.confidence
+        });
         emit(options, {
           runId,
           stepIndex: step.index,
@@ -433,14 +425,15 @@ async function runScenarioOnDriver(
     warnings: unique(warnings),
     steps: stepReports
   };
+  const liveSuggested: SuggestedPatch = {
+    schemaVersion: 1,
+    runId,
+    sessionId: executable.sessionId,
+    applied: false,
+    patches
+  };
   const suggestedPatch: SuggestedPatch = redactSuggestedPatchForPersistence(
-    {
-      schemaVersion: 1,
-      runId,
-      sessionId: executable.sessionId,
-      applied: false,
-      patches
-    },
+    liveSuggested,
     scenario,
     executable.steps
   );
@@ -465,7 +458,7 @@ async function runScenarioOnDriver(
     result.suggestedPatch = suggestedPatch;
   }
   const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
-    suggested: suggestedPatch,
+    suggested: liveSuggested,
     // L7-019: persist the recorded scenario, not dataset-materialized secrets.
     scenario,
     policy: resolvePatchPolicy(options.env ?? process.env, {

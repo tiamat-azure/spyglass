@@ -979,8 +979,12 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (activeReplay === undefined) {
       return { ok: false, error: 'inactive' };
     }
-    activeReplay.next();
-    return { ok: true };
+    try {
+      activeReplay.next();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle(IPC.replayStop, (event) => {
@@ -990,8 +994,12 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (activeReplay === undefined) {
       return { ok: false, error: 'inactive' };
     }
-    activeReplay.stop();
-    return { ok: true };
+    try {
+      activeReplay.stop();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
   });
 
   ipcMain.handle(IPC.sessionExport, async (event) => {

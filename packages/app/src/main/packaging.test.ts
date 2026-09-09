@@ -206,6 +206,12 @@ describe('packaged Observe', () => {
     const replayNextHandler = main.slice(replayNextIdx, replayStopIdx);
     expect(replayNextHandler).not.toContain('activeReplay?.next()');
     expect(replayNextHandler).toContain('activeReplay.next()');
+    expect(replayNextHandler).toContain('try {');
+    expect(replayNextHandler).toContain('catch (error)');
+    const replayStopHandler = main.slice(replayStopIdx, main.indexOf('IPC.sessionExport'));
+    expect(replayStopHandler).toContain('activeReplay.stop()');
+    expect(replayStopHandler).toContain('try {');
+    expect(replayStopHandler).toContain('catch (error)');
     expect(preload).toContain('IPC.voiceSetMode');
     const ipcShared = readFileSync(join(appRoot, 'src/shared/ipc.ts'), 'utf8');
     expect(ipcShared).toContain('export type SttUpgradeDecideResponse');

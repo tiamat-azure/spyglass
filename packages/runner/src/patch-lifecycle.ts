@@ -48,13 +48,13 @@ export async function processSuggestedPatch(input: {
   if (sessionDir === undefined) {
     return {};
   }
-  const suggested = redactSuggestedPatchForPersistence(input.suggested, input.scenario);
-  let health = await loadHealth(sessionDir, suggested.sessionId);
+  const persisted = redactSuggestedPatchForPersistence(input.suggested, input.scenario);
+  let health = await loadHealth(sessionDir, persisted.sessionId);
   // L7-028 / L7-153: empty patches still record on a clean success — that run resets F-63 candidates.
-  health = recordSuggestedPatches(health, suggested, policy);
+  health = recordSuggestedPatches(health, persisted, policy);
   const healthPath = await saveHealth(sessionDir, health);
   const result: PatchLifecycleResult = { health, healthPath };
-  if (!policy.assistedApply || suggested.patches.length === 0) {
+  if (!policy.assistedApply || persisted.patches.length === 0) {
     return result;
   }
   const resolvedPath = resolveScenarioPath(input.scenarioPath, policy.repo);
@@ -71,7 +71,8 @@ export async function processSuggestedPatch(input: {
   try {
     const applyInput: Parameters<typeof applyAssistedPatches>[0] = {
       health,
-      suggested,
+      // L7-230: apply the live suggested patch; `persisted` is health/artifacts only.
+      suggested: input.suggested,
       scenario: input.scenario,
       scenarioPath,
       policy,

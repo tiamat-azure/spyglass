@@ -1153,6 +1153,18 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: A30, I30, C31, W31.
 
+## Pass-32 adversarial fixes (L7-230 … L7-231)
+
+- **L7-230:** `processSuggestedPatch` records health from a
+  persistence-redacted copy (P13a / P28b) but passes the live suggested
+  patch to `applyAssistedPatches`. Apply matches F-63 hashes on the
+  redacted descriptor and writes live args. `run.ts` keeps recovered
+  descriptors live until lifecycle; disk `suggested-patch.json` stays
+  scrubbed.
+- **L7-231:** `IPC.replayNext` / `IPC.replayStop` wrap
+  `activeReplay.next()` / `stop()` in try/catch and return
+  `{ ok: false, error }` instead of an unhandled rejection.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

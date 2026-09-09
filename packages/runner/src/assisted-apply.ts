@@ -24,6 +24,7 @@ import {
 } from './git-repo.ts';
 import { incrementAppliedPatches, promotedCandidates } from './health.ts';
 import type { PatchPolicy } from './patch-config.ts';
+import { findStepByIndex, redactSuggestedPatchEntryForPersistence } from './patch-redact.ts';
 import { asScenario, cloneDescriptor } from './scenario.ts';
 
 export const ACTION_DESCRIPTOR_SCOPE = 'action.descriptor' as const;
@@ -243,7 +244,13 @@ export async function applyAssistedPatches(input: {
     if (!allowed.ok) {
       return { ok: false, reason: allowed.reason, code: 'illegal-scope' };
     }
-    const hash = descriptorHash(patch.suggested);
+    // L7-230: match F-63 hashes on the persistence-redacted descriptor (P13a / P28b)
+    // but apply the live suggested args.
+    const persisted = redactSuggestedPatchEntryForPersistence(
+      patch,
+      findStepByIndex(input.scenario, candidate.stepIndex)
+    );
+    const hash = descriptorHash(persisted.suggested);
     if (hash !== candidate.descriptorHash) {
       continue;
     }
@@ -643,7 +650,19 @@ function scenarioHasAppliedPatches(
 ): boolean {
   return patches.every((patch) => {
     const step = scenario.steps.find((entry) => entry.index === patch.stepIndex);
-    return step !== undefined && descriptorHash(step.action.descriptor) === patch.hash;
+    if (step === undefined) {
+      return false;
+    }
+    const persisted = redactSuggestedPatchEntryForPersistence(
+      {
+        stepIndex: patch.stepIndex,
+        scope: ACTION_DESCRIPTOR_SCOPE,
+        original: step.action.descriptor,
+        suggested: step.action.descriptor
+      },
+      step
+    );
+    return descriptorHash(persisted.suggested) === patch.hash;
   });
 }
 

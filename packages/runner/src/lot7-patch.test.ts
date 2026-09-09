@@ -2640,6 +2640,7 @@ describe('Lot 7 health.json wiring after recovery', () => {
     );
     expect(lifecycle).toContain('try {');
     expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
+    expect(lifecycle).toContain('suggested: liveSuggested');
     expect(lifecycle).toContain("code: 'internal-error'");
   });
 
@@ -2787,6 +2788,81 @@ describe('Lot 7 health.json wiring after recovery', () => {
     const working = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(working.steps[0]?.action.descriptor.arguments?.[0]).toBe('recorded-secret');
     expect(working.steps[1]?.action.descriptor.selector).toBe('#old');
+  });
+
+  it('applies live fill args and keeps health/artifacts scrubbed (L7-230)', async () => {
+    const root = await tempDir('spyglass-lot7-l7230-');
+    const repo = join(root, 'repo');
+    const sessionDir = join(root, 'session');
+    await mkdir(repo, { recursive: true });
+    await mkdir(sessionDir, { recursive: true });
+    await initGitRepo(repo);
+    const secret = 'live-dataset-secret';
+    const scn = scenario([fillStep(0, '#password', 'recorded-secret', 'password')]);
+    const scenarioPath = join(repo, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
+    const livePatch = (runId: string): SuggestedPatch => ({
+      schemaVersion: 1,
+      runId,
+      sessionId: 'ses_lot7',
+      applied: false,
+      patches: [
+        {
+          stepIndex: 0,
+          scope: 'action.descriptor',
+          original: { type: 'fill', selector: '#password', arguments: ['recorded-secret'] },
+          suggested: { type: 'fill', selector: '#password-new', arguments: [secret] },
+          diagnosis: 'selector drift',
+          confidence: 0.9
+        }
+      ]
+    });
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    const first = await processSuggestedPatch({
+      suggested: livePatch('run_a'),
+      scenario: scn,
+      policy,
+      scenarioPath,
+      sessionDir,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(JSON.stringify(first.health ?? {})).not.toMatch(secret);
+    expect(first.health?.patchCandidates[0]?.descriptorHash).toBe(
+      descriptorHash({ type: 'fill', selector: '#password-new' })
+    );
+    const second = await processSuggestedPatch({
+      suggested: livePatch('run_b'),
+      scenario: scn,
+      policy,
+      scenarioPath,
+      sessionDir,
+      git: defaultGitExec,
+      preparePr: async () => ({})
+    });
+    expect(second.assistedApply?.ok).toBe(true);
+    if (second.assistedApply?.ok !== true) {
+      return;
+    }
+    const onPatch = await gitShowJson<Scenario>(repo, `${second.assistedApply.branch}:scenario.json`);
+    expect(onPatch.steps[0]?.action.descriptor.selector).toBe('#password-new');
+    expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).toBe(secret);
+    expect(onPatch.steps[0]?.action.descriptor.arguments?.[0]).not.toBeNull();
+    const healthDisk = await loadHealth(sessionDir, 'ses_lot7');
+    expect(JSON.stringify(healthDisk)).not.toMatch(secret);
+    const src = await readFile(new URL('./patch-lifecycle.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('export async function processSuggestedPatch'),
+      src.indexOf('export type ResolveScenarioPathResult')
+    );
+    expect(fn).toContain('const persisted = redactSuggestedPatchForPersistence');
+    expect(fn).toContain('recordSuggestedPatches(health, persisted, policy)');
+    expect(fn).toContain('suggested: input.suggested');
+    expect(fn.indexOf('suggested: input.suggested')).toBeGreaterThan(
+      fn.indexOf('recordSuggestedPatches(health, persisted, policy)')
+    );
   });
 
   it('strips dataset secrets from suggested fill args before disk and health (P13a)', async () => {
