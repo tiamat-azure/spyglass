@@ -125,8 +125,7 @@ test.describe('Lot 0 two-zone shell', () => {
       await expect(chrome.locator('#log')).toContainText('nav.popup-redirected', {
         timeout: 15_000
       });
-      const redirected = await guestWindow(electronApp);
-      await expect(redirected.locator('#popup-target')).toBeVisible({ timeout: 15_000 });
+      await expect(guest.locator('#popup-target')).toBeVisible({ timeout: 15_000 });
 
       await chrome.locator('#url').fill('https://example.com');
       await chrome.locator('#url-form').evaluate((form) => {
