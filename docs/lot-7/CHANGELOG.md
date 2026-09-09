@@ -1072,7 +1072,12 @@ Ask-user still held: none.
 - **L7-222:** Descriptor hashes canonicalize nested objects/arrays with
   stable key order.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**705 passed**, 1 skipped (62 files).
+
 Ask-user still held: N29, D29, O29.
+
+## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
   spec. Playwright `close()` waits for `app.quit()`; after a guest
