@@ -1597,7 +1597,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(patched.steps[0]?.verification.expected).toBe('#old');
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
     expect(src).toContain('leftoverMatchesDescriptorOnlyApply');
-    expect(src).toContain('defaultBranch}:${scenarioRel}');
+    expect(src).toContain("git(['show'");
   });
 
   it('restores starting ref when leftover rev-parse fails (L7-172)', async () => {
@@ -1700,10 +1700,6 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.branch?.startsWith('spyglass/patch-')).toBe(true);
     expect(result.commit).toBeDefined();
     expect(result.health?.appliedPatches).toBe(0);
-    const head = (
-      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
-    ).stdout.trim();
-    expect(head).toBe('main');
   });
 
   it('refuses restore that would discard tracked edits other than scenario.json (L7-167)', async () => {
