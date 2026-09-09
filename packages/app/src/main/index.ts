@@ -9,7 +9,6 @@ import {
   STT_LARGE_MIN_BYTES,
   STT_LARGE_MODEL_FILE,
   STT_LARGE_MODEL_URL,
-  STT_LARGE_SHA256,
   sttLargeDownloadTimeoutMs,
   writeFileAtomic
 } from '@spyglass/stt';
@@ -70,6 +69,7 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
+import { resolveSttLargeExpectedSha256, sttUpgradeFakeEnabled } from './stt-upgrade-policy.ts';
 import { SttUpgradeStore, sttUpgradeStorePath } from './stt-upgrade-store.ts';
 import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
@@ -1077,18 +1077,15 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     try {
       await mkdir(modelDir, { recursive: true });
       const dest = largeModelPath(modelDir);
-      if (process.env.SPYGLASS_STT_UPGRADE_FAKE === '1') {
+      if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
         await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
         return { ok: true };
       }
-      const fromEnv = process.env.STT_LARGE_SHA256;
-      const digest =
-        fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : STT_LARGE_SHA256;
       await downloadUrlToFileAtomic({
         dest,
         url: STT_LARGE_MODEL_URL,
         timeoutMs: sttLargeDownloadTimeoutMs(process.env),
-        expectedSha256: digest,
+        expectedSha256: resolveSttLargeExpectedSha256(process.env, app.isPackaged),
         minBytes: STT_LARGE_MIN_BYTES
       });
       return { ok: true };

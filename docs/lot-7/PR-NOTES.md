@@ -100,8 +100,9 @@ NODE_OPTIONS=--experimental-transform-types node scripts/capture-lot-7.mjs
 2. **In-app replay** writes `health.json` on the session. Git/PR only when
    `PATCH_ASSISTED_APPLY` is on **and** the scenario file is inside
    `--repo`.
-3. **STT download** uses `ggml-large-v3-turbo-q5_0.bin`. Tests use
-   `SPYGLASS_STT_UPGRADE_FAKE=1` and never fetch ~575 Mo.
+3. **STT download** uses `ggml-large-v3-turbo-q5_0.bin`. Unpackaged/test
+   builds may set `SPYGLASS_STT_UPGRADE_FAKE=1` and never fetch ~575 Mo.
+   Packaged production ignores FAKE and env `STT_LARGE_SHA256` (E18a).
 4. **Export/import** copies the session folder (plus
    `spyglass-session.json` manifest). In-app F-47 picks the folder with
    a main-process directory dialog (E4a). Path-traversal session ids and
@@ -166,6 +167,8 @@ Pass-21 (L7-142 … L7-157) is in `CHANGELOG.md`.
 Pass-22 (L7-158 … L7-164) is in `CHANGELOG.md`.
 Captain lock **A17b** (sync `createEngineFromEnv` + named
 `createEngineFromEnvAsync`) is in `CHANGELOG.md`.
+Captain lock **E18a** (packaged production ignores FAKE / env
+`STT_LARGE_SHA256`) is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -206,3 +209,6 @@ Captain lock **A17b** (sync `createEngineFromEnv` + named
 - **A17b:** `createEngineFromEnv` is sync. Whisper marker I/O uses
   `readLargeFallbackSync`. Callers that must not block (sidecar,
   `createInProcessSttFromEnv`) use `createEngineFromEnvAsync`.
+- **E18a:** Packaged production ignores `SPYGLASS_STT_UPGRADE_FAKE` and
+  env `STT_LARGE_SHA256`. Unpackaged or `NODE_ENV=test` may still use
+  those escapes (no ~575 Mo fetch in tests).

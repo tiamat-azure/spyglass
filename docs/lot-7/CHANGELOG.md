@@ -663,6 +663,16 @@ Ask-user still held: **A17**, **E18**, **M18**, **W18**, **R19**, **D20**,
 
 Ask-user still held: **E18**, **M18**, **W18**, **R19**, **D20**, **H21**.
 
+## Captain lock E18a (no packaged FAKE / SHA256 env escapes)
+
+- **E18a:** `SPYGLASS_STT_UPGRADE_FAKE` and env `STT_LARGE_SHA256` are
+  honoured only when unpackaged or `NODE_ENV=test`. Packaged production
+  builds always download the real large model and verify the pinned
+  `STT_LARGE_SHA256` digest (S4a). Unpackaged/test still skip the ~575 Mo
+  fetch via FAKE.
+
+Ask-user still held: **M18**, **W18**, **R19**, **D20**, **H21**.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
