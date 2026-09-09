@@ -1004,6 +1004,9 @@ Ask-user still held: S28, X28, F28, W28.
   `code: 'scenario-outside-repo'` from `processSuggestedPatch` (L7-009
   realpath symlink escape in apply still holds).
 
+Local: `pnpm lint` 275 files, `pnpm typecheck` 6 packages, `pnpm test`
+**694 passed**, 1 skipped (62 files). `lot7-patch.test.ts` 90.
+
 Ask-user still held: X28, F28, W28.
 
 ## CI — macOS Electron e2e close hang
