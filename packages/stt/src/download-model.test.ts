@@ -280,6 +280,24 @@ describe('W3a fetch-whisper --large', () => {
     expect(zipFn).toContain('powershell.exe');
     expect(src).toContain("['-xf', archivePath, '-C', extractDir]");
   });
+
+  it('rejects extracted whisper-cli smaller than CLI_MIN_BYTES (L7-225)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const fnStart = src.indexOf('async function ensureWhisperCli');
+    const fnEnd = src.indexOf('const SMALL_MIN_BYTES');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('copyFileSync(found, dest)');
+    expect(body.indexOf('copyFileSync(found, dest)')).toBeLessThan(
+      body.lastIndexOf('existingCliOk(dest)')
+    );
+    expect(body.lastIndexOf('existingCliOk(dest)')).toBeLessThan(body.indexOf('chmodSync'));
+    expect(body).toContain('CLI_MIN_BYTES');
+  });
 });
 
 describe('Lot 7 first-use latency isolation (L7-008)', () => {

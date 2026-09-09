@@ -400,6 +400,53 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(again.steps[0]?.action.descriptor.arguments).toEqual(['carol', 'slowly', 'ltr']);
   });
 
+  it('preserves JSON-serializable non-string trailing args (L7-224)', async () => {
+    const step = fillStep(0, '#user', 'alice');
+    step.action.descriptor.arguments = [
+      'alice',
+      0,
+      false,
+      2,
+      true,
+      { dir: 'ltr' }
+    ] as unknown as string[];
+    const scn: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/login',
+      steps: [step]
+    };
+    const extracted = extractScenarioParameters(scn);
+    expect(extracted.scenario.steps[0]?.action.descriptor.arguments?.slice(1)).toEqual([
+      0,
+      false,
+      2,
+      true,
+      { dir: 'ltr' }
+    ]);
+    const applied = applyDataset(extracted.scenario, {
+      schemaVersion: 1,
+      name: 'live',
+      values: { user: 'bob' },
+      secrets: []
+    });
+    expect(applied.steps[0]?.action.descriptor.arguments).toEqual([
+      'bob',
+      0,
+      false,
+      2,
+      true,
+      { dir: 'ltr' }
+    ]);
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('function trailingArguments'),
+      src.indexOf('function cloneJsonArg')
+    );
+    expect(fn).not.toContain("typeof item === 'string'");
+    expect(src).toContain('cloneJsonArg');
+  });
+
   it('preserves trailing select arguments through extract and apply (A27b)', async () => {
     const step = selectStep(0, '#country', 'fr');
     step.action.descriptor.arguments = ['fr', 'exact'];

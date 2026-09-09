@@ -1077,6 +1077,18 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: N29, D29, O29.
 
+## Pass-30 adversarial fixes (L7-223 … L7-225)
+
+- **L7-223:** `gitChildExecOptions` uses `GIT_EXEC_MAX_BUFFER_BYTES`
+  (32 MiB), above the former 2MB cap, so assisted-apply status/diff/log
+  on larger repos is not truncated.
+- **L7-224:** `trailingArguments` keeps JSON-serializable trailing
+  values (not only strings) through parameterize/restore (A27b).
+- **L7-225:** After extract+copy, `ensureWhisperCli` requires
+  `existingCliOk` / `CLI_MIN_BYTES` before chmod/success.
+
+Ask-user still held: N29, D29, O29, A30, I30.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

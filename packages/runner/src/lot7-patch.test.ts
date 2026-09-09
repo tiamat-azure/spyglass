@@ -28,6 +28,7 @@ import {
 import {
   defaultGitExec,
   detectDefaultBranch,
+  GIT_EXEC_MAX_BUFFER_BYTES,
   GIT_EXEC_TIMEOUT_MS,
   GitApplyError,
   type GitExec,
@@ -887,9 +888,13 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
 
   it('times out hung git exec instead of waiting forever (L7-093 / L7-160)', async () => {
     expect(GIT_EXEC_TIMEOUT_MS).toBe(120_000);
+    expect(GIT_EXEC_MAX_BUFFER_BYTES).toBeGreaterThan(2_000_000);
+    expect(gitChildExecOptions(process.cwd(), 400).maxBuffer).toBe(GIT_EXEC_MAX_BUFFER_BYTES);
     const src = await readFile(new URL('./git-repo.ts', import.meta.url), 'utf8');
     expect(src).toContain('execGitTimed(args, cwd, GIT_EXEC_TIMEOUT_MS)');
     expect(src).toContain("killSignal: 'SIGKILL'");
+    expect(src).toContain('maxBuffer: GIT_EXEC_MAX_BUFFER_BYTES');
+    expect(src).not.toContain('maxBuffer: 2_000_000');
     const started = Date.now();
     const hung = execFileAsync(
       process.execPath,

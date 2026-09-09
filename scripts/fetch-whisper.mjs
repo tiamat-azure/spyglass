@@ -190,6 +190,10 @@ async function ensureWhisperCli() {
       throw new Error(`archive did not contain ${cli.name}`);
     }
     copyFileSync(found, dest);
+    if (!existingCliOk(dest)) {
+      await rm(dest, { recursive: true, force: true });
+      throw new Error(`extracted ${cli.name} is smaller than ${String(CLI_MIN_BYTES)} bytes`);
+    }
     if (process.platform !== 'win32') {
       chmodSync(dest, 0o755);
     }

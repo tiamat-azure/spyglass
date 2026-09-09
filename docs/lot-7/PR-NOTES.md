@@ -275,6 +275,11 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **L7-220:** `consecutiveRuns` max 32.
 - **L7-221:** Duplicate STT accept does not re-download large.
 - **L7-222:** Nested descriptor objects hash with sorted keys.
+- **L7-223:** Git child exec `maxBuffer` is 32 MiB (not 2MB).
+- **L7-224:** Trailing fill/select args keep JSON-serializable
+  non-strings.
+- **L7-225:** Extracted whisper-cli must meet `CLI_MIN_BYTES` before
+  success.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -341,4 +346,6 @@ recovery without `checkout -f`, migrated consecutiveRuns window,
 whisperAvailable vs prefer-small, soft health lifecycle, configured
 large skip, existing explicit large only, refuse special files,
 consecutiveRuns max 32, skip duplicate large download, nested descriptor
-canonicalize. Held: N29, D29, O29.
+canonicalize. Pass-30 (L7-223 … L7-225): git exec maxBuffer 32 MiB,
+JSON-serializable trailing args, whisper-cli size check after extract.
+Held: N29, D29, O29, A30, I30.

@@ -5,6 +5,8 @@ const execFileAsync = promisify(execFile);
 
 /** Matches `tryGhPrCreate` so hung `git push` / credential prompts fail closed. */
 export const GIT_EXEC_TIMEOUT_MS = 120_000;
+/** L7-223: above Node's ~1MB and the former 2MB cap so status/diff/log on large repos is not truncated. */
+export const GIT_EXEC_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 
 export type GitExecResult = {
   stdout: string;
@@ -99,7 +101,7 @@ export function gitChildExecOptions(
   return {
     cwd,
     encoding: 'utf8',
-    maxBuffer: 2_000_000,
+    maxBuffer: GIT_EXEC_MAX_BUFFER_BYTES,
     timeout: timeoutMs,
     killSignal: 'SIGKILL',
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }

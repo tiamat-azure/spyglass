@@ -156,22 +156,45 @@ export function stripParameterizedArgument(descriptor: ReplayDescriptor): void {
 }
 
 function applyParameterizedArgument(descriptor: ReplayDescriptor, value: string): void {
-  descriptor.arguments = [value, ...trailingArguments(descriptor.arguments)];
+  descriptor.arguments = [value, ...trailingArguments(descriptor.arguments)] as string[];
 }
 
-function trailingArguments(args: readonly unknown[] | undefined): string[] {
-  const trailing: string[] = [];
+/**
+ * A27b / L7-224: keep trailing slots (not only strings). JSON-serializable
+ * values round-trip; functions/undefined are dropped.
+ */
+function trailingArguments(args: readonly unknown[] | undefined): unknown[] {
+  const trailing: unknown[] = [];
   for (const item of (args ?? []).slice(1)) {
-    if (typeof item === 'string') {
-      trailing.push(item);
+    const kept = cloneJsonArg(item);
+    if (kept !== undefined) {
+      trailing.push(kept);
     }
   }
   return trailing;
 }
 
+function cloneJsonArg(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const encoded = JSON.stringify(value);
+    if (encoded === undefined) {
+      return undefined;
+    }
+    return JSON.parse(encoded) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Vacant [0] so D20a still fails; JSON.stringify persists it as null. */
-function unappliedArguments(trailing: string[]): string[] {
-  return [undefined as unknown as string, ...trailing];
+function unappliedArguments(trailing: unknown[]): string[] {
+  return [undefined as unknown as string, ...(trailing as string[])];
 }
 
 function isUnresolvedParameterArg(value: unknown): boolean {
