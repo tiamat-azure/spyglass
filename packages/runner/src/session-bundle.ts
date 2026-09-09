@@ -301,7 +301,16 @@ async function replaceDirectory(dest: string, staging: string): Promise<void> {
   } catch (error) {
     if (backedUp && !published) {
       // L7-163: dest is not our published staging; do not rm a concurrent dest.
-      await rename(backup, dest).catch(() => undefined);
+      try {
+        await rename(backup, dest);
+      } catch (restoreError) {
+        // L7-169: keep the original publish error; log a stuck orphan so it is visible.
+        console.error(
+          `[spyglass] failed to restore ${dest} from ${backup} after publish failure: ${
+            restoreError instanceof Error ? restoreError.message : String(restoreError)
+          }`
+        );
+      }
     }
     throw error;
   }

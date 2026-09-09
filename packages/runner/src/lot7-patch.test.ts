@@ -199,6 +199,16 @@ describe('Lot 7 F-63 confirmation', () => {
     expect(health.patchCandidates[0]?.runIds).toEqual(['run_a']);
   });
 
+  it('does not inflate consecutiveRuns when a prior runId reappears (L7-166)', () => {
+    let health = emptyHealth('ses_lot7');
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    expect(health.patchCandidates[0]?.consecutiveRuns).toBe(2);
+    expect(health.patchCandidates[0]?.lastRunId).toBe('run_b');
+    expect(health.patchCandidates[0]?.runIds).toEqual(['run_a', 'run_b']);
+  });
+
   it('increments appliedPatches by unique step indexes (L7-136)', () => {
     const health = incrementAppliedPatches(emptyHealth('ses_lot7'), [0, 0, 1], policy);
     expect(health.appliedPatches).toBe(2);
@@ -496,7 +506,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
     health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
     const git = async (args: readonly string[], cwd: string) => {
-      if (args[0] === 'checkout' && args[1] === '-f') {
+      if (args[0] === 'checkout' && args[1] !== '-b' && args[1] !== '--') {
         const head = (
           await defaultGitExec(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
         ).stdout.trim();
@@ -1479,6 +1489,103 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
+  it('does not skipMutate a leftover patch branch that also changes unrelated files (L7-168)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7168-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const leftover = patchBranchName(
+      'ses_lot7',
+      patchSetHash([{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }])
+    );
+    await execFileAsync('git', ['checkout', '-b', leftover], { cwd: dir });
+    const applied = scenario([clickStep(0, '#new')]);
+    await writeFile(scenarioPath, `${JSON.stringify(applied, null, 2)}\n`, 'utf8');
+    await writeFile(join(dir, 'extra.txt'), 'unrelated\n', 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json', 'extra.txt'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'leftover with extra file'], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({}),
+      createPr: async () => ({ ok: true })
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const names = (
+      await execFileAsync('git', ['diff', '--name-only', `main...${result.branch}`], { cwd: dir })
+    ).stdout
+      .trim()
+      .split('\n')
+      .filter((line) => line.length > 0);
+    expect(names).toEqual(['scenario.json']);
+    await expect(
+      execFileAsync('git', ['cat-file', '-e', `${result.branch}:extra.txt`], { cwd: dir })
+    ).rejects.toThrow();
+  });
+
+  it('refuses restore that would discard tracked edits other than scenario.json (L7-167)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7167-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let statusCalls = 0;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'status' && args.includes('--porcelain')) {
+        statusCalls += 1;
+        if (statusCalls > 1) {
+          return { stdout: ' M extra.txt\n', stderr: '', code: 0 };
+        }
+      }
+      if (args[0] === 'checkout' && args[1] === '-f') {
+        throw new Error('L7-167: restore must not git checkout -f');
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('restore-failed');
+      expect(result.reason).toMatch(/refusing to discard uncommitted changes: extra\.txt/);
+    }
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const restoreFn = src.slice(
+      src.indexOf('async function restoreStartingBranch'),
+      src.indexOf('function trackedDirtyPaths')
+    );
+    expect(restoreFn).not.toContain("'-f'");
+    expect(restoreFn).toContain("['checkout', target]");
+  });
+
   it('maps a throwing pre-mutation git probe to git-error (L7-144)', async () => {
     const dir = await tempDir('spyglass-lot7-l7144-');
     await initGitRepo(dir);
@@ -1598,8 +1705,13 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     health = recordSuggestedPatches(health, { ...suggested, runId: 'run_a' }, policy);
     health = recordSuggestedPatches(health, suggested, policy);
     const git = async (args: readonly string[], cwd: string) => {
-      if (args[0] === 'checkout' && args[1] === '-f') {
-        return { stdout: '', stderr: 'fatal: cannot checkout starting branch', code: 128 };
+      if (args[0] === 'checkout' && args[1] !== '-b' && args[1] !== '--') {
+        const head = (
+          await defaultGitExec(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+        ).stdout.trim();
+        if (head.startsWith('spyglass/patch-')) {
+          return { stdout: '', stderr: 'fatal: cannot checkout starting branch', code: 128 };
+        }
       }
       return await defaultGitExec(args, cwd);
     };

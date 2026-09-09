@@ -100,6 +100,8 @@ let activeReplay: ReplayEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
 let sttUpgradeStore: SttUpgradeStore | undefined;
 let sttUpgradeStoreLoading: Promise<SttUpgradeStore> | undefined;
+/** L7-165: serialize accept/refuse so a concurrent accept cannot start a large download after refuse. */
+let sttUpgradeDecideQueue: Promise<unknown> = Promise.resolve();
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -293,6 +295,15 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
     sttUpgradeStoreLoading = undefined;
     throw error;
   }
+}
+
+function enqueueSttUpgradeDecide<T>(task: () => Promise<T>): Promise<T> {
+  const run = sttUpgradeDecideQueue.then(task, task);
+  sttUpgradeDecideQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 function resolveSttModelDir(): string {
@@ -1063,37 +1074,42 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (action === undefined) {
       return { ok: false, error: 'bad-request' };
     }
-    let store: SttUpgradeStore;
-    try {
-      store = await ensureSttUpgradeStore();
-      if (action === 'refuse') {
-        await store.refusePermanently();
-        return { ok: true };
+    return enqueueSttUpgradeDecide(async () => {
+      let store: SttUpgradeStore;
+      try {
+        store = await ensureSttUpgradeStore();
+        if (action === 'refuse') {
+          await store.refusePermanently();
+          return { ok: true };
+        }
+        if (store.snapshot(resolveSttModelDir()).refusedPermanently) {
+          return { ok: false, error: 'refused' };
+        }
+      } catch {
+        return { ok: false, error: 'store-unavailable' };
       }
-    } catch {
-      return { ok: false, error: 'store-unavailable' };
-    }
-    const modelDir = resolveSttModelDir();
-    try {
-      await mkdir(modelDir, { recursive: true });
-      const dest = largeModelPath(modelDir);
-      if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
-        await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
+      const modelDir = resolveSttModelDir();
+      try {
+        await mkdir(modelDir, { recursive: true });
+        const dest = largeModelPath(modelDir);
+        if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
+          await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
+          return { ok: true };
+        }
+        await downloadUrlToFileAtomic({
+          dest,
+          url: STT_LARGE_MODEL_URL,
+          timeoutMs: sttLargeDownloadTimeoutMs(process.env),
+          expectedSha256: resolveSttLargeExpectedSha256(process.env, app.isPackaged),
+          minBytes: STT_LARGE_MIN_BYTES
+        });
         return { ok: true };
+      } catch (error) {
+        const timedOut =
+          error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        return { ok: false, error: timedOut ? 'timeout' : 'download-failed' };
       }
-      await downloadUrlToFileAtomic({
-        dest,
-        url: STT_LARGE_MODEL_URL,
-        timeoutMs: sttLargeDownloadTimeoutMs(process.env),
-        expectedSha256: resolveSttLargeExpectedSha256(process.env, app.isPackaged),
-        minBytes: STT_LARGE_MIN_BYTES
-      });
-      return { ok: true };
-    } catch (error) {
-      const timedOut =
-        error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-      return { ok: false, error: timedOut ? 'timeout' : 'download-failed' };
-    }
+    });
   });
 }
 

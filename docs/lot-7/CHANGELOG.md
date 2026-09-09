@@ -722,6 +722,26 @@ Ask-user still held: **H21**.
 
 Ask-user still held: none for these captain locks.
 
+## Pass-23 adversarial fixes (L7-165 … L7-169)
+
+- **L7-165:** `sttUpgradeDecide` reject `accept` when `refusedPermanently`
+  is set. Accept/refuse IPC is serialized so a concurrent accept cannot
+  start a large download after refuse.
+- **L7-166:** `recordSuggestedPatches` treats any `suggested.runId` already
+  in `runIds` as a no-op (not only equality with last). A→B→A cannot
+  inflate `consecutiveRuns`.
+- **L7-167:** `restoreStartingBranch` uses non-force `git checkout` after
+  restoring only this op’s dirty `scenario.json`. Tracked edits to other
+  files (e.g. during a long push/PR wait) are not discarded with
+  `checkout -f`.
+- **L7-168:** Reuse of an existing patch branch (`skipMutate`) requires the
+  branch to be a descendant of default and `default...HEAD` to contain
+  only the scenario file; otherwise the leftover is deleted and recreated.
+- **L7-169:** If restore-after-failed-publish itself fails, log the stuck
+  orphan and still throw the original publish error.
+
+Ask-user still held: **F23** (`pickPreferredWhisperModel` fallback-awareness).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

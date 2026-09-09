@@ -63,11 +63,11 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (274 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **628 passed**, 1 skipped (62 files) |
+| `pnpm test` | **631 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (67), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (45),
+Lot 7-focused unit tests: `lot7-patch.test.ts` (70), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (45),
 `upgrade.test.ts` (24), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
@@ -236,3 +236,7 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   `runIds` get them from existing string items or `lastRunId`.
   `schemaVersion` stays 1. Schema still requires `runIds` (L7-128);
   load no longer fails solely for that omission.
+
+Pass-23 (L7-165 … L7-169) is in `CHANGELOG.md` (STT decide serialize +
+refuse gate, distinct `runIds` membership, non-force restore, leftover
+diff check, log failed publish restore). Ask-user still held: **F23**.

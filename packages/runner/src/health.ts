@@ -187,7 +187,8 @@ export function recordSuggestedPatches(
       continue;
     }
     const runIds = distinctRunIds(previous);
-    if (runIds[runIds.length - 1] === suggested.runId) {
+    // L7-166: any prior occurrence is a no-op (A→B→A must not inflate consecutiveRuns).
+    if (runIds.includes(suggested.runId)) {
       continue;
     }
     runIds.push(suggested.runId);

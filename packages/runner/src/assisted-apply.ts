@@ -222,6 +222,7 @@ export async function applyAssistedPatches(input: {
     };
   }
   const scenarioPath = resolvedScenario.scenarioReal;
+  const scenarioRel = relative(resolvedScenario.repoReal, scenarioPath).split(sep).join('/');
 
   const promoted = promotedCandidates(input.health, policy);
   if (promoted.length === 0) {
@@ -291,26 +292,39 @@ export async function applyAssistedPatches(input: {
   let skipMutate = false;
   let reloadScenarioFromDefault = false;
   if (leftoverExists) {
-    const ontoPatch = await checkoutOrGitError(git, repoRoot, starting, ['checkout', branch]);
+    const ontoPatch = await checkoutOrGitError(
+      git,
+      repoRoot,
+      starting,
+      ['checkout', branch],
+      [scenarioRel]
+    );
     if (ontoPatch !== undefined) {
       return ontoPatch;
     }
     try {
       const onPatch = await loadScenarioJson(scenarioPath);
-      if (scenarioHasAppliedPatches(onPatch, toApply)) {
+      if (
+        scenarioHasAppliedPatches(onPatch, toApply) &&
+        (await leftoverPatchOnlyExpectedScenario(git, repoRoot, defaultBranch, scenarioRel))
+      ) {
         skipMutate = true;
       } else {
-        const ontoDefault = await checkoutOrGitError(git, repoRoot, starting, [
-          'checkout',
-          '-f',
-          defaultBranch
-        ]);
+        const ontoDefault = await checkoutOrGitError(
+          git,
+          repoRoot,
+          starting,
+          ['checkout', '-f', defaultBranch],
+          [scenarioRel]
+        );
         if (ontoDefault !== undefined) {
           return ontoDefault;
         }
         const deleted = await git(['branch', '-D', branch], repoRoot);
         if (deleted.code !== 0) {
-          const revertError = await restoreStartingBranch(git, repoRoot, starting);
+          const revertError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+            scenarioRel
+          ]);
           return refusalWithRestore(
             {
               ok: false,
@@ -325,7 +339,9 @@ export async function applyAssistedPatches(input: {
         reloadScenarioFromDefault = true;
       }
     } catch (error) {
-      const revertError = await restoreStartingBranch(git, repoRoot, starting);
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+        scenarioRel
+      ]);
       return refusalWithRestore(
         {
           ok: false,
@@ -346,10 +362,13 @@ export async function applyAssistedPatches(input: {
     if (starting.name !== defaultBranch || reloadScenarioFromDefault) {
       const headNow = await currentBranch(git, repoRoot);
       if (headNow !== defaultBranch) {
-        const switched = await checkoutOrGitError(git, repoRoot, starting, [
-          'checkout',
-          defaultBranch
-        ]);
+        const switched = await checkoutOrGitError(
+          git,
+          repoRoot,
+          starting,
+          ['checkout', defaultBranch],
+          [scenarioRel]
+        );
         if (switched !== undefined) {
           return switched;
         }
@@ -357,7 +376,9 @@ export async function applyAssistedPatches(input: {
       try {
         scenario = await loadScenarioJson(scenarioPath);
       } catch (error) {
-        const revertError = await restoreStartingBranch(git, repoRoot, starting);
+        const revertError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+          scenarioRel
+        ]);
         return refusalWithRestore(
           {
             ok: false,
@@ -369,13 +390,21 @@ export async function applyAssistedPatches(input: {
         );
       }
     }
-    const created = await checkoutOrGitError(git, repoRoot, starting, ['checkout', '-b', branch]);
+    const created = await checkoutOrGitError(
+      git,
+      repoRoot,
+      starting,
+      ['checkout', '-b', branch],
+      [scenarioRel]
+    );
     if (created !== undefined) {
       return created;
     }
     const onBranch = await currentBranch(git, repoRoot);
     if (isDefaultBranchName(onBranch, defaultBranch)) {
-      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch);
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, [
+        scenarioRel
+      ]);
       return refusalWithRestore(
         { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' },
         revertError,
@@ -385,7 +414,9 @@ export async function applyAssistedPatches(input: {
 
     const typeMismatch = typeMismatchForApply(scenario, toApply);
     if (typeMismatch !== undefined) {
-      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch);
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, [
+        scenarioRel
+      ]);
       return refusalWithRestore(typeMismatch, revertError, starting);
     }
 
@@ -397,13 +428,15 @@ export async function applyAssistedPatches(input: {
       });
       await writeFile(scenarioPath, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
 
-      const rel = relative(resolvedScenario.repoReal, scenarioPath).split(sep).join('/');
+      const rel = scenarioRel;
       await gitOkOrThrow(git, repoRoot, ['add', '--', rel]);
       const message = `fix(spyglass): assisted action.descriptor patch for ${input.suggested.sessionId}\n\nHuman review required (F-64). CI green is not merge.`;
       await gitOkOrThrow(git, repoRoot, ['commit', '-m', message]);
       commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
     } catch (error) {
-      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch);
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, [
+        scenarioRel
+      ]);
       const reason = error instanceof Error ? error.message : String(error);
       return refusalWithRestore(
         {
@@ -496,7 +529,9 @@ export async function applyAssistedPatches(input: {
   // B16a / L7-129: after success, return to the pre-apply starting ref. Do not
   // use currentBranch() here — HEAD is the patch branch. Leave spyglass/patch-*
   // in place for human review (do not pass it as danglingPatchBranch).
-  const restoreError = await restoreStartingBranch(git, repoRoot, starting);
+  const restoreError = await restoreStartingBranch(git, repoRoot, starting, undefined, [
+    scenarioRel
+  ]);
   if (restoreError !== undefined) {
     return {
       ok: false,
@@ -620,19 +655,41 @@ function startingCheckoutRef(head: StartingHead): string {
   return head.name === 'HEAD' ? head.sha : head.name;
 }
 
-/** L7-066 / L7-067: restore HEAD, then best-effort delete a patch branch we created. */
+/** L7-066 / L7-067 / L7-167: restore HEAD without `checkout -f`. */
 async function restoreStartingBranch(
   git: GitExec,
   cwd: string,
   starting: StartingHead,
-  danglingPatchBranch?: string
+  danglingPatchBranch?: string,
+  revertPaths: readonly string[] = []
 ): Promise<string | undefined> {
   const target = startingCheckoutRef(starting);
   let revertError: string | undefined;
   try {
-    const restored = await git(['checkout', '-f', target], cwd);
-    if (restored.code !== 0) {
-      revertError = restored.stderr.trim() || `git checkout -f ${target} failed`;
+    const status = await git(['status', '--porcelain'], cwd);
+    if (status.code !== 0) {
+      revertError = status.stderr.trim() || 'git status failed';
+    } else {
+      const trackedDirty = trackedDirtyPaths(status.stdout);
+      const allowed = new Set(revertPaths);
+      const unexpected = trackedDirty.filter((path) => !allowed.has(path));
+      if (unexpected.length > 0) {
+        revertError = `refusing to discard uncommitted changes: ${unexpected.join(', ')}`;
+      } else {
+        for (const file of trackedDirty) {
+          const reset = await git(['checkout', '--', file], cwd);
+          if (reset.code !== 0) {
+            revertError = reset.stderr.trim() || `git checkout -- ${file} failed`;
+            break;
+          }
+        }
+        if (revertError === undefined) {
+          const restored = await git(['checkout', target], cwd);
+          if (restored.code !== 0) {
+            revertError = restored.stderr.trim() || `git checkout ${target} failed`;
+          }
+        }
+      }
     }
   } catch (error) {
     revertError = error instanceof Error ? error.message : String(error);
@@ -657,6 +714,49 @@ async function restoreStartingBranch(
     }
   }
   return revertError;
+}
+
+function trackedDirtyPaths(porcelain: string): string[] {
+  const paths: string[] = [];
+  for (const line of porcelain.split('\n')) {
+    if (line.length < 4) {
+      continue;
+    }
+    const xy = line.slice(0, 2);
+    if (xy === '??' || xy === '!!') {
+      continue;
+    }
+    const rest = line.slice(3).trim();
+    const renamed = rest.split(' -> ');
+    const raw = renamed[renamed.length - 1] ?? '';
+    const path = raw.replace(/^"(.*)"$/u, '$1').replaceAll('\\', '/');
+    if (path.length > 0) {
+      paths.push(path);
+    }
+  }
+  return paths;
+}
+
+/** L7-168: leftover patch branch may be reused only if it forks default and only changes scenario.json. */
+async function leftoverPatchOnlyExpectedScenario(
+  git: GitExec,
+  cwd: string,
+  defaultBranch: string,
+  scenarioRel: string
+): Promise<boolean> {
+  const ancestor = await git(['merge-base', '--is-ancestor', defaultBranch, 'HEAD'], cwd);
+  if (ancestor.code !== 0) {
+    return false;
+  }
+  const diff = await git(['diff', '--name-only', `${defaultBranch}...HEAD`], cwd);
+  if (diff.code !== 0) {
+    return false;
+  }
+  const files = diff.stdout
+    .split('\n')
+    .map((line) => line.trim().replaceAll('\\', '/'))
+    .filter((line) => line.length > 0);
+  return files.length > 0 && files.every((file) => file === scenarioRel);
 }
 
 /** P12a / P14a: local commit stays; PR prep / remote recreate failure does not increment health. */
@@ -705,13 +805,14 @@ async function checkoutOrGitError(
   git: GitExec,
   cwd: string,
   starting: StartingHead,
-  args: readonly string[]
+  args: readonly string[],
+  revertPaths: readonly string[] = []
 ): Promise<AssistedApplyRefusal | undefined> {
   try {
     await gitOkOrThrow(git, cwd, args);
     return undefined;
   } catch (error) {
-    const revertError = await restoreStartingBranch(git, cwd, starting);
+    const revertError = await restoreStartingBranch(git, cwd, starting, undefined, revertPaths);
     return refusalWithRestore(
       {
         ok: false,

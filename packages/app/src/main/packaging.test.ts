@@ -282,11 +282,16 @@ describe('packaged Observe', () => {
     const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
     expect(replaceCatch).not.toContain('await rm(dest');
     expect(replaceCatch).toContain('await rename(backup, dest)');
+    expect(replaceCatch).toContain('console.error');
+    expect(replaceCatch).toContain('throw error');
     expect(main).toContain("error: 'fallback-unreadable'");
     expect(main).toContain("error: 'store-unavailable'");
     const decideFn = main.slice(main.indexOf('IPC.sttUpgradeDecide'));
     expect(decideFn).toContain('sttUpgradeFakeEnabled(process.env, app.isPackaged)');
     expect(decideFn).toContain('resolveSttLargeExpectedSha256(process.env, app.isPackaged)');
+    expect(decideFn).toContain('enqueueSttUpgradeDecide');
+    expect(decideFn).toContain('refusedPermanently');
+    expect(decideFn).toContain("error: 'refused'");
     expect(decideFn).not.toContain("process.env.SPYGLASS_STT_UPGRADE_FAKE === '1'");
     expect(decideFn).not.toContain('process.env.STT_LARGE_SHA256');
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');
