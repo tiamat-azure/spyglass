@@ -7,7 +7,7 @@ import type { ParsedRunnerArgv, RunScenarioResult } from './options.ts';
 import { runPath, traceFileName } from './paths.ts';
 import { createPlaywrightDriver } from './playwright-driver.ts';
 import { LlmRecoverer, type Recoverer } from './recover.ts';
-import { newRunId, runScenario } from './run.ts';
+import { newRunId, type ReplayProgress, runScenario } from './run.ts';
 
 export type LaunchPlaywrightRunInput = {
   scenario: Scenario;
@@ -18,6 +18,8 @@ export type LaunchPlaywrightRunInput = {
   proofScreenshot?: string;
   /** L6-055: caller-supplied recoverer wins over createCliGateway(). */
   recoverer?: Recoverer;
+  /** L6-073: forwarded into runScenario for driver-less callers. */
+  onProgress?: (event: ReplayProgress) => void;
 };
 
 /**
@@ -61,11 +63,12 @@ export async function launchPlaywrightRun(
       runId,
       closeDriver: false,
       ...(parsed.baseUrl !== undefined ? { baseUrl: parsed.baseUrl } : {}),
-      ...(recoverer !== undefined ? { recoverer } : {})
+      ...(recoverer !== undefined ? { recoverer } : {}),
+      ...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {})
     });
     if (input.proofScreenshot !== undefined && input.proofScreenshot.length > 0) {
       await mkdir(dirname(input.proofScreenshot), { recursive: true });
-      await driver.screenshot(input.proofScreenshot).catch(() => undefined);
+      await driver.screenshot(input.proofScreenshot);
     }
     await driver.close();
     return result;

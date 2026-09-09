@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -99,6 +99,24 @@ describe('Lot 6 measurement protocol corpus', () => {
     expect(src).toContain('isAbsolute(outArg)');
     expect(src).not.toMatch(/resolve\(process\.cwd\(\)/);
     expect(src).not.toContain('process.chdir');
+  });
+
+  it('rejects a .json --out whose realpath leaf is not JSON (L6-069)', async () => {
+    const md = join(repoRoot(), 'docs/lot-6/corpus-runs', 'l6-069-notes.md');
+    const link = join(repoRoot(), 'docs/lot-6/corpus-runs', 'l6-069-out.json');
+    await mkdir(dirname(link), { recursive: true });
+    await rm(link, { force: true });
+    await rm(md, { force: true });
+    await writeFile(md, 'not json\n', 'utf8');
+    await symlink(md, link);
+    try {
+      await expect(resolveCorpusOutPath(['--out', link], 'J+0')).rejects.toThrow(
+        /must be a \.json file/
+      );
+    } finally {
+      await rm(link, { force: true });
+      await rm(md, { force: true });
+    }
   });
 
   it('O34a jail realpaths symlink parents that point outside the repo (L6-047)', async () => {

@@ -1,6 +1,7 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryPageDriver } from './memory-driver.ts';
@@ -148,5 +149,96 @@ describe('launchPlaywrightRun recoverer / gateway (L6-053 / L6-055)', () => {
     });
     expect(result.exitCode).toBe(0);
     expect(gatewayFactory).not.toHaveBeenCalled();
+  });
+
+  it('propagates an explicit proof screenshot failure (L6-071)', async () => {
+    closeSpy.mockClear();
+    driverFactory.mockReset();
+    gatewayFactory.mockReset();
+    const driver = mockDriver();
+    driver.screenshot = async () => {
+      throw new Error('proof shot failed');
+    };
+    driverFactory.mockImplementation(async () => driver);
+    const reportDir = await mkdtemp(join(tmpdir(), 'spyglass-l6-071-'));
+    await expect(
+      launchPlaywrightRun({
+        scenario: scenario(),
+        parsed: parsed({ aiRecovery: false }),
+        env: { CI: '1' },
+        reportDir,
+        proofScreenshot: join(reportDir, 'proof.jpg')
+      })
+    ).rejects.toThrow(/proof shot failed/);
+    expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('driver-less runScenario keeps parseGeneratedArgv headless unless options override (L6-072)', async () => {
+    const src = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'run.ts'), 'utf8');
+    expect(src).not.toContain("parsed.headless = options.headless ?? argv.includes('--headless')");
+    expect(src).toContain('if (options.headless !== undefined)');
+
+    closeSpy.mockClear();
+    driverFactory.mockReset();
+    gatewayFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const reportDir = await mkdtemp(join(tmpdir(), 'spyglass-l6-072-'));
+    const withFlag = await runScenario(scenario(), {
+      argv: ['--headless', '--no-ai'],
+      env: { CI: '1' },
+      reportDir
+    });
+    expect(withFlag.exitCode).toBe(0);
+    expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ headless: true });
+
+    driverFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const headedDefault = await runScenario(scenario(), {
+      argv: ['--no-ai'],
+      env: { CI: '1' },
+      reportDir
+    });
+    expect(headedDefault.exitCode).toBe(0);
+    expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ headless: false });
+
+    driverFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const override = await runScenario(scenario(), {
+      argv: ['--no-ai'],
+      env: { CI: '1' },
+      reportDir,
+      headless: true
+    });
+    expect(override.exitCode).toBe(0);
+    expect(driverFactory.mock.calls[0]?.[0]).toMatchObject({ headless: true });
+  });
+
+  it('driver-less runScenario forwards options.onProgress (L6-073)', async () => {
+    const launchSrc = await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), 'launch.ts'),
+      'utf8'
+    );
+    const runSrc = await readFile(join(dirname(fileURLToPath(import.meta.url)), 'run.ts'), 'utf8');
+    expect(launchSrc).toContain('onProgress?: (event: ReplayProgress) => void');
+    expect(runSrc).toContain(
+      '...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})'
+    );
+
+    closeSpy.mockClear();
+    driverFactory.mockReset();
+    gatewayFactory.mockReset();
+    driverFactory.mockImplementation(async () => mockDriver());
+    const progress: string[] = [];
+    const reportDir = await mkdtemp(join(tmpdir(), 'spyglass-l6-073-'));
+    const result = await runScenario(scenario(), {
+      argv: ['--headless', '--no-ai'],
+      env: {},
+      reportDir,
+      onProgress: (event) => {
+        progress.push(event.message);
+      }
+    });
+    expect(result.exitCode).toBe(0);
+    expect(progress.length).toBeGreaterThan(0);
   });
 });

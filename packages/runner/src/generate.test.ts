@@ -341,6 +341,85 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(json.startUrl).toBe('https://exemple.test/start');
   });
 
+  it('loadFinalizedScenarioForGenerate skips a newer reviewing revision', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-reviewing-skip-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'finalized',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-2.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 2,
+        createdAt: '2026-09-08T12:01:00.000Z',
+        status: 'reviewing',
+        steps: []
+      }),
+      'utf8'
+    );
+    const loaded = await loadFinalizedScenarioForGenerate(sessionDir);
+    expect(loaded.startUrl).toBe('https://exemple.test/start');
+    expect(loaded.steps).toEqual(scenario().steps);
+  });
+
+  it('fails closed when the newest finalized revision has no steps (L6-070)', async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-l6070-'));
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(sessionDir, 'refined'), { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 1,
+        createdAt: '2026-09-08T12:00:00.000Z',
+        status: 'finalized',
+        steps: scenario().steps
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(sessionDir, 'refined', 'rev-2.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_lot6_gen',
+        revision: 2,
+        createdAt: '2026-09-08T12:01:00.000Z',
+        status: 'finalized',
+        steps: []
+      }),
+      'utf8'
+    );
+    await expect(loadFinalizedScenarioForGenerate(sessionDir)).rejects.toThrow(
+      /finalized revision rev-2\.json has no steps/
+    );
+    await expect(generateFromSessionDir(sessionDir)).rejects.toThrow(
+      /finalized revision rev-2\.json has no steps/
+    );
+  });
+
   it('refuses leftover generated/ when no finalized rev exists (L6-004)', async () => {
     const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-leftover-'));
     const { mkdir, writeFile } = await import('node:fs/promises');

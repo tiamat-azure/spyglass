@@ -178,8 +178,11 @@ export async function loadFinalizedScenarioForGenerate(sessionDir: string): Prom
     const revision = JSON.parse(
       await readFile(join(refinedDir, name), 'utf8')
     ) as SessionRevisionLike;
-    if (revision.status === 'finalized' && revision.steps.length > 0) {
-      return scenarioFromRevision(revision, startUrl);
+    if (revision.status === 'finalized') {
+      if (Array.isArray(revision.steps) && revision.steps.length > 0) {
+        return scenarioFromRevision(revision, startUrl);
+      }
+      throw new Error(`finalized revision ${name} has no steps`);
     }
   }
   throw new Error('no finalized revision to generate from');

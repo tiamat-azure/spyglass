@@ -91,7 +91,9 @@ async function runScenarioStandalone(
   const env = options.env ?? process.env;
   const argv = options.argv ?? process.argv.slice(2);
   const parsed = parseGeneratedArgv(argv, env);
-  parsed.headless = options.headless ?? argv.includes('--headless');
+  if (options.headless !== undefined) {
+    parsed.headless = options.headless;
+  }
   if (options.timeoutMs !== undefined) {
     parsed.timeoutMs = options.timeoutMs;
   }
@@ -147,7 +149,8 @@ async function runScenarioStandalone(
     reportDir,
     runId,
     ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
-    ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {})
+    ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
+    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
   });
 }
 

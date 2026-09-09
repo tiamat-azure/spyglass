@@ -78,7 +78,7 @@ export async function resolveCorpusOutPath(
   if (!isInsideDir(lot6Real, realTarget) || resolve(realTarget) === resolve(lot6Real)) {
     throw new Error(`--out path escapes docs/lot-6: ${resolved}`);
   }
-  if (!resolved.toLowerCase().endsWith('.json')) {
+  if (!resolved.toLowerCase().endsWith('.json') || !realTarget.toLowerCase().endsWith('.json')) {
     throw new Error('--out must be a .json file under docs/lot-6');
   }
   return resolved;
