@@ -985,6 +985,30 @@ function gitFailureReason(stderr: string, args: readonly string[]): string {
   return detail.length > 0 ? detail : `git ${args.join(' ')} failed`;
 }
 
+async function remoteDeleteBlockedByOpenPr(
+  hasOpenPr: HasOpenPr,
+  input: { repo: string; branch: string }
+): Promise<{ ok: true } | { ok: false; code: 'pr-prep-failed' | 'open-pr'; reason: string }> {
+  let openPr: boolean;
+  try {
+    openPr = await hasOpenPr(input);
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'pr-prep-failed',
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
+  if (openPr) {
+    return {
+      ok: false,
+      code: 'open-pr',
+      reason: `open PR exists for ${input.branch}; remote left unchanged`
+    };
+  }
+  return { ok: true };
+}
+
 async function pushPatchBranch(
   git: GitExec,
   repoRoot: string,
@@ -999,22 +1023,15 @@ async function pushPatchBranch(
   if (!isNonFastForwardPush(pushed.stderr)) {
     return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(pushed.stderr, pushArgs) };
   }
-  let openPr: boolean;
-  try {
-    openPr = await hasOpenPr({ repo: repoRoot, branch });
-  } catch (error) {
-    return {
-      ok: false,
-      code: 'pr-prep-failed',
-      reason: error instanceof Error ? error.message : String(error)
-    };
+  const probe = { repo: repoRoot, branch };
+  const blocked = await remoteDeleteBlockedByOpenPr(hasOpenPr, probe);
+  if (!blocked.ok) {
+    return blocked;
   }
-  if (openPr) {
-    return {
-      ok: false,
-      code: 'open-pr',
-      reason: `open PR exists for ${branch}; remote left unchanged`
-    };
+  // L7-227: re-check immediately before origin --delete (TOCTOU vs the probe above).
+  const blockedAgain = await remoteDeleteBlockedByOpenPr(hasOpenPr, probe);
+  if (!blockedAgain.ok) {
+    return blockedAgain;
   }
   const deletedArgs = ['push', 'origin', '--delete', branch] as const;
   const deleted = await git(deletedArgs, repoRoot);

@@ -1,4 +1,5 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RefinedStep, ReplayDescriptor, Scenario } from '@spyglass/contracts';
 import { cloneDescriptor } from './scenario.ts';
@@ -259,12 +260,26 @@ export async function writeGeneratedDatasets(
   }
   const recordedPath = join(dir, 'recorded.json');
   const examplePath = join(dir, 'example.json');
-  // D11a / L7-137: recorded.json is plaintext captured values (including secrets).
-  await writeFile(recordedPath, `${JSON.stringify(recorded, null, 2)}\n`, {
-    encoding: 'utf8',
-    mode: 0o600
-  });
-  // writeFile mode applies only on create; tighten an existing broader file.
+  // D11a / L7-137 / L7-226: recorded.json is plaintext captured values
+  // (including secrets). Write a temp file, chmod 0o600, then rename so an
+  // existing world-readable dest is never overwritten in place.
+  const tmp = `${recordedPath}.tmp-${randomBytes(8).toString('hex')}`;
+  try {
+    await writeFile(tmp, `${JSON.stringify(recorded, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600
+    });
+    if (process.platform !== 'win32') {
+      await chmod(tmp, 0o600);
+    }
+    if (process.platform === 'win32') {
+      await rm(recordedPath, { force: true });
+    }
+    await rename(tmp, recordedPath);
+  } catch (error) {
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
   if (process.platform !== 'win32') {
     await chmod(recordedPath, 0o600);
   }

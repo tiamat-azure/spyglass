@@ -1119,6 +1119,21 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: O29, A30, I30.
 
+## Pass-31 adversarial fixes (L7-226 … L7-229)
+
+- **L7-226:** `writeGeneratedDatasets` writes `recorded.json` to a temp
+  file, `chmod 0o600`, then `rename` onto the dest so an existing
+  world-readable file is never overwritten in place with secrets.
+- **L7-227:** Non-fast-forward remote delete/repush re-checks `hasOpenPr`
+  immediately before `git push origin --delete` (TOCTOU). Fail closed
+  if a PR appeared after the first probe.
+- **L7-228:** `collectParameterSecrets` requires
+  `PARAMETER_SECRET_MIN_LENGTH` (2) so a single-char OTP digit is not a
+  word-boundary redact secret.
+- **L7-229:** `fetch-whisper.mjs --large` skips re-download when
+  `existingLargeOk` (size ≥ `STT_LARGE_MIN_BYTES`), same as
+  `existingCliOk` / `existingSmallOk`.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

@@ -310,7 +310,7 @@ function enqueueSttUpgradeDecide<T>(task: () => Promise<T>): Promise<T> {
 function resolveSttModelDir(): string {
   const fromEnv = process.env.STT_MODEL_DIR;
   if (fromEnv !== undefined && fromEnv.trim().length > 0) {
-    return fromEnv;
+    return fromEnv.trim();
   }
   return join(app.getPath('userData'), 'whisper');
 }

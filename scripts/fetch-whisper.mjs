@@ -216,6 +216,16 @@ function existingSmallOk(dest) {
   }
 }
 
+/** L7-229: skip only a valid large file; truncated files/dirs are re-fetched. */
+function existingLargeOk(dest, minBytes) {
+  try {
+    const st = statSync(dest);
+    return st.isFile() && st.size >= minBytes;
+  } catch {
+    return false;
+  }
+}
+
 /** W18a / L7-179: skip only a valid small file; truncated files/dirs are re-fetched atomically. */
 async function ensureSmallFallback(downloadAtomic) {
   const dest = join(outDir, MODEL_NAME);
@@ -247,21 +257,25 @@ async function main() {
       '../packages/stt/src/upgrade.ts'
     );
     const largePath = join(outDir, STT_LARGE_MODEL_FILE);
-    process.stdout.write(`Downloading ${STT_LARGE_MODEL_FILE} (optional STT upgrade, ~575MB)…\n`);
-    const response = await fetch(STT_LARGE_MODEL_URL, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(STT_LARGE_DOWNLOAD_TIMEOUT_MS)
-    });
-    if (!response.ok) {
-      throw new Error(`GET ${STT_LARGE_MODEL_URL} → ${String(response.status)}`);
+    if (existingLargeOk(largePath, STT_LARGE_MIN_BYTES)) {
+      process.stdout.write(`large already present: ${largePath}\n`);
+    } else {
+      process.stdout.write(`Downloading ${STT_LARGE_MODEL_FILE} (optional STT upgrade, ~575MB)…\n`);
+      const response = await fetch(STT_LARGE_MODEL_URL, {
+        redirect: 'follow',
+        signal: AbortSignal.timeout(STT_LARGE_DOWNLOAD_TIMEOUT_MS)
+      });
+      if (!response.ok) {
+        throw new Error(`GET ${STT_LARGE_MODEL_URL} → ${String(response.status)}`);
+      }
+      await downloadResponseToFileAtomic({
+        dest: largePath,
+        response,
+        expectedSha256: STT_LARGE_SHA256,
+        minBytes: STT_LARGE_MIN_BYTES
+      });
+      process.stdout.write(`Wrote ${largePath}\n`);
     }
-    await downloadResponseToFileAtomic({
-      dest: largePath,
-      response,
-      expectedSha256: STT_LARGE_SHA256,
-      minBytes: STT_LARGE_MIN_BYTES
-    });
-    process.stdout.write(`Wrote ${largePath}\n`);
     await ensureSmallFallback(downloadResponseToFileAtomic);
     await ensureWhisperCli();
     return;

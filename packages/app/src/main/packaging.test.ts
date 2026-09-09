@@ -294,6 +294,11 @@ describe('packaged Observe', () => {
     expect(resolveEngine).not.toContain('env.STT_MAX_LATENCY_MS');
     expect(resolveEngine).not.toContain('STT_WHISPER_TIMEOUT_MS');
     expect(main).toContain('function resolveSttModelDir');
+    const resolveDir = main.slice(
+      main.indexOf('function resolveSttModelDir'),
+      main.indexOf('async function pickSessionDirectory')
+    );
+    expect(resolveDir).toContain('return fromEnv.trim()');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');
     expect(whisper).toContain('warnOnFinalFailure');
@@ -302,7 +307,7 @@ describe('packaged Observe', () => {
       join(appRoot, '../../packages/stt/src/download-model.ts'),
       'utf8'
     );
-    expect(downloadModel).toContain('body?.cancel()');
+    expect(downloadModel).toContain('body.cancel()');
     expect(downloadModel).toContain('content-encoding');
     const sessionBundle = readFileSync(
       join(appRoot, '../../packages/runner/src/session-bundle.ts'),

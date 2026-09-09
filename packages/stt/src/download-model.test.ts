@@ -298,6 +298,32 @@ describe('W3a fetch-whisper --large', () => {
     expect(body.lastIndexOf('existingCliOk(dest)')).toBeLessThan(body.indexOf('chmodSync'));
     expect(body).toContain('CLI_MIN_BYTES');
   });
+
+  it('skips --large re-download when a valid large file is present (L7-229)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const largeStart = src.indexOf('if (large)');
+    const largeEnd = src.indexOf('const modelPath');
+    expect(largeStart).toBeGreaterThan(-1);
+    expect(largeEnd).toBeGreaterThan(largeStart);
+    const largeBlock = src.slice(largeStart, largeEnd);
+    expect(largeBlock).toContain('existingLargeOk(largePath, STT_LARGE_MIN_BYTES)');
+    expect(largeBlock).toContain('downloadResponseToFileAtomic');
+    expect(largeBlock.indexOf('existingLargeOk(largePath, STT_LARGE_MIN_BYTES)')).toBeLessThan(
+      largeBlock.indexOf('await fetch(STT_LARGE_MODEL_URL')
+    );
+    const fnStart = src.indexOf('function existingLargeOk');
+    const fnEnd = src.indexOf('async function ensureSmallFallback');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('statSync');
+    expect(body).toContain('isFile()');
+    expect(body).toContain('minBytes');
+    expect(body).not.toContain('existsSync');
+  });
 });
 
 describe('Lot 7 first-use latency isolation (L7-008)', () => {

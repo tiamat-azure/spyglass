@@ -306,6 +306,28 @@ describe('Lot 7 F-48 parameterization', () => {
     }
   });
 
+  it('writes recorded.json via chmod 0o600 temp then rename (L7-226)', async () => {
+    const src = await readFile(new URL('./parameters.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('export async function writeGeneratedDatasets'),
+      src.indexOf('function nameFromSelector')
+    );
+    expect(fn).toContain('await chmod(tmp, 0o600)');
+    expect(fn).toContain('await rename(tmp, recordedPath)');
+    expect(fn.indexOf('await chmod(tmp, 0o600)')).toBeLessThan(
+      fn.indexOf('await rename(tmp, recordedPath)')
+    );
+    expect(fn).not.toMatch(/writeFile\(\s*recordedPath/);
+    const dir = await tempDir('spyglass-lot7-l7226-');
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const paths = await writeGeneratedDatasets(dir, extracted.dataset);
+    const recorded = parseDataset(JSON.parse(await readFile(paths.recorded, 'utf8')));
+    expect(recorded.values.password).toBe('s3cret');
+    if (process.platform !== 'win32') {
+      expect((await stat(paths.recorded)).mode & 0o777).toBe(0o600);
+    }
+  });
+
   it('writeGeneratedPackage emits datasets/recorded.json and example.json', async () => {
     const sessionDir = await tempDir('spyglass-lot7-genpkg-');
     const paths = await writeGeneratedPackage({
@@ -1092,6 +1114,58 @@ describe('Lot 7 F-48 parameterization', () => {
       expect(snap.text).toContain('table');
       expect(snap.text).not.toMatch(/(^|[^A-Za-z0-9])ab([^A-Za-z0-9]|$)/u);
     }
+  });
+
+  it('does not redact a single-char OTP digit as a word-boundary secret (L7-228)', async () => {
+    const secret = '1';
+    const step = fillStep(0, '#code', secret, 'code');
+    step.verification.expected = '#gone';
+    step.verification.timeoutMs = 40;
+    const captured: Array<{ text: string }> = [];
+    const recoverer: Recoverer = {
+      recover: async (context) => {
+        if (context.afterDom !== undefined) {
+          captured.push({ text: context.afterDom.text });
+        }
+        return undefined;
+      }
+    };
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      text: 'otp step 1 of 9 on page',
+      elements: [
+        { selector: '#code', visible: true, value: secret, text: secret },
+        { selector: '#gone', visible: false }
+      ]
+    });
+    const result = await runScenario(
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_params',
+        startUrl: 'https://exemple.test/login',
+        steps: [step]
+      },
+      {
+        driver,
+        aiRecovery: true,
+        maxAiRetries: 1,
+        env: {},
+        recoverer
+      }
+    );
+    expect(result.exitCode).toBe(1);
+    expect(captured.length).toBeGreaterThan(0);
+    for (const snap of captured) {
+      expect(snap.text).toContain('step 1 of 9');
+    }
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    const fn = src.slice(
+      src.indexOf('function collectParameterSecrets'),
+      src.indexOf('function redactTextWithSecrets')
+    );
+    expect(fn).toContain('PARAMETER_SECRET_MIN_LENGTH');
+    expect(fn).not.toMatch(/live\.length > 0/);
+    expect(fn).not.toMatch(/argument\.length > 0/);
   });
 
   it('loads datasets through loadDatasetFile and skips parameterized shots from scenario.steps (L7-111 / L7-112)', async () => {

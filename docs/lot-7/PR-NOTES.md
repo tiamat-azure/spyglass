@@ -280,6 +280,14 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   non-strings.
 - **L7-225:** Extracted whisper-cli must meet `CLI_MIN_BYTES` before
   success.
+- **L7-226:** `recorded.json` is written via chmod `0o600` temp then
+  rename (no in-place overwrite of a world-readable dest).
+- **L7-227:** Non-ff remote delete re-checks `hasOpenPr` immediately
+  before `origin --delete`.
+- **L7-228:** Parameter secret candidacy requires min length 2 (no
+  single-char OTP digit word-boundary redact).
+- **L7-229:** `--large` skips re-download when a valid large file is
+  already present.
 - **N29a:** Vacant parameterized `[0]` is JSON `null` in
   `unappliedArguments` (indices preserved; not omitted, not `""`).
 - **D29a:** Explicit `parameterRef` is not unique-ified against
@@ -353,6 +361,9 @@ large skip, existing explicit large only, refuse special files,
 consecutiveRuns max 32, skip duplicate large download, nested descriptor
 canonicalize. Pass-30 (L7-223 … L7-225): git exec maxBuffer 32 MiB,
 JSON-serializable trailing args, whisper-cli size check after extract.
-**N29a:** vacant parameterized `[0]` is JSON `null`. **D29a:** explicit
-`parameterRef` is not unique-ified against selector-derived names
-(R10a last-write-wins). Held: O29, A30, I30.
+Pass-31 (L7-226 … L7-229): recorded.json chmod-then-rename, non-ff
+open-PR re-check before remote delete, min-length secret candidacy,
+skip `--large` when valid large exists. **N29a:** vacant parameterized
+`[0]` is JSON `null`. **D29a:** explicit `parameterRef` is not
+unique-ified against selector-derived names (R10a last-write-wins).
+Held: O29, A30, I30, C31, W31.

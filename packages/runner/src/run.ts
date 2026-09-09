@@ -753,6 +753,9 @@ function redactSnapshotForRecovery(
   return { ...snapshot, values, text, url, title };
 }
 
+/** L7-228: word-boundary redaction must not treat a single OTP digit as a secret. */
+const PARAMETER_SECRET_MIN_LENGTH = 2;
+
 /** L7-194: same parameter-derived secret set for snapshots and lastError. */
 function collectParameterSecrets(
   scenario: Scenario,
@@ -767,12 +770,12 @@ function collectParameterSecrets(
     const selector = step.action.descriptor.selector;
     for (const snapshot of snapshots) {
       const live = snapshot.values[selector];
-      if (live !== undefined && live.length > 0) {
+      if (live !== undefined && live.length >= PARAMETER_SECRET_MIN_LENGTH) {
         secrets.add(live);
       }
     }
     for (const argument of step.action.descriptor.arguments ?? []) {
-      if (typeof argument === 'string' && argument.length > 0) {
+      if (typeof argument === 'string' && argument.length >= PARAMETER_SECRET_MIN_LENGTH) {
         secrets.add(argument);
       }
     }
@@ -790,7 +793,7 @@ function redactTextWithSecrets(text: string, secrets: string[]): string {
 
 /** L7-124: redact PIN/OTP/tokens without substring-stripping unrelated words. */
 function redactSecretFromText(text: string, secret: string): string {
-  if (secret.length === 0) {
+  if (secret.length < PARAMETER_SECRET_MIN_LENGTH) {
     return text;
   }
   const escaped = secret.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
