@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createEngineFromEnv } from './resolve-engine.ts';
 import {
   chooseWhisperModel,
   parseUpgradePromptAfter,
@@ -68,5 +69,23 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
   it('reads STT_UPGRADE_PROMPT_AFTER', () => {
     expect(parseUpgradePromptAfter({ STT_UPGRADE_PROMPT_AFTER: '3' })).toBe(3);
     expect(parseUpgradePromptAfter({})).toBe(10);
+  });
+});
+
+describe('Lot 7 STT small-engine fallback (L7-016)', () => {
+  it('refuses to use the large weights as the small engine', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-small-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    await writeFile(join(dir, STT_LARGE_MODEL_FILE), 'large-weights\n', 'utf8');
+    expect(() =>
+      createEngineFromEnv({
+        SPYGLASS_STT_ENGINE: 'whisper',
+        STT_MODEL_DIR: dir,
+        STT_BIN: join(dir, 'whisper-cli'),
+        STT_MODEL_PATH: join(dir, STT_LARGE_MODEL_FILE),
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toThrow(/ggml-small-q5_1\.bin/);
   });
 });

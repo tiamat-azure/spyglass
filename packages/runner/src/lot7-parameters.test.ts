@@ -151,6 +151,57 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(recorded.values.user).toBe('alice');
     expect(example.values.user).toBe('example_user');
   });
+
+  it('fails fast when a dataset omits a required parameterRef (P2a)', () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const recordedSecret = extracted.scenario.steps[1]?.action.descriptor.arguments?.[0];
+    expect(recordedSecret).toBe('s3cret');
+    expect(() =>
+      applyDataset(extracted.scenario, {
+        schemaVersion: 1,
+        name: 'incomplete',
+        values: { user: 'bob' },
+        secrets: ['password']
+      })
+    ).toThrow(/dataset is missing parameterRef: password/);
+    expect(extracted.scenario.steps[1]?.action.descriptor.arguments?.[0]).toBe('s3cret');
+  });
+
+  it('applies an empty-string value that is present in the dataset (P2a)', () => {
+    const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
+    const applied = applyDataset(extracted.scenario, {
+      schemaVersion: 1,
+      name: 'example',
+      values: { user: 'alice', password: '' },
+      secrets: ['password']
+    });
+    expect(applied.steps[1]?.action.descriptor.arguments?.[0]).toBe('');
+  });
+
+  it('resolves a relative dataset path from scriptDir (L7-014)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-scriptdir-'));
+    const extracted = extractScenarioParameters(loginScenario('alice', 'one'));
+    await writeFile(
+      join(dir, 'bob.json'),
+      `${JSON.stringify({ schemaVersion: 1, name: 'bob', values: { user: 'bob', password: 'two' }, secrets: ['password'] }, null, 2)}\n`,
+      'utf8'
+    );
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [
+        { selector: '#user', visible: true, value: '' },
+        { selector: '#password', visible: true, value: '' }
+      ]
+    });
+    const result = await runScenario(extracted.scenario, {
+      driver,
+      aiRecovery: false,
+      datasetPath: 'bob.json',
+      scriptDir: dir
+    });
+    expect(result.exitCode).toBe(0);
+    expect(driver.fills.map((row) => row.value)).toEqual(['bob', 'two']);
+  });
 });
 
 describe('Lot 7 F-47 session export/import', () => {
@@ -211,6 +262,23 @@ describe('Lot 7 F-47 session export/import', () => {
     );
     await expect(importSessionFolder(root, sessionsRoot)).rejects.toThrow(/invalid sessionId/);
     expect(await readFile(marker, 'utf8')).toBe('safe\n');
+  });
+
+  it('refuses import when dest is the source session (L7-013)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-overlap-'));
+    const sessionDir = join(root, 'ses_overlap');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      join(sessionDir, 'meta.json'),
+      `${JSON.stringify({ sessionId: 'ses_overlap', schemaVersion: 1 }, null, 2)}\n`,
+      'utf8'
+    );
+    const keep = join(sessionDir, 'keep.txt');
+    await writeFile(keep, 'alive\n', 'utf8');
+    await expect(importSessionFolder(sessionDir, root)).rejects.toThrow(
+      /must not be the source session/
+    );
+    expect(await readFile(keep, 'utf8')).toBe('alive\n');
   });
 });
 

@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { streamToFileAtomic, writeFileAtomic } from './download-model.ts';
+import {
+  downloadResponseToFileAtomic,
+  streamToFileAtomic,
+  writeFileAtomic
+} from './download-model.ts';
 import { notifyFirstUseLatency } from './whisper-engine.ts';
 
 describe('Lot 7 STT download atomic publish (L7-005)', () => {
@@ -44,6 +48,20 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     const dest = join(dir, 'stub.bin');
     await writeFileAtomic(dest, Buffer.from('ok\n'));
     expect(await readFile(dest, 'utf8')).toBe('ok\n');
+  });
+
+  it('rejects a non-2xx Response before streaming (L7-015)', async () => {
+    const dest = join(await mkdtemp(join(tmpdir(), 'spyglass-stt-http-')), 'model.bin');
+    const html = '<html>error</html>';
+    const response = new Response(html, {
+      status: 404,
+      statusText: 'Not Found',
+      headers: { 'content-length': String(html.length) }
+    });
+    await expect(
+      downloadResponseToFileAtomic({ dest, response, minBytes: 1 })
+    ).rejects.toThrow(/HTTP 404/);
+    await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 

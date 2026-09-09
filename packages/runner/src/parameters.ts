@@ -87,25 +87,32 @@ export function exampleDataset(recorded: ScenarioDataset): ScenarioDataset {
 }
 
 export function applyDataset(scenario: Scenario, dataset: ScenarioDataset): Scenario {
-  return {
-    ...scenario,
-    steps: scenario.steps.map((step) => {
-      const ref = step.action.parameterRef;
-      if (ref === undefined || !Object.hasOwn(dataset.values, ref)) {
-        return step;
+  const missing: string[] = [];
+  const steps = scenario.steps.map((step) => {
+    const ref = step.action.parameterRef;
+    if (ref === undefined || ref.trim().length === 0) {
+      return step;
+    }
+    if (!Object.hasOwn(dataset.values, ref)) {
+      missing.push(ref);
+      return step;
+    }
+    const value = dataset.values[ref] ?? '';
+    const descriptor = cloneDescriptor(step.action.descriptor);
+    descriptor.arguments = [value];
+    return {
+      ...step,
+      action: {
+        ...step.action,
+        descriptor
       }
-      const value = dataset.values[ref] ?? '';
-      const descriptor = cloneDescriptor(step.action.descriptor);
-      descriptor.arguments = [value];
-      return {
-        ...step,
-        action: {
-          ...step.action,
-          descriptor
-        }
-      };
-    })
-  };
+    };
+  });
+  if (missing.length > 0) {
+    const unique = [...new Set(missing)];
+    throw new Error(`dataset is missing parameterRef: ${unique.join(', ')}`);
+  }
+  return { ...scenario, steps };
 }
 
 export function parseDataset(value: unknown): ScenarioDataset {

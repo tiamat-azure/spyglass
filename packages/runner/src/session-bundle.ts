@@ -1,5 +1,5 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 export const SESSION_BUNDLE_MANIFEST = 'spyglass-session.json';
 
@@ -51,6 +51,7 @@ export async function importSessionFolder(
   if (!isInsideSessionsRoot(root, dest)) {
     throw new Error('import refused: invalid sessionId');
   }
+  await assertSafeImportCopy(source, dest);
   await mkdir(root, { recursive: true });
   await rm(dest, { recursive: true, force: true });
   await cp(source, dest, { recursive: true, dereference: false });
@@ -80,4 +81,32 @@ function isSafeSessionId(sessionId: string): boolean {
 function isInsideSessionsRoot(sessionsRoot: string, dest: string): boolean {
   const rel = relative(sessionsRoot, dest);
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/**
+ * L7-013: never `rm(dest)` when dest is the source (or either contains the other).
+ */
+async function assertSafeImportCopy(source: string, dest: string): Promise<void> {
+  const sourceReal = await realpathExisting(source);
+  const destReal = await realpathExisting(dest);
+  if (sourceReal === destReal) {
+    throw new Error('import refused: destination must not be the source session');
+  }
+  const destInsideSource = isInsideSessionsRoot(sourceReal, destReal);
+  const sourceInsideDest = isInsideSessionsRoot(destReal, sourceReal);
+  if (destInsideSource || sourceInsideDest) {
+    throw new Error('import refused: destination must not overlap the source session');
+  }
+}
+
+async function realpathExisting(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    try {
+      return join(await realpath(dirname(path)), basename(path));
+    } catch {
+      return resolve(path);
+    }
+  }
 }

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -390,6 +390,109 @@ describe('Lot 7 F-64 assisted git/PR path', () => {
       descriptorHash({ type: 'click', selector: '#new' })
     );
   });
+
+  it('refuses a scenario.json symlink that escapes --repo (L7-009)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'spyglass-lot7-symlink-'));
+    const repo = join(root, 'repo');
+    const outside = join(root, 'outside');
+    await mkdir(repo, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await initGitRepo(repo);
+    const scn = scenario([clickStep(0, '#old')]);
+    const outsideFile = join(outside, 'scenario.json');
+    await writeFile(outsideFile, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    const scenarioPath = join(repo, 'scenario.json');
+    await symlink(outsideFile, scenarioPath);
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: repo });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: repo });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('scenario-outside-repo');
+    }
+    const onDisk = JSON.parse(await readFile(outsideFile, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
+  });
+
+  it('keeps ok:true and increments health when preparePr throws (L7-011)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-prthrow-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => {
+        throw new Error('gh down');
+      }
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.prPrepared).toBe(false);
+    expect(result.health.appliedPatches).toBe(1);
+    const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
+    expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe(result.branch);
+  });
+
+  it('restores the starting branch when commit fails after checkout -b (L7-012)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-commitfail-'));
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'commit') {
+        return { stdout: '', stderr: 'commit failed', code: 1 };
+      }
+      return await defaultGitExec(args, cwd);
+    };
+    await expect(
+      applyAssistedPatches({
+        health,
+        suggested: patch('#new', 'run_b'),
+        scenario: scn,
+        scenarioPath,
+        policy,
+        git
+      })
+    ).rejects.toThrow(/commit failed/);
+    const branch = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir });
+    expect(branch.stdout.trim()).toBe('main');
+  });
 });
 
 describe('Lot 7 health.json wiring after recovery', () => {
@@ -440,5 +543,29 @@ describe('saveHealth schema', () => {
     await saveHealth(dir, health);
     const disk = JSON.parse(await readFile(join(dir, 'health.json'), 'utf8')) as unknown;
     expect(disk).toMatchObject({ schemaVersion: 1, status: 'healthy', appliedPatches: 0 });
+  });
+
+  it('returns empty health when health.json is missing (L7-010)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-enoent-'));
+    const health = await loadHealth(dir, 'ses_lot7');
+    expect(health).toEqual(emptyHealth('ses_lot7'));
+  });
+
+  it('throws on corrupt health.json and does not replace the file (L7-010)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-corrupt-'));
+    const path = join(dir, 'health.json');
+    await writeFile(path, '{not json', 'utf8');
+    await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(/corrupt health.json: invalid JSON/);
+    expect(await readFile(path, 'utf8')).toBe('{not json');
+  });
+
+  it('throws on schema-invalid health.json (L7-010)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-lot7-badschema-'));
+    const path = join(dir, 'health.json');
+    await writeFile(path, `${JSON.stringify({ schemaVersion: 1 })}\n`, 'utf8');
+    await expect(loadHealth(dir, 'ses_lot7')).rejects.toThrow(
+      /corrupt health.json: schema validation failed/
+    );
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual({ schemaVersion: 1 });
   });
 });

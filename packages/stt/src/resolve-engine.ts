@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
@@ -49,14 +49,19 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
     if (modelDir !== undefined) {
       const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
       const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
+      const smallOk = existsSync(smallPath);
       const fallback =
         env.STT_LARGE_FALLBACK === '1' || existsSync(join(modelDir, STT_FALLBACK_MARKER));
       const choice = chooseWhisperModel({
         ...(existsSync(largePath) ? { largePath } : {}),
-        smallPath: existsSync(smallPath) ? smallPath : paths.model,
+        ...(smallOk ? { smallPath } : {}),
         largeFallback: fallback
       });
-      model = choice.file;
+      if (choice.kind === 'small') {
+        model = requireSmallModelFile(smallPath, paths.model);
+      } else {
+        model = choice.file;
+      }
       const engineOpts: Parameters<typeof createWhisperEngine>[0] = {
         bin: paths.bin,
         model,
@@ -81,4 +86,16 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
     });
   }
   return createMockEngine(parseMockTranscripts(env.SPYGLASS_STT_MOCK_TRANSCRIPTS));
+}
+
+/**
+ * L7-016: large-model fallback must load `ggml-small-q5_1.bin`, never the large weights.
+ */
+export function requireSmallModelFile(smallPath: string, refusedPath: string): string {
+  if (existsSync(smallPath) && basename(smallPath) === STT_SMALL_MODEL_FILE) {
+    return smallPath;
+  }
+  throw new Error(
+    `STT large-model fallback requires ${STT_SMALL_MODEL_FILE} at ${smallPath} (refusing to use ${basename(refusedPath)} as the small engine)`
+  );
 }

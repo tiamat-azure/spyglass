@@ -30,3 +30,29 @@
 - **L7-007:** Import rejects `.` / `..` session ids and verifies dest is
   inside `sessionsRoot` before `rm`.
 - **L7-008:** First-use latency persistence cannot fail transcription.
+
+## Pass-2 adversarial fixes (L7-009 … L7-016) + P2a
+
+- **P2a:** When a `--dataset` is provided, missing `parameterRef` keys fail
+  fast. There is no silent fallback to the captured descriptor value
+  (including secrets). An empty string that is present in the dataset
+  remains valid.
+- **L7-009:** Assisted apply follows symlinks for `--repo`, the scenario
+  file, and its parent; a worktree-relative path that resolves outside
+  the repo is refused.
+- **L7-010:** Corrupt or unreadable `health.json` throws. Only a missing
+  file (ENOENT) starts empty healthy counters. The corrupt file is not
+  deleted or replaced.
+- **L7-011:** `preparePr` throwing still returns `ok: true` with
+  `prPrepared: false` after the branch commit, and still increments
+  health.
+- **L7-012:** If mutation/commit fails after `checkout -b`, HEAD is
+  restored to the starting branch (`git checkout -f`).
+- **L7-013:** Session import refuses when dest is the source (or either
+  path contains the other) before `rm(dest)`.
+- **L7-014:** Relative `--dataset` from a generated script resolves via
+  `scriptDir` through `launchPlaywrightRun`.
+- **L7-015:** STT model download rejects a non-2xx `Response` before
+  streaming.
+- **L7-016:** Large→small fallback requires a real `ggml-small-q5_1.bin`;
+  large weights are never used as the small engine.

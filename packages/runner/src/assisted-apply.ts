@@ -1,5 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   RefinedStep,
   ReplayDescriptor,
@@ -86,11 +86,58 @@ export function assertAssistedApplyAllowed(
   return { ok: true };
 }
 
-export function isInsideRepo(repoRoot: string, filePath: string): boolean {
-  const root = resolve(repoRoot);
-  const target = resolve(filePath);
+export function isPathInside(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+/** Repo root itself is a valid parent of `scenario.json` at the worktree top. */
+export function isSameOrInside(root: string, target: string): boolean {
+  const rel = relative(root, target);
+  return rel === '' || isPathInside(root, target);
+}
+
+/** Lexical containment (tests / callers that already resolved real paths). */
+export function isInsideRepo(repoRoot: string, filePath: string): boolean {
+  return isPathInside(resolve(repoRoot), resolve(filePath));
+}
+
+/**
+ * L7-009: follow symlinks for the repo, the scenario file, and its parent.
+ * A worktree-relative scenario.json that points outside `--repo` is refused.
+ */
+export async function resolveScenarioInRepo(
+  repoRoot: string,
+  scenarioPath: string
+): Promise<{ gitCwd: string; repoReal: string; scenarioReal: string } | undefined> {
+  const gitCwd = resolve(repoRoot);
+  let repoReal: string;
+  try {
+    repoReal = await realpath(gitCwd);
+  } catch {
+    return undefined;
+  }
+  const requested = resolve(scenarioPath);
+  const scenarioReal = await realpathExisting(requested);
+  let parentReal: string;
+  try {
+    parentReal = await realpath(dirname(requested));
+  } catch {
+    parentReal = dirname(scenarioReal);
+  }
+  if (!isPathInside(repoReal, scenarioReal) || !isSameOrInside(repoReal, parentReal)) {
+    return undefined;
+  }
+  return { gitCwd, repoReal, scenarioReal };
+}
+
+async function realpathExisting(path: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    const parent = await realpath(dirname(path));
+    return join(parent, basename(path));
+  }
 }
 
 export async function applyAssistedPatches(input: {
@@ -125,14 +172,15 @@ export async function applyAssistedPatches(input: {
     };
   }
   const repoRoot = resolve(repo);
-  const scenarioPath = resolve(input.scenarioPath);
-  if (!isInsideRepo(repoRoot, scenarioPath)) {
+  const resolvedScenario = await resolveScenarioInRepo(repoRoot, input.scenarioPath);
+  if (resolvedScenario === undefined) {
     return {
       ok: false,
       reason: 'F-64: scenario.json must live inside the target --repo',
       code: 'scenario-outside-repo'
     };
   }
+  const scenarioPath = resolvedScenario.scenarioReal;
 
   const promoted = promotedCandidates(input.health, policy);
   if (promoted.length === 0) {
@@ -193,80 +241,89 @@ export async function applyAssistedPatches(input: {
     return { ok: false, reason: 'F-64: never commit the default branch', code: 'default-branch' };
   }
 
-  const patched = applyDescriptorsToScenario(input.scenario, toApply, {
-    runId: input.suggested.runId,
-    date: (input.now ?? new Date()).toISOString(),
-    branch
-  });
-  await writeFile(scenarioPath, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
-
-  const rel = relative(repoRoot, scenarioPath).split(sep).join('/');
-  await gitOkOrThrow(git, repoRoot, ['add', '--', rel]);
-  const message = `fix(spyglass): assisted action.descriptor patch for ${input.suggested.sessionId}\n\nHuman review required (F-64). CI green is not merge.`;
-  await gitOkOrThrow(git, repoRoot, ['commit', '-m', message]);
-  const commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
-
-  const title = `spyglass: assisted descriptor patch (${input.suggested.sessionId})`;
-  const body = [
-    'Assisted apply of an `action.descriptor` patch (ADR-0008 / F-62–F-64).',
-    '',
-    `- Session: \`${input.suggested.sessionId}\``,
-    `- Run: \`${input.suggested.runId}\``,
-    `- Steps: ${toApply.map((item) => String(item.stepIndex)).join(', ')}`,
-    '',
-    '**Do not merge without human review.** A green CI does not validate a scenario that changed itself.',
-    '',
-    'Verification criteria and scenario structure remain proposal-only (CA-14 / F-62).'
-  ].join('\n');
-
-  let prUrl: string | undefined;
-  let prPrepared = false;
-  if (input.preparePr !== undefined) {
-    const prepared = await input.preparePr({
-      repo: repoRoot,
-      branch,
-      defaultBranch,
-      title,
-      body
+  try {
+    const patched = applyDescriptorsToScenario(input.scenario, toApply, {
+      runId: input.suggested.runId,
+      date: (input.now ?? new Date()).toISOString(),
+      branch
     });
-    prPrepared = true;
-    if (prepared.url !== undefined && prepared.url.length > 0) {
-      prUrl = prepared.url;
-    }
-  } else {
-    const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
-    if (pushed.code === 0) {
-      const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
-      if (gh.ok) {
+    await writeFile(scenarioPath, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
+
+    const rel = relative(resolvedScenario.repoReal, scenarioPath).split(sep).join('/');
+    await gitOkOrThrow(git, repoRoot, ['add', '--', rel]);
+    const message = `fix(spyglass): assisted action.descriptor patch for ${input.suggested.sessionId}\n\nHuman review required (F-64). CI green is not merge.`;
+    await gitOkOrThrow(git, repoRoot, ['commit', '-m', message]);
+    const commit = (await gitOkOrThrow(git, repoRoot, ['rev-parse', 'HEAD'])).trim();
+
+    const title = `spyglass: assisted descriptor patch (${input.suggested.sessionId})`;
+    const body = [
+      'Assisted apply of an `action.descriptor` patch (ADR-0008 / F-62–F-64).',
+      '',
+      `- Session: \`${input.suggested.sessionId}\``,
+      `- Run: \`${input.suggested.runId}\``,
+      `- Steps: ${toApply.map((item) => String(item.stepIndex)).join(', ')}`,
+      '',
+      '**Do not merge without human review.** A green CI does not validate a scenario that changed itself.',
+      '',
+      'Verification criteria and scenario structure remain proposal-only (CA-14 / F-62).'
+    ].join('\n');
+
+    let prUrl: string | undefined;
+    let prPrepared = false;
+    if (input.preparePr !== undefined) {
+      try {
+        const prepared = await input.preparePr({
+          repo: repoRoot,
+          branch,
+          defaultBranch,
+          title,
+          body
+        });
         prPrepared = true;
-        if (gh.url !== undefined && gh.url.length > 0) {
-          prUrl = gh.url;
+        if (prepared.url !== undefined && prepared.url.length > 0) {
+          prUrl = prepared.url;
+        }
+      } catch {
+        prPrepared = false;
+      }
+    } else {
+      const pushed = await git(['push', '-u', 'origin', branch], repoRoot);
+      if (pushed.code === 0) {
+        const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
+        if (gh.ok) {
+          prPrepared = true;
+          if (gh.url !== undefined && gh.url.length > 0) {
+            prUrl = gh.url;
+          }
         }
       }
     }
-  }
 
-  const health = incrementAppliedPatches(
-    input.health,
-    toApply.map((item) => item.stepIndex),
-    policy
-  );
+    const health = incrementAppliedPatches(
+      input.health,
+      toApply.map((item) => item.stepIndex),
+      policy
+    );
 
-  const result: AssistedApplySuccess = {
-    ok: true,
-    branch,
-    defaultBranch,
-    commit,
-    scenarioPath,
-    prPrepared,
-    merged: false,
-    appliedStepIndexes: toApply.map((item) => item.stepIndex),
-    health
-  };
-  if (prUrl !== undefined) {
-    result.prUrl = prUrl;
+    const result: AssistedApplySuccess = {
+      ok: true,
+      branch,
+      defaultBranch,
+      commit,
+      scenarioPath,
+      prPrepared,
+      merged: false,
+      appliedStepIndexes: toApply.map((item) => item.stepIndex),
+      health
+    };
+    if (prUrl !== undefined) {
+      result.prUrl = prUrl;
+    }
+    return result;
+  } catch (error) {
+    await git(['checkout', '-f', startingBranch], repoRoot).catch(() => undefined);
+    throw error;
   }
-  return result;
 }
 
 function applyDescriptorsToScenario(

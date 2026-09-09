@@ -64,16 +64,27 @@ export function resolveSessionDir(input: {
 }
 
 export async function loadHealth(sessionDir: string, sessionId: string): Promise<ScenarioHealth> {
+  let rawText: string;
   try {
-    const raw = JSON.parse(await readFile(healthFilePath(sessionDir), 'utf8')) as unknown;
-    const checked = validateHealth(raw);
-    if (checked.valid) {
-      return raw as ScenarioHealth;
+    rawText = await readFile(healthFilePath(sessionDir), 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      return emptyHealth(sessionId);
     }
-  } catch {
-    // missing or corrupt → start empty (session-scoped counters)
+    throw new Error(`unreadable health.json: ${(err as Error).message}`);
   }
-  return emptyHealth(sessionId);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error('corrupt health.json: invalid JSON');
+  }
+  const checked = validateHealth(parsed);
+  if (!checked.valid) {
+    throw new Error('corrupt health.json: schema validation failed');
+  }
+  return parsed as ScenarioHealth;
 }
 
 export async function saveHealth(sessionDir: string, health: ScenarioHealth): Promise<string> {

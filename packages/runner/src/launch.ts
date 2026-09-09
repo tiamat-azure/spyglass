@@ -21,6 +21,8 @@ export type LaunchPlaywrightRunInput = {
   /** L6-073: forwarded into runScenario for driver-less callers. */
   onProgress?: (event: ReplayProgress) => void;
   stepGate?: StepGate;
+  /** L7-014: resolve relative `--dataset` from the generated script directory. */
+  scriptDir?: string;
 };
 
 /**
@@ -70,7 +72,8 @@ export async function launchPlaywrightRun(
       ...(parsed.sessionDir !== undefined ? { sessionDir: parsed.sessionDir } : {}),
       ...(recoverer !== undefined ? { recoverer } : {}),
       ...(input.onProgress !== undefined ? { onProgress: input.onProgress } : {}),
-      ...(input.stepGate !== undefined ? { stepGate: input.stepGate } : {})
+      ...(input.stepGate !== undefined ? { stepGate: input.stepGate } : {}),
+      ...(input.scriptDir !== undefined ? { scriptDir: input.scriptDir } : {})
     });
     if (input.proofScreenshot !== undefined && input.proofScreenshot.length > 0) {
       await mkdir(dirname(input.proofScreenshot), { recursive: true });

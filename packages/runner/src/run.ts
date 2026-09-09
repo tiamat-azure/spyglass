@@ -173,7 +173,8 @@ async function runScenarioStandalone(
     ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
     ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
     ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {}),
-    ...(options.stepGate !== undefined ? { stepGate: options.stepGate } : {})
+    ...(options.stepGate !== undefined ? { stepGate: options.stepGate } : {}),
+    scriptDir
   });
 }
 
