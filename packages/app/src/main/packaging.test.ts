@@ -232,7 +232,7 @@ describe('packaged Observe', () => {
       join(appRoot, '../../packages/stt/src/resolve-engine.ts'),
       'utf8'
     );
-    expect(resolveEngine).toContain('return recordFirstUseLatency');
+    expect(resolveEngine).toContain('await recordFirstUseLatency');
     expect(main).toContain('function resolveSttModelDir');
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');

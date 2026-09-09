@@ -90,8 +90,8 @@ export async function createEngineFromEnv(
       };
       if (existsSync(largePath) && model === largePath) {
         const budgetMs = parseMaxLatencyMs(env);
-        engineOpts.onFirstUseLatency = (latencyMs) => {
-          return recordFirstUseLatency({ modelDir, latencyMs, budgetMs });
+        engineOpts.onFirstUseLatency = async (latencyMs) => {
+          await recordFirstUseLatency({ modelDir, latencyMs, budgetMs });
         };
       }
       return createWhisperEngine(engineOpts);
