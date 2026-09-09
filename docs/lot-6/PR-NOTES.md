@@ -527,6 +527,9 @@ Applied on tip `981c737782233c043f46ada43943a4c84c8e47a3`. Product decisions
   has cwd `packages/runner`; cwd-relative resolve would miss the O57a jail.
   Absolute `--out` is unchanged.
 
+Unit tests after this pass: **407 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
