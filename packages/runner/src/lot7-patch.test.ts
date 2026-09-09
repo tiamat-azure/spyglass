@@ -386,7 +386,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(result.health.appliedPatches).toBe(1);
   });
 
-  it('does not claim PR preparation when git push fails (L7-002)', async () => {
+  it('returns ok:false pr-prep-failed when git push fails (L7-002 / P12a)', async () => {
     const dir = await tempDir('spyglass-lot7-pushfail-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
@@ -412,15 +412,20 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       policy,
       git
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
+    expect(result.ok).toBe(false);
+    if (result.ok) {
       return;
     }
-    expect(result.prPrepared).toBe(false);
-    expect(result.merged).toBe(false);
-    expect(result.health.appliedPatches).toBe(0);
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/git push failed/);
+    expect(result.health?.appliedPatches).toBe(0);
+    expect(result.branch).toBeDefined();
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe(result.branch);
   });
 
   it('replaces the descriptor with the confirmed suggestion only (L7-003)', async () => {
@@ -542,7 +547,7 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
   });
 
-  it('keeps ok:true without incrementing health when preparePr throws (H5b)', async () => {
+  it('returns ok:false pr-prep-failed without incrementing health when preparePr throws (P12a / H5b)', async () => {
     const dir = await tempDir('spyglass-lot7-prthrow-');
     await initGitRepo(dir);
     const scn = scenario([clickStep(0, '#old')]);
@@ -565,12 +570,13 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
         throw new Error('gh down');
       }
     });
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
+    expect(result.ok).toBe(false);
+    if (result.ok) {
       return;
     }
-    expect(result.prPrepared).toBe(false);
-    expect(result.health.appliedPatches).toBe(0);
+    expect(result.code).toBe('pr-prep-failed');
+    expect(result.reason).toMatch(/gh down/);
+    expect(result.health?.appliedPatches).toBe(0);
     const onDisk = JSON.parse(await readFile(scenarioPath, 'utf8')) as Scenario;
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#new');
     const head = (
@@ -602,15 +608,15 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
         throw new Error('gh down');
       }
     });
-    expect(first.ok).toBe(true);
-    if (!first.ok) {
+    expect(first.ok).toBe(false);
+    if (first.ok) {
       return;
     }
-    expect(first.prPrepared).toBe(false);
-    expect(first.health.appliedPatches).toBe(0);
+    expect(first.code).toBe('pr-prep-failed');
+    expect(first.health?.appliedPatches).toBe(0);
     await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
     const second = await applyAssistedPatches({
-      health: first.health,
+      health: first.health ?? health,
       suggested: patch('#new', 'run_b'),
       scenario: scn,
       scenarioPath,
@@ -677,27 +683,32 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       policy,
       git
     });
-    expect(first.ok).toBe(true);
-    if (!first.ok) {
+    expect(first.ok).toBe(false);
+    if (first.ok) {
       return;
     }
-    expect(first.prPrepared).toBe(false);
+    expect(first.code).toBe('pr-prep-failed');
+    const leftover = first.branch;
+    expect(leftover).toBeDefined();
+    if (leftover === undefined) {
+      return;
+    }
     await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
-    await execFileAsync('git', ['branch', '-D', first.branch], { cwd: dir });
+    await execFileAsync('git', ['branch', '-D', leftover], { cwd: dir });
     const second = await applyAssistedPatches({
-      health: first.health,
+      health: first.health ?? health,
       suggested: patch('#new', 'run_b'),
       scenario: scn,
       scenarioPath,
       policy,
       git
     });
-    expect(second.ok).toBe(true);
-    if (!second.ok) {
+    expect(second.ok).toBe(false);
+    if (second.ok) {
       return;
     }
+    expect(second.code).toBe('pr-prep-failed');
     expect(second.branch).toBe(first.branch);
-    expect(second.prPrepared).toBe(false);
     expect(deletedRemote).toBe(true);
     expect(upstreamPushes).toBe(3);
   });

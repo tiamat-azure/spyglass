@@ -400,6 +400,17 @@ patches vs document residual).
 Ask-user still held: **P12**, **P13**, **P14** (remote force-delete vs
 gate on open PR).
 
+## Captain lock P12a (PR-prep failure is ok:false)
+
+- **P12a:** After a successful local patch commit, push / `gh pr create`
+  / `preparePr` failure returns `{ ok: false, code: 'pr-prep-failed' }`
+  (not `ok: true` + `prPrepared: false`). The `spyglass/patch-*` branch
+  stays for L7-084 resume. Health is not incremented (H5b). Success
+  still has `prPrepared: true`.
+
+Ask-user still held: **P13** (strip proposed-side secret args in patches
+vs document residual), **P14** (remote force-delete vs gate on open PR).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

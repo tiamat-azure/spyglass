@@ -42,7 +42,12 @@ export type AssistedApplyRefusal = {
     | 'missing-scenario-path'
     | 'git-error'
     | 'internal-error'
-    | 'type-mismatch';
+    | 'type-mismatch'
+    | 'pr-prep-failed';
+  /** P12a: set when the local patch commit succeeded but PR prep failed. */
+  branch?: string;
+  commit?: string;
+  health?: ScenarioHealth;
 };
 
 export type AssistedApplySuccess = {
@@ -242,7 +247,7 @@ export async function applyAssistedPatches(input: {
   const hash = patchSetHash(toApply);
   const branch = patchBranchName(input.suggested.sessionId, hash);
 
-  // L7-084: a prior ok:true / prPrepared:false attempt leaves spyglass/patch-* around.
+  // L7-084 / P12a: a prior ok:false / pr-prep-failed attempt leaves spyglass/patch-* around.
   // Reuse it and resume PR prep instead of failing checkout -b.
   let skipMutate = false;
   if (await localBranchExists(git, repoRoot, branch)) {
@@ -384,7 +389,6 @@ export async function applyAssistedPatches(input: {
   ].join('\n');
 
   let prUrl: string | undefined;
-  let prPrepared = false;
   if (input.preparePr !== undefined) {
     try {
       const prepared = await input.preparePr({
@@ -394,33 +398,46 @@ export async function applyAssistedPatches(input: {
         title,
         body
       });
-      prPrepared = true;
       if (prepared.url !== undefined && prepared.url.length > 0) {
         prUrl = prepared.url;
       }
-    } catch {
-      prPrepared = false;
+    } catch (error) {
+      return prPrepFailed({
+        branch,
+        commit,
+        health: input.health,
+        reason: error instanceof Error ? error.message : String(error)
+      });
     }
   } else {
     const pushed = await pushPatchBranch(git, repoRoot, branch);
-    if (pushed) {
-      const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
-      if (gh.ok) {
-        prPrepared = true;
-        if (gh.url !== undefined && gh.url.length > 0) {
-          prUrl = gh.url;
-        }
-      }
+    if (!pushed) {
+      return prPrepFailed({
+        branch,
+        commit,
+        health: input.health,
+        reason: 'git push failed'
+      });
+    }
+    const gh = await tryGhPrCreate({ repo: repoRoot, branch, defaultBranch, title, body });
+    if (!gh.ok) {
+      return prPrepFailed({
+        branch,
+        commit,
+        health: input.health,
+        reason: 'gh pr create failed'
+      });
+    }
+    if (gh.url !== undefined && gh.url.length > 0) {
+      prUrl = gh.url;
     }
   }
 
-  const health = prPrepared
-    ? incrementAppliedPatches(
-        input.health,
-        toApply.map((item) => item.stepIndex),
-        policy
-      )
-    : input.health;
+  const health = incrementAppliedPatches(
+    input.health,
+    toApply.map((item) => item.stepIndex),
+    policy
+  );
 
   const result: AssistedApplySuccess = {
     ok: true,
@@ -428,7 +445,7 @@ export async function applyAssistedPatches(input: {
     defaultBranch,
     commit,
     scenarioPath,
-    prPrepared,
+    prPrepared: true,
     merged: false,
     appliedStepIndexes: toApply.map((item) => item.stepIndex),
     health
@@ -560,6 +577,23 @@ async function restoreStartingBranch(
     }
   }
   return revertError;
+}
+
+/** P12a: local commit stays; PR prep failure is ok:false and does not increment health. */
+function prPrepFailed(input: {
+  branch: string;
+  commit: string;
+  health: ScenarioHealth;
+  reason: string;
+}): AssistedApplyRefusal {
+  return {
+    ok: false,
+    code: 'pr-prep-failed',
+    reason: input.reason,
+    branch: input.branch,
+    commit: input.commit,
+    health: input.health
+  };
 }
 
 function refusalWithRestore(

@@ -144,6 +144,8 @@ Pass-13 (L7-091 … L7-098) is in `CHANGELOG.md`.
 Captain lock **D11a** (`generated/datasets/recorded.json` is local-only
 plaintext secrets; gitignored) is in `CHANGELOG.md`.
 Pass-14 (L7-099 … L7-102) is in `CHANGELOG.md`.
+Captain lock **P12a** (PR-prep failure is `ok: false` / `pr-prep-failed`)
+is in `CHANGELOG.md`.
 
 ## Residuals
 
@@ -158,9 +160,10 @@ Pass-14 (L7-099 … L7-102) is in `CHANGELOG.md`.
 - **D11a:** `generated/datasets/recorded.json` is plaintext captured
   values (including secrets). Gitignored; do not commit. Use
   `datasets/example.json` as the template.
-- **P12** ask-user: PR-prep failure remains `ok: true` +
-  `prPrepared: false` (H5b). L7-084 / L7-094 only make a retry
-  recoverable; they do not change the ok/prPrepared contract.
+- **P12a:** Push / `gh pr create` / `preparePr` failure after a local
+  commit is `ok: false` + `code: 'pr-prep-failed'`. Patch branch remains
+  for resume (L7-084). Health increments only when `prPrepared: true`
+  (H5b).
 - **P13** ask-user: strip proposed-side secret args in patches vs
   document residual (unchanged).
 - **P14** ask-user: remote force-delete vs gate on open PR (unchanged).
