@@ -12,7 +12,13 @@ export type GitExecResult = {
   stdout: string;
   stderr: string;
   code: number;
+  /** L7-235: true when the child was SIGKILL'd / timed out, not a normal git exit. */
+  timedOut?: boolean;
+  signal?: string;
 };
+
+/** GNU `timeout(1)` convention; not a normal git exit code 1. */
+export const GIT_TIMEOUT_EXIT_CODE = 124;
 
 export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecResult>;
 
@@ -78,13 +84,38 @@ export async function execGitTimed(
     const result = await execFileAsync('git', [...args], gitChildExecOptions(cwd, timeoutMs));
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   } catch (error) {
-    const err = error as { stdout?: string; stderr?: string; code?: number; message?: string };
-    return {
-      stdout: err.stdout ?? '',
-      stderr: err.stderr ?? err.message ?? String(error),
-      code: typeof err.code === 'number' ? err.code : 1
-    };
+    return gitExecResultFromFailure(error);
   }
+}
+
+/** L7-235: SIGKILL / timeout is not ordinary git exit 1. */
+export function gitExecResultFromFailure(error: unknown): GitExecResult {
+  const err = error as {
+    stdout?: string;
+    stderr?: string;
+    code?: unknown;
+    killed?: boolean;
+    signal?: string;
+    message?: string;
+  };
+  const signal = typeof err.signal === 'string' ? err.signal : undefined;
+  const timedOut =
+    err.killed === true ||
+    signal === 'SIGKILL' ||
+    (typeof err.code === 'string' && /TIMEOUT|ETIMEDOUT/iu.test(err.code));
+  let numericCode = 1;
+  if (typeof err.code === 'number') {
+    numericCode = err.code;
+  } else if (timedOut) {
+    numericCode = GIT_TIMEOUT_EXIT_CODE;
+  }
+  return {
+    stdout: err.stdout ?? '',
+    stderr: err.stderr ?? err.message ?? String(error),
+    code: numericCode,
+    ...(timedOut ? { timedOut: true } : {}),
+    ...(signal !== undefined ? { signal } : {})
+  };
 }
 
 export function gitChildExecOptions(

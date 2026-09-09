@@ -1,3 +1,4 @@
+import { isSessionBundleError } from '@spyglass/runner';
 import type {
   BrowserBounds,
   ConfigSetRequest,
@@ -344,6 +345,9 @@ export function sessionBundleIpcError(
     return fallback;
   }
   const code = (error as NodeJS.ErrnoException).code;
+  if (isSessionBundleError(error)) {
+    return error.bundleCode;
+  }
   if (code === 'ENOENT') {
     return 'not-found';
   }

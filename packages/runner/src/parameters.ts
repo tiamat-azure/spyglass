@@ -176,7 +176,8 @@ function trailingArguments(args: readonly unknown[] | undefined): unknown[] {
   return trailing;
 }
 
-function cloneJsonArg(value: unknown): unknown {
+/** A27b / L7-224 / L7-232: keep JSON-serializable slots (not functions/undefined). */
+export function cloneJsonArg(value: unknown): unknown {
   if (typeof value === 'string') {
     return value;
   }

@@ -502,6 +502,8 @@ const replayHaltBtn = requireEl<HTMLButtonElement>('replay-halt');
 const replaySteps = requireEl<HTMLOListElement>('replay-steps');
 /** L7-204: halt must keep next disabled even if next()'s finally runs later. */
 let replayHalted = false;
+/** L7-234: re-enable Suivant only while stepwise replay is still in flight. */
+let replayStepwiseActive = false;
 const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
 const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
 const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
@@ -837,6 +839,7 @@ replayRunBtn.addEventListener('click', () => {
   const datasetRaw = replayDataset.value.trim();
   const datasetPath = datasetRaw.length > 0 ? datasetRaw : undefined;
   replayHalted = false;
+  replayStepwiseActive = stepByStep;
   replayNextBtn.disabled = !stepByStep;
   replayHaltBtn.disabled = !stepByStep;
   void api.replay
@@ -851,6 +854,7 @@ replayRunBtn.addEventListener('click', () => {
       replayPanel.dataset.runId = result.runId;
     })
     .finally(() => {
+      replayStepwiseActive = false;
       replayRunBtn.disabled = false;
       replayNextBtn.disabled = true;
       replayHaltBtn.disabled = true;
@@ -873,7 +877,7 @@ replayNextBtn.addEventListener('click', () => {
       replayStatus.textContent = error instanceof Error ? error.message : String(error);
     })
     .finally(() => {
-      if (!replayHalted && !replayHaltBtn.disabled) {
+      if (!replayHalted && replayStepwiseActive) {
         replayNextBtn.disabled = false;
       }
     });
@@ -884,6 +888,7 @@ replayHaltBtn.addEventListener('click', () => {
     return;
   }
   replayHalted = true;
+  replayStepwiseActive = false;
   replayNextBtn.disabled = true;
   replayHaltBtn.disabled = true;
   void api.replay

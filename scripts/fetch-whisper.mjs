@@ -16,7 +16,7 @@
  * Pins below; non-empty `STT_WHISPER_CLI_SHA256` overrides (S4a-style).
  */
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   chmodSync,
   copyFileSync,
@@ -25,7 +25,7 @@ import {
   readdirSync,
   statSync
 } from 'node:fs';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -93,6 +93,26 @@ async function download(url, dest) {
     throw new Error(`GET ${url} → ${String(response.status)}`);
   }
   await pipeline(Readable.fromWeb(response.body), createWriteStream(dest));
+}
+
+/** L7-237: atomic + min-size for default small (Node builtins only, L7-086). */
+async function downloadResponseAtomic(dest, response, minBytes) {
+  if (!response.ok || response.body === null) {
+    throw new Error(`GET → ${String(response.status)}`);
+  }
+  const partial = `${dest}.partial-${randomBytes(8).toString('hex')}`;
+  await rm(partial, { force: true });
+  try {
+    await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+    const st = statSync(partial);
+    if (st.size < minBytes) {
+      throw new Error(`downloaded file too small (${String(st.size)} < ${String(minBytes)} bytes)`);
+    }
+    await rename(partial, dest);
+  } catch (error) {
+    await rm(partial, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 function existingCliOk(dest) {
@@ -351,9 +371,18 @@ async function main() {
     return;
   }
   const modelPath = join(outDir, MODEL_NAME);
-  process.stdout.write(`Downloading ${MODEL_NAME} (offline STT weights, ~190MB)…\n`);
-  await download(MODEL_URL, modelPath);
-  process.stdout.write(`Wrote ${modelPath}\n`);
+  if (existingSmallOk(modelPath)) {
+    process.stdout.write(`${MODEL_NAME} already present: ${modelPath}\n`);
+  } else {
+    await rm(modelPath, { recursive: true, force: true });
+    process.stdout.write(`Downloading ${MODEL_NAME} (offline STT weights, ~190MB)…\n`);
+    const response = await fetch(MODEL_URL, { redirect: 'follow' });
+    if (!response.ok) {
+      throw new Error(`GET ${MODEL_URL} → ${String(response.status)}`);
+    }
+    await downloadResponseAtomic(modelPath, response, SMALL_MIN_BYTES);
+    process.stdout.write(`Wrote ${modelPath}\n`);
+  }
   await ensureWhisperCli();
   process.stdout.write(
     'Then launch with SPYGLASS_STT_ENGINE=whisper (auto-selected when both files exist).\n'

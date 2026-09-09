@@ -17,6 +17,36 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 
 export const SESSION_BUNDLE_MANIFEST = 'spyglass-session.json';
 
+export const SESSION_BUNDLE_ERROR_TAG = 'spyglass.session-bundle' as const;
+
+export type SessionBundleIpcCode =
+  | 'dest-not-empty'
+  | 'dest-not-directory'
+  | 'session-exists'
+  | 'invalid-session'
+  | 'overlap'
+  | 'symlink'
+  | 'invalid-meta';
+
+/** L7-233: structured codes so IPC mapping does not depend on Error.message text. */
+export class SessionBundleError extends Error {
+  readonly tag: typeof SESSION_BUNDLE_ERROR_TAG = SESSION_BUNDLE_ERROR_TAG;
+  readonly bundleCode: SessionBundleIpcCode;
+  constructor(bundleCode: SessionBundleIpcCode, message: string) {
+    super(message);
+    this.name = 'SessionBundleError';
+    this.bundleCode = bundleCode;
+  }
+}
+
+export function isSessionBundleError(error: unknown): error is SessionBundleError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { tag?: unknown }).tag === SESSION_BUNDLE_ERROR_TAG
+  );
+}
+
 export type SessionBundleManifest = {
   schemaVersion: 1;
   kind: 'spyglass-session';
@@ -72,6 +102,7 @@ export async function exportSessionFolder(
       await replaceDirectory(dest, staging, {
         overwrite,
         existsError: 'export refused: destination already exists',
+        existsCode: 'dest-not-empty',
         allowEmptyDest: !overwrite
       });
       return { dest, sessionId: meta.sessionId, manifestPath: join(dest, SESSION_BUNDLE_MANIFEST) };
@@ -91,19 +122,19 @@ export async function importSessionFolder(
   const meta = await readSessionMeta(source);
   const sessionId = meta.sessionId;
   if (!isSafeSessionId(sessionId)) {
-    throw new Error('import refused: invalid sessionId');
+    throw new SessionBundleError('invalid-session', 'import refused: invalid sessionId');
   }
   const root = resolve(sessionsRoot);
   const dest = resolve(root, sessionId);
   if (!isInsideSessionsRoot(root, dest)) {
-    throw new Error('import refused: invalid sessionId');
+    throw new SessionBundleError('invalid-session', 'import refused: invalid sessionId');
   }
   await assertNoCopyOverlap(source, dest);
   await assertBundleManifestAgrees(source, sessionId);
   return await withDestLock(dest, async () => {
     await recoverOrphanedBackup(dest);
     if (await pathExists(dest)) {
-      throw new Error('import refused: session already exists');
+      throw new SessionBundleError('session-exists', 'import refused: session already exists');
     }
     await mkdir(root, { recursive: true });
     const staging = await mkdtemp(join(root, '.spyglass-import-'));
@@ -112,7 +143,8 @@ export async function importSessionFolder(
       await assertNoSymlinks(staging, 'import');
       await replaceDirectory(dest, staging, {
         overwrite: false,
-        existsError: 'import refused: session already exists'
+        existsError: 'import refused: session already exists',
+        existsCode: 'session-exists'
       });
     } catch (error) {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined);
@@ -127,7 +159,7 @@ export async function readSessionMeta(sessionDir: string): Promise<{ sessionId: 
     sessionId?: unknown;
   };
   if (typeof raw.sessionId !== 'string' || raw.sessionId.trim().length === 0) {
-    throw new Error('session meta.json is missing sessionId');
+    throw new SessionBundleError('invalid-meta', 'session meta.json is missing sessionId');
   }
   return { sessionId: raw.sessionId };
 }
@@ -254,7 +286,10 @@ async function assertExportDestIsDirectoryIfPresent(dest: string): Promise<void>
     throw err;
   }
   if (!st.isDirectory()) {
-    throw new Error('export refused: destination is not a directory');
+    throw new SessionBundleError(
+      'dest-not-directory',
+      'export refused: destination is not a directory'
+    );
   }
 }
 
@@ -272,7 +307,7 @@ async function assertExportDestAvailable(dest: string): Promise<void> {
     throw err;
   }
   if (names.length > 0) {
-    throw new Error('export refused: destination is not empty');
+    throw new SessionBundleError('dest-not-empty', 'export refused: destination is not empty');
   }
 }
 
@@ -283,12 +318,18 @@ async function assertNoCopyOverlap(source: string, dest: string): Promise<void> 
   const sourceReal = await realpathExisting(source);
   const destReal = await realpathExisting(dest);
   if (sourceReal === destReal) {
-    throw new Error('session copy refused: destination must not be the source session');
+    throw new SessionBundleError(
+      'overlap',
+      'session copy refused: destination must not be the source session'
+    );
   }
   const destInsideSource = isInsideSessionsRoot(sourceReal, destReal);
   const sourceInsideDest = isInsideSessionsRoot(destReal, sourceReal);
   if (destInsideSource || sourceInsideDest) {
-    throw new Error('session copy refused: destination must not overlap the source session');
+    throw new SessionBundleError(
+      'overlap',
+      'session copy refused: destination must not overlap the source session'
+    );
   }
 }
 
@@ -302,7 +343,7 @@ async function assertNoSymlinks(root: string, action: 'import' | 'export'): Prom
     }
     const st = await lstat(current);
     if (st.isSymbolicLink()) {
-      throw new Error(`${action} refused: symlinks are not allowed`);
+      throw new SessionBundleError('symlink', `${action} refused: symlinks are not allowed`);
     }
     if (st.isDirectory()) {
       const names = await readdir(current);
@@ -418,7 +459,12 @@ async function recoverOrphanedBackup(dest: string): Promise<void> {
 async function replaceDirectory(
   dest: string,
   staging: string,
-  options: { overwrite: boolean; existsError: string; allowEmptyDest?: boolean }
+  options: {
+    overwrite: boolean;
+    existsError: string;
+    existsCode: SessionBundleIpcCode;
+    allowEmptyDest?: boolean;
+  }
 ): Promise<void> {
   if (!options.overwrite) {
     if (options.allowEmptyDest === true) {
@@ -437,7 +483,7 @@ async function replaceDirectory(
       // L7-195: EPERM is not "already exists" (permissions / Windows rename).
       if (code === 'EEXIST' || code === 'ENOTEMPTY') {
         if (await pathExists(dest)) {
-          throw new Error(options.existsError);
+          throw new SessionBundleError(options.existsCode, options.existsError);
         }
       }
       throw err;
@@ -447,7 +493,10 @@ async function replaceDirectory(
   try {
     const destStat = await lstat(dest);
     if (!destStat.isDirectory()) {
-      throw new Error('export refused: destination is not a directory');
+      throw new SessionBundleError(
+        'dest-not-directory',
+        'export refused: destination is not a directory'
+      );
     }
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;

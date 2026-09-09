@@ -49,7 +49,9 @@ export type { GitExec, GitExecResult } from './git-repo.ts';
 export {
   defaultGitExec,
   detectDefaultBranch,
+  GIT_TIMEOUT_EXIT_CODE,
   GitApplyError,
+  gitExecResultFromFailure,
   isGitApplyError,
   isWorktreeDirty,
   patchBranchName
@@ -132,6 +134,9 @@ export type { SessionExportOptions, SessionExportResult } from './session-bundle
 export {
   exportSessionFolder,
   importSessionFolder,
-  SESSION_BUNDLE_MANIFEST
+  isSessionBundleError,
+  SESSION_BUNDLE_ERROR_TAG,
+  SESSION_BUNDLE_MANIFEST,
+  SessionBundleError
 } from './session-bundle.ts';
 export { verifyStep } from './verify.ts';

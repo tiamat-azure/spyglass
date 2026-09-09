@@ -6,6 +6,8 @@ import { basename, dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
 import {
+  isLargeFallbackError,
+  isUnreadableLargeFallbackError,
   largeFallbackMarkerDirs,
   readLargeFallbackSync,
   STT_LARGE_MODEL_FILE,
@@ -195,8 +197,7 @@ function readFallbackMarkerForPathPick(dir: string): boolean {
   try {
     return readLargeFallbackSync(dir);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.startsWith('unreadable large-fallback.json')) {
+    if (isUnreadableLargeFallbackError(error)) {
       return false;
     }
     throw error;
@@ -217,8 +218,7 @@ export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean 
   try {
     return pickPreferredWhisperModel(existing, env) !== undefined;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('large-fallback.json')) {
+    if (isLargeFallbackError(error)) {
       return true;
     }
     throw error;

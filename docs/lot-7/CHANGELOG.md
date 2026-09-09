@@ -1231,6 +1231,34 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user queue: clear.
 
+## Pass-33 adversarial fixes (L7-232 … L7-239)
+
+- **L7-232:** `scrubKnownValuesFromDescriptor` keeps fill/select trailing
+  array shape. Secret slots become JSON `null`; JSON-serializable
+  non-strings are kept. Indices are not collapsed (N29a / A27b).
+- **L7-233:** Session export/import throws `SessionBundleError` with
+  `bundleCode`. `sessionBundleIpcError` prefers that code over
+  `Error.message` substring matching (message fallback remains).
+- **L7-234:** Replay Suivant `finally` re-enables next only when
+  `replayStepwiseActive` (not because halt is enabled), so natural
+  completion cannot race-re-enable next.
+- **L7-235:** `execGitTimed` maps SIGKILL/timeout to `timedOut` and
+  exit 124, not ordinary git exit 1. Hung push is `pr-prep-failed`
+  before a non-fast-forward remote delete.
+- **L7-236:** When `findStepByIndex` misses, suggested-patch `original`
+  uses `originalWithoutLiveFillArgs` (omit live fill/select args), not
+  the dataset-materialized live descriptor.
+- **L7-237:** Default `fetch-whisper` small download is atomic + min-size
+  (builtin `downloadResponseAtomic`), not a raw overwrite of the vendor
+  path.
+- **L7-238:** `large-fallback.json` corrupt/unreadable throws
+  `LargeFallbackError` (`kind` + tag). Path pick / `whisperAvailable`
+  classify with structured helpers, not `Error.message` substrings.
+- **L7-239:** `chooseWhisperModel` existence-checks `largePath` like
+  `resolveWhisperPaths` and does not return a missing large file.
+
+Ask-user queue: clear.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

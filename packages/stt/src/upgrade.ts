@@ -14,6 +14,32 @@ export const STT_LARGE_SHA256 = '394221709cd5ad1f40c46e6031ca61bce88931e6e088c18
 export const STT_UPGRADE_PROMPT_AFTER_DEFAULT = 10;
 export const STT_MAX_LATENCY_MS_DEFAULT = 2_000;
 export const STT_FALLBACK_MARKER = 'large-fallback.json';
+export const LARGE_FALLBACK_ERROR_TAG = 'spyglass.large-fallback' as const;
+
+export type LargeFallbackErrorKind = 'corrupt' | 'unreadable';
+
+/** L7-238: structured marker errors so classifiers need not parse Error.message. */
+export class LargeFallbackError extends Error {
+  readonly tag: typeof LARGE_FALLBACK_ERROR_TAG = LARGE_FALLBACK_ERROR_TAG;
+  readonly kind: LargeFallbackErrorKind;
+  constructor(kind: LargeFallbackErrorKind, message: string) {
+    super(message);
+    this.name = 'LargeFallbackError';
+    this.kind = kind;
+  }
+}
+
+export function isLargeFallbackError(error: unknown): error is LargeFallbackError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { tag?: unknown }).tag === LARGE_FALLBACK_ERROR_TAG
+  );
+}
+
+export function isUnreadableLargeFallbackError(error: unknown): boolean {
+  return isLargeFallbackError(error) && error.kind === 'unreadable';
+}
 
 export type SttUpgradeDecision = 'propose' | 'silent' | 'refused';
 
@@ -73,7 +99,10 @@ export function chooseWhisperModel(input: {
   modelDir?: string;
 }): SttModelChoice {
   if (input.largePath !== undefined && input.largePath.length > 0 && !input.largeFallback) {
-    return { file: input.largePath, kind: 'large', fallback: false };
+    // L7-239: do not return a non-existent largePath (same existence check as resolveWhisperPaths).
+    if (existsSync(input.largePath)) {
+      return { file: input.largePath, kind: 'large', fallback: false };
+    }
   }
   if (input.smallPath !== undefined && input.smallPath.length > 0) {
     return { file: input.smallPath, kind: 'small', fallback: input.largeFallback };
@@ -96,14 +125,14 @@ function parseLargeFallbackJson(rawText: string): boolean {
   try {
     parsed = JSON.parse(rawText);
   } catch {
-    throw new Error('corrupt large-fallback.json: invalid JSON');
+    throw new LargeFallbackError('corrupt', 'corrupt large-fallback.json: invalid JSON');
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('corrupt large-fallback.json: not an object');
+    throw new LargeFallbackError('corrupt', 'corrupt large-fallback.json: not an object');
   }
   const fallback = (parsed as { fallback?: unknown }).fallback;
   if (typeof fallback !== 'boolean') {
-    throw new Error('corrupt large-fallback.json: fallback');
+    throw new LargeFallbackError('corrupt', 'corrupt large-fallback.json: fallback');
   }
   return fallback;
 }
@@ -121,7 +150,10 @@ export async function readLargeFallback(modelDir: string): Promise<boolean> {
     if (code === 'ENOENT') {
       return false;
     }
-    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
+    throw new LargeFallbackError(
+      'unreadable',
+      `unreadable large-fallback.json: ${(err as Error).message}`
+    );
   }
   return parseLargeFallbackJson(rawText);
 }
@@ -139,7 +171,10 @@ export function readLargeFallbackSync(modelDir: string): boolean {
     if (code === 'ENOENT') {
       return false;
     }
-    throw new Error(`unreadable large-fallback.json: ${(err as Error).message}`);
+    throw new LargeFallbackError(
+      'unreadable',
+      `unreadable large-fallback.json: ${(err as Error).message}`
+    );
   }
   return parseLargeFallbackJson(rawText);
 }

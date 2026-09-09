@@ -315,6 +315,15 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
 - **R32b:** Replay-start IPC accepts/forwards `datasetPath` (not
   silently dropped). Preload + `#replay-dataset` wire it into
   `ReplayEngine` / `runScenario`.
+- **L7-232:** Fill/select secret scrub preserves trailing array shape
+  (`null` vacant slots; JSON args kept).
+- **L7-233:** Session bundle IPC codes come from `SessionBundleError.bundleCode`.
+- **L7-234:** Suivant re-enable is gated on `replayStepwiseActive`, not halt enabled.
+- **L7-235:** Git timeout/SIGKILL is `timedOut` (exit 124), not exit 1.
+- **L7-236:** Missing recorded step does not persist live fill args as `original`.
+- **L7-237:** Default small model download is atomic + min-size.
+- **L7-238:** Large-fallback marker errors are structured (`LargeFallbackError`).
+- **L7-239:** `chooseWhisperModel` does not return a non-existent `largePath`.
 - **F23b:** `pickPreferredWhisperModel` / `resolveWhisperPaths` honour
   `large-fallback.json` so existence-only large preference cannot bypass
   F-39 fallback-to-small.
@@ -395,4 +404,9 @@ sessionDir (structured `missing-session-dir` refusal). **I30a:**
 whisper-cli download SHA-256 after extract, before chmod (fail closed).
 **C31a:** closeElectron SIGKILL timeout-only. **W31a:** skipLarge does
 not fall back to large when small is missing. **R32b:** replay-start
-forwards `datasetPath` for parameterized in-app replay. Held: none.
+forwards `datasetPath` for parameterized in-app replay. Pass-33
+(L7-232 … L7-239): preserve redact array shape; structured session-bundle
+IPC codes; Suivant gated on stepwise-active; git timeout ≠ exit 1;
+no live fill original on miss; atomic default small download;
+structured large-fallback errors; `chooseWhisperModel` existence-checks
+large. Held: none.

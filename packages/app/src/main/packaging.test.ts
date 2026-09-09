@@ -193,7 +193,7 @@ describe('packaged Observe', () => {
     );
     expect(pickBody).toContain('preferSmallAfterLargeFallback');
     expect(pickBody).toContain('readFallbackMarkerForPathPick');
-    expect(pickBody).toContain('unreadable large-fallback.json');
+    expect(pickBody).toContain('isUnreadableLargeFallbackError');
     expect(pickBody).toContain('readLargeFallbackSync');
     expect(pickBody).toContain('largeFallbackMarkerDirs');
     expect(pickBody).toContain('skipLarge');
@@ -201,6 +201,7 @@ describe('packaged Observe', () => {
     expect(pickBody.indexOf('if (skipLarge)')).toBeLessThan(
       pickBody.indexOf('return nonLarge ?? existing[0]')
     );
+    expect(whisper).toContain('isLargeFallbackError');
     expect(main).toContain("error: 'inactive'");
     expect(main).toContain('activeReplay === undefined');
     const replayNextIdx = main.indexOf('IPC.replayNext');
@@ -425,6 +426,8 @@ describe('packaged Observe', () => {
     expect(nextHandler).toContain('result.ok');
     expect(nextHandler).toContain('result.error');
     expect(nextHandler).toContain('replayHalted');
+    expect(nextHandler).toContain('replayStepwiseActive');
+    expect(nextHandler).not.toContain('!replayHaltBtn.disabled');
     const haltHandler = renderer.slice(haltIdx, haltIdx + 1100);
     expect(haltHandler).toContain('api.replay');
     expect(haltHandler).toContain('result.ok');

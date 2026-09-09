@@ -9,6 +9,7 @@ import { resolvePatchPolicy } from './patch-config.ts';
 import { processSuggestedPatch } from './patch-lifecycle.ts';
 import {
   originalDescriptorForPatch,
+  originalWithoutLiveFillArgs,
   overlayLiveArgumentsForRecovery,
   redactSuggestedPatchEntryForPersistence,
   redactSuggestedPatchForPersistence
@@ -265,8 +266,69 @@ describe('P13a patch secret redaction', () => {
       }
     );
     expect(JSON.stringify(redacted)).not.toMatch(secret);
-    expect(redacted.patches[0]?.original.arguments).toEqual(['alice']);
-    expect(redacted.patches[0]?.suggested.arguments).toEqual(['alice']);
+    expect(redacted.patches[0]?.original.arguments).toEqual(['alice', null]);
+    expect(redacted.patches[0]?.suggested.arguments).toEqual(['alice', null]);
+  });
+
+  it('preserves trailing JSON args and vacant secret slots (L7-232)', () => {
+    const secret = 'dataset-secret';
+    const user = fillStep('#user', 'alice');
+    user.action.descriptor.arguments = ['alice', secret, { delay: 1 }] as unknown as string[];
+    const redacted = redactSuggestedPatchForPersistence(
+      {
+        schemaVersion: 1,
+        runId: 'run_l7232',
+        sessionId: 'ses_lot7',
+        applied: false,
+        patches: [
+          {
+            stepIndex: 0,
+            scope: 'action.descriptor',
+            original: {
+              type: 'fill',
+              selector: '#user',
+              arguments: ['alice', secret, { delay: 1 }] as unknown as string[]
+            },
+            suggested: {
+              type: 'fill',
+              selector: '#user-new',
+              arguments: ['alice', secret, { delay: 1 }] as unknown as string[]
+            },
+            diagnosis: 'selector drift',
+            confidence: 0.9
+          }
+        ]
+      },
+      {
+        schemaVersion: 1,
+        sessionId: 'ses_lot7',
+        startUrl: 'https://exemple.test/login',
+        steps: [user, fillStep('#password', secret, 'password')]
+      }
+    );
+    expect(JSON.stringify(redacted)).not.toMatch(secret);
+    expect(redacted.patches[0]?.original.arguments).toEqual(['alice', null, { delay: 1 }]);
+    expect(redacted.patches[0]?.suggested.arguments?.[2]).toEqual({ delay: 1 });
+    expect(redacted.patches[0]?.original.arguments?.[1]).toBeNull();
+  });
+
+  it('omits live fill/select args when the recorded step is missing (L7-236)', () => {
+    const original = originalWithoutLiveFillArgs({
+      type: 'fill',
+      selector: '#password',
+      arguments: ['live-secret']
+    });
+    expect(original.arguments).toBeUndefined();
+    expect(original.selector).toBe('#password');
+    const click = originalWithoutLiveFillArgs({ type: 'click', selector: '#go' });
+    expect(click.type).toBe('click');
+    expect(click.arguments).toBeUndefined();
+  });
+
+  it('run.ts does not persist a live descriptor as suggested-patch original (L7-236)', async () => {
+    const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    expect(src).toContain('originalWithoutLiveFillArgs');
+    expect(src).not.toContain('cloneDescriptor(step.action.descriptor)');
   });
 
   it('scrubs by value on a single entry without a scenario (P28b)', () => {

@@ -10,6 +10,8 @@ import {
 } from './resolve-engine.ts';
 import {
   chooseWhisperModel,
+  isLargeFallbackError,
+  LARGE_FALLBACK_ERROR_TAG,
   largeFallbackMarkerDirs,
   parseMaxLatencyMs,
   parseUpgradePromptAfter,
@@ -71,14 +73,31 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
     expect(choice.fallback).toBe(true);
   });
 
-  it('prefers large when present and within budget', () => {
+  it('prefers large when present and within budget', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-up-large-'));
+    const largePath = join(dir, STT_LARGE_MODEL_FILE);
+    await writeFile(largePath, 'stub-large-weights\n', 'utf8');
     const choice = chooseWhisperModel({
-      largePath: `/models/${STT_LARGE_MODEL_FILE}`,
-      smallPath: `/models/${STT_SMALL_MODEL_FILE}`,
+      largePath,
+      smallPath: join(dir, STT_SMALL_MODEL_FILE),
       largeFallback: false
     });
     expect(choice.kind).toBe('large');
+    expect(choice.file).toBe(largePath);
     expect(choice.file).toContain('large-v3-turbo');
+  });
+
+  it('does not return a missing largePath (L7-239)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-up-nolarge-'));
+    const smallPath = join(dir, STT_SMALL_MODEL_FILE);
+    await writeFile(smallPath, 'stub-small-weights\n', 'utf8');
+    const choice = chooseWhisperModel({
+      largePath: join(dir, STT_LARGE_MODEL_FILE),
+      smallPath,
+      largeFallback: false
+    });
+    expect(choice.kind).toBe('small');
+    expect(choice.file).toBe(smallPath);
   });
 
   it('returns smallModelPath when smallPath is omitted (L7-073)', () => {
@@ -178,6 +197,16 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     await writeFile(join(dir, STT_FALLBACK_MARKER), '{not json', 'utf8');
     await expect(readLargeFallback(dir)).rejects.toThrow(/corrupt large-fallback.json/);
     expect(() => readLargeFallbackSync(dir)).toThrow(/corrupt large-fallback.json/);
+    try {
+      readLargeFallbackSync(dir);
+      expect.unreachable();
+    } catch (error) {
+      expect(isLargeFallbackError(error)).toBe(true);
+      if (isLargeFallbackError(error)) {
+        expect(error.kind).toBe('corrupt');
+        expect(error.tag).toBe(LARGE_FALLBACK_ERROR_TAG);
+      }
+    }
   });
 
   it('replaces a corrupt large-fallback.json atomically (L7-140)', async () => {

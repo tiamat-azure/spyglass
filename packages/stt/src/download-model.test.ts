@@ -178,6 +178,23 @@ describe('W3a fetch-whisper --large', () => {
     expect(largeBlock).not.toMatch(/\bawait download\(/);
   });
 
+  it('downloads default small via atomic min-size path (L7-237)', async () => {
+    const src = await readFile(
+      new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),
+      'utf8'
+    );
+    const start = src.indexOf('const modelPath');
+    const end = src.indexOf('void main()');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body).toContain('downloadResponseAtomic');
+    expect(body).toContain('SMALL_MIN_BYTES');
+    expect(body).toContain('existingSmallOk');
+    expect(body).not.toMatch(/\bawait download\(/);
+    expect(src).toContain('async function downloadResponseAtomic');
+  });
+
   it('ensures ggml-small-q5_1.bin on --large before returning (W18a)', async () => {
     const src = await readFile(
       new URL('../../../scripts/fetch-whisper.mjs', import.meta.url),

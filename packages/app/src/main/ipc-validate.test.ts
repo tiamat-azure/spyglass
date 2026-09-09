@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { SessionBundleError } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
 import { refineSourceBanner } from '../shared/ipc.ts';
 import {
@@ -270,6 +271,20 @@ describe('sessionBundleIpcError (L7-088)', () => {
     expect(
       sessionBundleIpcError(new Error('import refused: symlinks are not allowed'), 'import-failed')
     ).toBe('symlink');
+  });
+
+  it('prefers SessionBundleError.bundleCode over Error.message (L7-233)', () => {
+    const error = new SessionBundleError(
+      'dest-not-directory',
+      'unrelated wording that would not match substrings'
+    );
+    expect(sessionBundleIpcError(error, 'export-failed')).toBe('dest-not-directory');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('session-exists', 'destination is not empty'),
+        'import-failed'
+      )
+    ).toBe('session-exists');
   });
 
   it('returns the fallback when the rejection is null, undefined, or not an object (L7-092)', () => {

@@ -31,6 +31,7 @@ import {
   findStepByIndex,
   hasParameterRef,
   originalDescriptorForPatch,
+  originalWithoutLiveFillArgs,
   overlayLiveArgumentsForRecovery,
   redactSuggestedPatchForPersistence
 } from './patch-redact.ts';
@@ -38,7 +39,6 @@ import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
 import { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
 import { writeRunArtifacts } from './report.ts';
-import { cloneDescriptor } from './scenario.ts';
 import { verifyStep } from './verify.ts';
 
 export type ReplayProgress = {
@@ -350,7 +350,7 @@ async function runScenarioOnDriver(
           original:
             recordedStep !== undefined
               ? originalDescriptorForPatch(recordedStep)
-              : cloneDescriptor(step.action.descriptor),
+              : originalWithoutLiveFillArgs(step.action.descriptor),
           suggested: recovered.descriptor,
           diagnosis: recovered.diagnosis,
           confidence: recovered.confidence

@@ -6,6 +6,7 @@ import type {
   SuggestedPatchEntry
 } from '@spyglass/contracts';
 import {
+  cloneJsonArg,
   isSecretParameterName,
   isSecretSelector,
   looksMaskedParameterValue,
@@ -40,6 +41,15 @@ export function originalDescriptorForPatch(step: RefinedStep): ReplayDescriptor 
     stripParameterizedArgument(descriptor);
   }
   return descriptor;
+}
+
+/** L7-236: never persist a dataset-materialized live fill/select as `original`. */
+export function originalWithoutLiveFillArgs(descriptor: ReplayDescriptor): ReplayDescriptor {
+  const clone = cloneDescriptor(descriptor);
+  if (clone.type === 'fill' || clone.type === 'select') {
+    delete clone.arguments;
+  }
+  return clone;
 }
 
 function isSecretArgType(type: ReplayDescriptor['type']): boolean {
@@ -102,6 +112,14 @@ export function collectKnownParameterSecretValues(
   return known;
 }
 
+function isKnownSecretString(value: unknown, known: ReadonlySet<string>): boolean {
+  return typeof value === 'string' && value.length > 0 && known.has(value);
+}
+
+/**
+ * L7-232 / N29a / A27b: scrub secrets in place. Vacant slots are JSON `null`
+ * so later indices do not shift. Non-string JSON args are kept, not dropped.
+ */
 function scrubKnownValuesFromDescriptor(
   descriptor: ReplayDescriptor,
   known: ReadonlySet<string>
@@ -109,30 +127,24 @@ function scrubKnownValuesFromDescriptor(
   if (!isSecretArgType(descriptor.type) || descriptor.arguments === undefined) {
     return;
   }
-  const first = descriptor.arguments[0];
-  if (typeof first === 'string' && first.length > 0 && known.has(first)) {
-    stripParameterizedArgument(descriptor);
-  }
-  if (descriptor.arguments === undefined) {
-    return;
-  }
-  const trailing: string[] = [];
-  for (const item of descriptor.arguments.slice(1)) {
-    if (typeof item === 'string' && item.length > 0 && known.has(item)) {
+  const scrubbed: unknown[] = [];
+  for (const item of descriptor.arguments) {
+    if (isKnownSecretString(item, known)) {
+      scrubbed.push(null);
       continue;
     }
-    if (typeof item === 'string') {
-      trailing.push(item);
-    }
+    const kept = cloneJsonArg(item);
+    scrubbed.push(kept === undefined ? null : kept);
   }
-  const head = descriptor.arguments[0];
-  const keepHead = typeof head === 'string' && head.length > 0 && !known.has(head);
+  const trailing = scrubbed.slice(1);
+  const head = scrubbed[0];
+  const keepHead = typeof head === 'string' && head.length > 0;
   if (!keepHead && trailing.length === 0) {
     delete descriptor.arguments;
     return;
   }
   if (keepHead) {
-    descriptor.arguments = [head, ...trailing];
+    descriptor.arguments = scrubbed as string[];
     return;
   }
   descriptor.arguments = unappliedArguments(trailing);

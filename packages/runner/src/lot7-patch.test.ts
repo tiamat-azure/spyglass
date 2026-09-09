@@ -30,9 +30,11 @@ import {
   detectDefaultBranch,
   GIT_EXEC_MAX_BUFFER_BYTES,
   GIT_EXEC_TIMEOUT_MS,
+  GIT_TIMEOUT_EXIT_CODE,
   GitApplyError,
   type GitExec,
   gitChildExecOptions,
+  gitExecResultFromFailure,
   isDefaultBranchName,
   isGitApplyError,
   isUnresolvedDefaultBranchError,
@@ -895,6 +897,8 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(src).toContain("killSignal: 'SIGKILL'");
     expect(src).toContain('maxBuffer: GIT_EXEC_MAX_BUFFER_BYTES');
     expect(src).not.toContain('maxBuffer: 2_000_000');
+    expect(src).toContain('gitExecResultFromFailure');
+    expect(src).toContain('GIT_TIMEOUT_EXIT_CODE');
     const started = Date.now();
     const hung = execFileAsync(
       process.execPath,
@@ -912,6 +916,21 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const elapsed = Date.now() - started;
     // L7-212: no wall-clock floor (flakes under CI load); prove kill + upper bound.
     expect(elapsed).toBeLessThan(15_000);
+  });
+
+  it('maps SIGKILL/timeout to timedOut, not ordinary exit 1 (L7-235)', () => {
+    const killed = gitExecResultFromFailure({
+      killed: true,
+      signal: 'SIGKILL',
+      stderr: 'killed'
+    });
+    expect(killed.timedOut).toBe(true);
+    expect(killed.signal).toBe('SIGKILL');
+    expect(killed.code).toBe(GIT_TIMEOUT_EXIT_CODE);
+    expect(killed.code).not.toBe(1);
+    const ordinary = gitExecResultFromFailure({ code: 1, stderr: 'error: failed to push' });
+    expect(ordinary.timedOut).toBeUndefined();
+    expect(ordinary.code).toBe(1);
   });
 
   it('retries push after a non-fast-forward when origin already has the branch (L7-094)', async () => {

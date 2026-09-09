@@ -53,6 +53,10 @@ export { runSidecarMain, startSidecarServer } from './sidecar.ts';
 export type { SttModelChoice, SttUpgradeDecision } from './upgrade.ts';
 export {
   chooseWhisperModel,
+  isLargeFallbackError,
+  isUnreadableLargeFallbackError,
+  LARGE_FALLBACK_ERROR_TAG,
+  LargeFallbackError,
   largeModelPath,
   largeModelPresent,
   parseMaxLatencyMs,

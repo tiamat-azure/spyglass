@@ -1042,6 +1042,13 @@ async function pushPatchBranch(
   if (pushed.code === 0) {
     return { ok: true };
   }
+  if (pushed.timedOut === true) {
+    return {
+      ok: false,
+      code: 'pr-prep-failed',
+      reason: gitFailureReason(pushed.stderr, pushArgs)
+    };
+  }
   if (!isNonFastForwardPush(pushed.stderr)) {
     return { ok: false, code: 'pr-prep-failed', reason: gitFailureReason(pushed.stderr, pushArgs) };
   }
