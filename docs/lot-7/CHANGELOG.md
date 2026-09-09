@@ -1098,6 +1098,9 @@ Ask-user still held: N29, D29, O29, A30, I30.
   `null` (not omitted, not `""`) so trailing indices stay. D20a still
   fails for unresolved `[0]`.
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**708 passed**, 1 skipped (62 files). `lot7-parameters.test.ts` 66.
+
 Ask-user still held: D29, O29, A30, I30.
 
 ## CI — macOS Electron e2e close hang
