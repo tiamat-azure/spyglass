@@ -1,13 +1,14 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { RefinedStep, Scenario } from '@spyglass/contracts';
 import { describe, expect, it } from 'vitest';
 import { runCli } from './cli.ts';
+import { resolveReportDir } from './launch.ts';
 import { MemoryPageDriver } from './memory-driver.ts';
 import { aiRecoveryEnabled, isCiEnv, parseRunnerArgv, resolveMaxAiRetries } from './options.ts';
 import { RUNNER_PACKAGE, runnerPackageName } from './package-name.ts';
-import { screenshotFileName, traceFileName } from './paths.ts';
+import { runPath, screenshotFileName, traceFileName } from './paths.ts';
 import { StaticRecoverer } from './recover.ts';
 import { runScenario } from './run.ts';
 
@@ -47,6 +48,11 @@ describe('@spyglass/runner package', () => {
   it('reserves the npm scope name', () => {
     expect(runnerPackageName()).toBe('@spyglass/runner');
     expect(RUNNER_PACKAGE.startsWith('@spyglass/')).toBe(true);
+  });
+
+  it('re-exports fixture server APIs (F37a)', async () => {
+    const entry = await import('./index.ts');
+    expect(typeof entry.startFixtureServer).toBe('function');
   });
 });
 
@@ -103,9 +109,24 @@ describe('F-58 / F-60 CLI flags and CI default', () => {
       expect(text).toMatch(/--max-ai-retries/);
       expect(text).toMatch(/--report/);
       expect(text).toMatch(/--trace/);
+      expect(text).toMatch(/dirname\(<scenario\.json>\)/);
+      expect(text).toMatch(/process\.cwd\(\)/);
+      expect(text).toMatch(/A19a/);
     } finally {
       process.stdout.write = write;
     }
+  });
+
+  it('resolves relative --report from the scenario directory, not cwd (A19a / L6-076)', async () => {
+    const scenarioDir = join(tmpdir(), 'spyglass-a19a-scenario');
+    expect(resolveReportDir('out', scenarioDir, 'run_x')).toBe(resolve(scenarioDir, 'out'));
+    expect(resolveReportDir('/abs/reports', scenarioDir, 'run_x')).toBe(resolve('/abs/reports'));
+    expect(resolveReportDir(undefined, scenarioDir, 'run_x')).toBe(
+      runPath(scenarioDir, '..', 'runs', 'run_x')
+    );
+    const src = await readFile(new URL('./launch.ts', import.meta.url), 'utf8');
+    expect(src).toContain('isAbsolute(reportDir) ? resolve(reportDir)');
+    expect(src).not.toContain('isAbsolute(reportDir) ? reportDir');
   });
 
   it('disables recovery when CI=1 unless --ai, and --no-ai always wins', () => {

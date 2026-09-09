@@ -41,7 +41,7 @@ publishing to the public registry is not part of Lot 0. Register the
 | --- | --- |
 | `@spyglass/app` | Two-zone Electron shell, capture session, observer chat, F-29 settings, Stagehand `observe`/`act` |
 | `@spyglass/llm` | Two-profile LLM gateway, gabarits, expurgation filter, token budget (Lot 2) |
-| `@spyglass/runner` | Deterministic replay library, verification, bounded AI recovery, CLI `spyglass-run` (Lot 5, ADR-0006) |
+| `@spyglass/runner` | Deterministic replay library, thin generated script (`scenario.ts`), verification, bounded AI recovery, CLI `spyglass-run` / `spyglass-generate` (Lots 5–6, ADR-0006) |
 | `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |
 | `@spyglass/stt` | Local STT sidecar — mock engine in CI, whisper.cpp for packaged/dev (ADR-0013) |
@@ -257,5 +257,31 @@ profile (`LLM_SMART_MODEL=claude-sonnet-4-5-20250929`, I-05) with per-operation
 token estimate + confirm (F-71, F-74). `observe()` enrichment only when local
 F-22 descriptors are insufficient (I-07), one smart-time call per scenario.
 
-**Not** implemented: Lot 5+ runner execution, generated scripts.
-Closed shadow DOM remains out of scope (ADR-0009).
+Implemented (Lot 5): `@spyglass/runner` deterministic replay without an LLM
+on the happy path (F-50), post-step verification (F-51), bounded AI recovery
+(F-52–F-55), suggested patch never applied (F-57), CLI flags (F-58 / F-60).
+
+Implemented (Lot 6): finalize writes `generated/scenario.json` (source of
+truth), thin `scenario.ts` importing `runScenario` from
+`@spyglass/runner` (ADR-0006 / F-45), README mode d'emploi, F-58 flags with
+**visible by default** and `--headless` (`createPlaywrightDriver` is headed
+unless `headless === true`, D35b). `--base-url` rewrites the origin of
+an absolute http(s) `startUrl` (optional base path prefix); relative URLs
+still resolve with WHATWG. Relative `--report` is resolved from the
+scenario file directory, not `process.cwd()` (A19a). The script runs
+outside Electron; `--no-ai` needs no API key. Omitting `driver` in
+`runScenario` launches a real standalone Playwright Chromium (generated
+`scenario.ts` / CLI) and defaults `argv` / `env` to `process.argv.slice(2)`
+/ `process.env` (S44b / S66b). In-app replay (`ReplayEngine`) always passes an
+explicit driver bound to the guest window. In-app Rejouer loads
+`generated/scenario.json` only when the latest `rev-N` is `finalized`
+(G56a). Corpus `--out` must be a `.json` file under `docs/lot-6/` (O57a).
+Measurement protocol for
+PRD §2.2 non-contractual replay rates:
+10 public sites + local CI corpus, published under
+[`docs/lot-6/`](docs/lot-6/). **J+1 public is N/A / pending** (J1c). When
+`--public --j1` runs, Lot 6 **rebuilds from static `PUBLIC_CORPUS`**, not a
+persisted J+0 `scenario.json` (J8c).
+
+**Not** implemented: Lot 7 assisted patch apply / PR to the target repo
+(F-62–F-65). Closed shadow DOM remains out of scope (ADR-0009).

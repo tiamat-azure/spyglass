@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "protocol": "prd-2.2-jplus1",
+  "size": 10,
+  "sites": [
+    {
+      "id": "example-com",
+      "name": "example.com",
+      "startUrl": "https://example.com/",
+      "text": "Example Domain"
+    },
+    {
+      "id": "example-org",
+      "name": "example.org",
+      "startUrl": "https://example.org/",
+      "text": "Example Domain"
+    },
+    {
+      "id": "example-net",
+      "name": "example.net",
+      "startUrl": "https://example.net/",
+      "text": "Example Domain"
+    },
+    {
+      "id": "iana",
+      "name": "iana.org",
+      "startUrl": "https://www.iana.org/",
+      "text": "IANA"
+    },
+    {
+      "id": "w3c",
+      "name": "w3.org",
+      "startUrl": "https://www.w3.org/",
+      "text": "W3C",
+      "requireText": false
+    },
+    {
+      "id": "rfc-editor",
+      "name": "rfc-editor.org",
+      "startUrl": "https://www.rfc-editor.org/",
+      "text": "RFC"
+    },
+    {
+      "id": "ietf",
+      "name": "ietf.org",
+      "startUrl": "https://www.ietf.org/",
+      "text": "IETF"
+    },
+    {
+      "id": "unicode",
+      "name": "unicode.org",
+      "startUrl": "https://home.unicode.org/",
+      "text": "Unicode"
+    },
+    {
+      "id": "internic",
+      "name": "internic.net",
+      "startUrl": "https://www.internic.net/",
+      "text": "InterNIC"
+    },
+    {
+      "id": "cern-info",
+      "name": "info.cern.ch",
+      "startUrl": "https://info.cern.ch/",
+      "text": "CERN"
+    }
+  ]
+}

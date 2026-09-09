@@ -164,6 +164,8 @@ test.describe('Lot 5 runner', () => {
         }>;
       };
       expect(revision.status).toBe('finalized');
+      const generatedTs = await readFile(join(sessionDir, 'generated', 'scenario.ts'), 'utf8');
+      expect(generatedTs).toContain('runScenario');
       const last = revision.steps.at(-1);
       expect(last).toBeDefined();
       const originalSelector = last?.action.descriptor.selector;
@@ -174,6 +176,17 @@ test.describe('Lot 5 runner', () => {
         last.verification.timeoutMs = 1500;
       }
       await writeFile(revPath, `${JSON.stringify(revision, null, 2)}\n`, 'utf8');
+      const generatedPath = join(sessionDir, 'generated', 'scenario.json');
+      const generated = JSON.parse(await readFile(generatedPath, 'utf8')) as typeof revision & {
+        steps: typeof revision.steps;
+      };
+      const generatedLast = generated.steps.at(-1);
+      if (generatedLast !== undefined) {
+        generatedLast.action.descriptor.selector = '#does-not-exist';
+        generatedLast.action.descriptor.fallbackSelectors = [];
+        generatedLast.verification.timeoutMs = 1500;
+      }
+      await writeFile(generatedPath, `${JSON.stringify(generated, null, 2)}\n`, 'utf8');
 
       await chrome.locator('#replay-ai').check();
       await chrome.locator('#replay-run').click();

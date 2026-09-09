@@ -1,13 +1,16 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdirSync, unlinkSync } from 'node:fs';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { canFinalize, createMockTransport, LlmGateway, refineFromRaw } from '@spyglass/llm';
+import { writeGeneratedFromRevision, writeGeneratedPackage } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
 import {
   applyCorrelatedObserveEnrichment,
   nextRevision,
   observeMatchScore,
+  type RefinedRevisionFile,
   RefineEngine
 } from './refine-engine.ts';
 import type { RecorderState, SessionOrchestrator } from './session-orchestrator.ts';
@@ -125,6 +128,15 @@ async function makeSession(events: RawEvent[]): Promise<FakeSession> {
   const dir = await mkdtemp(join(tmpdir(), 'spyglass-refine-'));
   const sessionDir = join(dir, 'ses_lot4');
   await mkdir(sessionDir, { recursive: true });
+  const startUrl = events.find((event) => typeof event.page?.url === 'string')?.page?.url;
+  if (startUrl === undefined || startUrl.length === 0) {
+    throw new Error('test session events need page.url for meta.json startUrl');
+  }
+  await writeFile(
+    join(sessionDir, 'meta.json'),
+    `${JSON.stringify({ startUrl }, null, 2)}\n`,
+    'utf8'
+  );
   await writeFile(
     join(sessionDir, 'raw.jsonl'),
     `${events.map((event) => JSON.stringify(event)).join('\n')}\n`,
@@ -162,6 +174,7 @@ function engineFor(
     observe?: () => Promise<{ ok: boolean; observations: Array<{ selector?: string }> }>;
     threshold?: number;
     offline?: boolean;
+    generate?: (sessionDir: string, file: RefinedRevisionFile) => Promise<void>;
   }
 ): RefineEngine {
   const gateway = new LlmGateway({
@@ -189,7 +202,8 @@ function engineFor(
     model: () => 'claude-sonnet-4-5-20250929',
     confirmThreshold: () => options?.threshold ?? 100_000,
     offline: () => options?.offline === true,
-    observe: options?.observe
+    observe: options?.observe,
+    generate: options?.generate
   });
 }
 
@@ -287,6 +301,454 @@ describe('RefineEngine', () => {
       expect(canFinalize(engine.currentRevision()?.steps ?? [])).toBe(true);
     }
     expect(session.state).toBe('finalized');
+    const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
+    expect(generated).toContain('runScenario');
+    const scenarioJson = JSON.parse(
+      await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
+    ) as { sessionId: string };
+    expect(scenarioJson.sessionId).toBe('ses_lot4');
+  });
+
+  it('does not leave the session stuck if generate fails (L6-001)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    let failGenerate = true;
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        if (failGenerate) {
+          failGenerate = false;
+          throw new Error('disk full');
+        }
+        await writeGeneratedFromRevision(sessionDir, file);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    expect(engine.view()?.canFinalize).toBe(true);
+
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/disk full/);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.currentRevision()?.status).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+    const diskAfterFail = JSON.parse(
+      await readFile(join(session.dir, 'refined', 'rev-1.json'), 'utf8')
+    ) as { status: string };
+    expect(diskAfterFail.status).toBe('reviewing');
+
+    const retry = await engine.finalize();
+    expect(retry.ok).toBe(true);
+    if (retry.ok) {
+      expect(retry.revision.status).toBe('finalized');
+      expect(retry.revision.canFinalize).toBe(false);
+    }
+    expect(session.state).toBe('finalized');
+    const generated = await readFile(join(session.dir, 'generated', 'scenario.ts'), 'utf8');
+    expect(generated).toContain('runScenario');
+  });
+
+  it('deletes leftover generated/ if persist fails after generate-first (L6-004)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const rawPath = join(sessionDir, 'raw.jsonl');
+        await writeFile(rawPath, `${await readFile(rawPath, 'utf8')}\n`, 'utf8');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/raw\.jsonl mutated/);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.currentRevision()?.status).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+    await expect(access(join(session.dir, 'generated', 'scenario.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+  });
+
+  it('discards generated/ if generate writes then throws (L6-005)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        throw new Error('mid-write');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/mid-write/);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
+    await expect(access(join(session.dir, 'generated', 'scenario.json'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+  });
+
+  it('keeps a previously good generated/ if regenerate throws (D61a / L6-061)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    await writeGeneratedPackage({
+      sessionDir: session.dir,
+      scenario: {
+        schemaVersion: 1,
+        sessionId: 'ses_lot4',
+        startUrl: 'https://keep.test/good',
+        generatedAt: '2026-09-08T12:00:00.000Z',
+        steps: []
+      }
+    });
+    const engine = engineFor(session, {
+      generate: async () => {
+        throw new Error('mid-write');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/mid-write/);
+    }
+    const kept = JSON.parse(
+      await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
+    ) as { startUrl: string };
+    expect(kept.startUrl).toBe('https://keep.test/good');
+  });
+
+  it('keeps generated/ on persist abort after atomic replace when protectExisting (P65a / L6-065)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    await writeGeneratedPackage({
+      sessionDir: session.dir,
+      scenario: {
+        schemaVersion: 1,
+        sessionId: 'ses_lot4',
+        startUrl: 'https://keep.test/good',
+        generatedAt: '2026-09-08T12:00:00.000Z',
+        steps: []
+      }
+    });
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const revPath = join(sessionDir, 'refined', `rev-${String(file.revision)}.json`);
+        unlinkSync(revPath);
+        mkdirSync(revPath);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    const kept = JSON.parse(
+      await readFile(join(session.dir, 'generated', 'scenario.json'), 'utf8')
+    ) as { startUrl?: string };
+    expect(kept.startUrl).toBeDefined();
+    expect(kept.startUrl?.length).toBeGreaterThan(0);
+  });
+
+  it('keeps generated/ on raw mutation abort after atomic replace when protectExisting (P65a / L6-065)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    await writeGeneratedPackage({
+      sessionDir: session.dir,
+      scenario: {
+        schemaVersion: 1,
+        sessionId: 'ses_lot4',
+        startUrl: 'https://keep.test/good',
+        generatedAt: '2026-09-08T12:00:00.000Z',
+        steps: []
+      }
+    });
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const rawPath = join(sessionDir, 'raw.jsonl');
+        await writeFile(rawPath, `${await readFile(rawPath, 'utf8')}\n`, 'utf8');
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/raw\.jsonl mutated/);
+    }
+    await expect(access(join(session.dir, 'generated', 'scenario.json'))).resolves.toBeUndefined();
+  });
+
+  it('surfaces persistRevision rollback failure instead of silent diverge (R33a / L6-033)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    session.finalizeScenario = () => {
+      const revPath = join(session.dir, 'refined', 'rev-1.json');
+      unlinkSync(revPath);
+      mkdirSync(revPath);
+      throw new Error('orchestrator explode');
+    };
+    const engine = engineFor(session);
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/orchestrator explode/);
+      expect(failed.error).toMatch(/failed to persist reviewing rollback/i);
+    }
+    expect(session.state).toBe('reviewing');
+  });
+
+  it('rolls back reviewing on persistRevision failure after generate (R42a / L6-042)', async () => {
+    const events: RawEvent[] = [
+      click('evt_000001', 1, 'https://app.example.test/a', 1),
+      {
+        schemaVersion: 1,
+        id: 'evt_000002',
+        sessionId: 'ses_lot4',
+        ts: 2,
+        kind: 'nav.load',
+        page: { url: 'https://app.example.test/b', title: 'B' }
+      },
+      fill('evt_000003', 3),
+      click('evt_000004', 4, 'https://app.example.test/b', 3)
+    ];
+    const session = await makeSession(events);
+    const engine = engineFor(session, {
+      generate: async (sessionDir, file) => {
+        await writeGeneratedFromRevision(sessionDir, file);
+        const revPath = join(sessionDir, 'refined', `rev-${String(file.revision)}.json`);
+        unlinkSync(revPath);
+        mkdirSync(revPath);
+      }
+    });
+    const ran = await engine.run('balanced', false);
+    expect(ran.ok).toBe(true);
+    if (!ran.ok) {
+      return;
+    }
+    const routine = await engine.confirm({ routine: true });
+    expect(routine.ok).toBe(true);
+    if (!routine.ok) {
+      return;
+    }
+    const doubtful = routine.revision.steps.filter(
+      (step) => step.strength === 'weak' && step.weakGroup === 'doubtful' && !step.confirmedByUser
+    );
+    for (const step of doubtful) {
+      const one = await engine.confirm({ index: step.index });
+      expect(one.ok).toBe(true);
+    }
+    const failed = await engine.finalize();
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.error).toMatch(/EISDIR|illegal operation on a directory/i);
+      expect(failed.error).toMatch(/failed to persist reviewing rollback/i);
+    }
+    expect(session.state).toBe('reviewing');
+    expect(engine.view()?.canFinalize).toBe(true);
   });
 
   it('requires explicit confirm above the per-operation smart threshold', async () => {

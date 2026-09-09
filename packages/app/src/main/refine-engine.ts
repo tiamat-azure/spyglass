@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RawEvent, RefinedStep } from '@spyglass/contracts';
 import { validateRefinedStep } from '@spyglass/contracts';
@@ -16,6 +16,11 @@ import {
   unconfirmedWeaks,
   weakGroup
 } from '@spyglass/llm';
+import {
+  discardGeneratedPackage,
+  generatedScenarioJsonPath,
+  writeGeneratedFromRevision
+} from '@spyglass/runner';
 import type { RefinedStepView, RefineRevisionView } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
@@ -47,6 +52,11 @@ export type RefineEngineDeps = {
   observe?: () => Promise<{ ok: boolean; observations: ObserveCandidate[] }>;
   /** Test seam: invoked after persistRevision, before the ownership check. */
   afterPersist?: () => void | Promise<void>;
+  /**
+   * Writes `generated/` (F-45). Called **before** persisting `status: 'finalized'`
+   * so a generate failure cannot leave the session stuck (L6-001).
+   */
+  generate?: (sessionDir: string, file: RefinedRevisionFile) => Promise<void>;
 };
 
 export type { ObserveCandidate } from '@spyglass/llm';
@@ -330,14 +340,126 @@ export class RefineEngine {
       return { ok: false, error: 'no session directory' };
     }
     const before = await rawFingerprint(sessionDir);
-    file.status = 'finalized';
-    await persistRevision(sessionDir, file);
-    if ((await rawFingerprint(sessionDir)) !== before) {
-      return { ok: false, error: 'raw.jsonl mutated during finalize' };
+    const generated = await this.writeGeneratedPackage(sessionDir, file);
+    const discardGenerated = !generated.protectExisting;
+    if (!generated.ok) {
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        false,
+        generated.error,
+        discardGenerated
+      );
     }
-    session.finalizeScenario();
+    if ((await rawFingerprint(sessionDir)) !== before) {
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        false,
+        'raw.jsonl mutated during finalize',
+        discardGenerated
+      );
+    }
+    file.status = 'finalized';
+    try {
+      await persistRevision(sessionDir, file);
+    } catch (error) {
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        true,
+        error instanceof Error ? error.message : String(error),
+        discardGenerated
+      );
+    }
+    if ((await rawFingerprint(sessionDir)) !== before) {
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        true,
+        'raw.jsonl mutated during finalize',
+        discardGenerated
+      );
+    }
+    try {
+      session.finalizeScenario();
+    } catch (error) {
+      return await this.abortFinalizeAfterGenerate(
+        sessionDir,
+        file,
+        true,
+        error instanceof Error ? error.message : String(error),
+        discardGenerated
+      );
+    }
     this.current = file;
     return { ok: true, revision: toView(file) };
+  }
+
+  /**
+   * L6-001 keeps status `reviewing` + `canFinalize`. L6-004 also deletes the
+   * generate-first `generated/` so CLI cannot treat leftovers as truth.
+   * R42a: persistReviewing is also true when the finalized persistRevision
+   * throws, so disk cannot stay `finalized` while memory is `reviewing`.
+   * P65a: skip discard when `protectExisting` (a previously good finalized
+   * `generated/` existed); do not `rm -rf` it after atomic replace.
+   */
+  private async abortFinalizeAfterGenerate(
+    sessionDir: string,
+    file: RefinedRevisionFile,
+    persistReviewing: boolean,
+    error: string,
+    discardGenerated = true
+  ): Promise<{ ok: false; error: string }> {
+    file.status = 'reviewing';
+    let combined = error;
+    if (persistReviewing) {
+      try {
+        await persistRevision(sessionDir, file);
+      } catch (persistError) {
+        const persistDetail =
+          persistError instanceof Error ? persistError.message : String(persistError);
+        combined = `${error}; failed to persist reviewing rollback: ${persistDetail}`;
+      }
+    }
+    try {
+      if (discardGenerated) {
+        await discardGeneratedPackage(sessionDir);
+      }
+    } catch {
+      // CLI generate still refuses leftover files without a finalized rev
+    }
+    return { ok: false, error: combined };
+  }
+
+  private async writeGeneratedPackage(
+    sessionDir: string,
+    file: RefinedRevisionFile
+  ): Promise<
+    { ok: true; protectExisting: boolean } | { ok: false; error: string; protectExisting: boolean }
+  > {
+    const protectExisting = await generatedScenarioExists(sessionDir);
+    try {
+      if (this.deps.generate !== undefined) {
+        await this.deps.generate(sessionDir, file);
+        return { ok: true, protectExisting };
+      }
+      await writeGeneratedFromRevision(sessionDir, file);
+      return { ok: true, protectExisting };
+    } catch (error) {
+      try {
+        if (!protectExisting) {
+          await discardGeneratedPackage(sessionDir);
+        }
+      } catch {
+        // leftover generated/ is still unusable: CLI requires a finalized rev
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        protectExisting
+      };
+    }
   }
 
   reset(): void {
@@ -473,6 +595,15 @@ export async function nextRevision(sessionDir: string): Promise<number> {
     return max + 1;
   } catch {
     return 1;
+  }
+}
+
+async function generatedScenarioExists(sessionDir: string): Promise<boolean> {
+  try {
+    await access(generatedScenarioJsonPath(sessionDir));
+    return true;
+  } catch {
+    return false;
   }
 }
 

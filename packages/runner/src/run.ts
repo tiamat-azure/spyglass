@@ -11,11 +11,15 @@ import type {
 } from '@spyglass/contracts';
 import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
+import { applyBaseUrl } from './base-url.ts';
 import type { PageDriver } from './driver.ts';
+import { generatedHelpText } from './help-text.ts';
 import {
+  parseGeneratedArgv,
   type RunScenarioOptions,
   type RunScenarioResult,
-  resolveRunnerOptions
+  resolveRunnerOptions,
+  SMART_MODEL_PIN
 } from './options.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
@@ -34,11 +38,20 @@ export type ReplayProgress = {
 };
 
 export type RunScenarioHooks = RunScenarioOptions & {
-  driver: PageDriver;
+  /**
+   * S44b / S66b: omit to launch a real standalone Playwright Chromium
+   * (generated `scenario.ts` / CLI / ADR-0006) using host
+   * `process.argv.slice(2)` and `process.env`. In-app callers (Electron
+   * ReplayEngine) must pass an explicit driver bound to the guest window.
+   */
+  driver?: PageDriver;
   recoverer?: Recoverer;
   onProgress?: (event: ReplayProgress) => void;
   runId?: string;
   closeDriver?: boolean;
+  /** F-58 flags for the driver-less generated-script path. */
+  argv?: readonly string[];
+  scriptDir?: string;
 };
 
 const TEXT_ONLY_WARNING =
@@ -49,9 +62,101 @@ export function newRunId(now = new Date()): string {
   return `run_${stamp}_${randomBytes(3).toString('hex')}`;
 }
 
+/**
+ * Replay a scenario.
+ *
+ * S44b — omitting `options.driver` launches a real standalone Playwright
+ * Chromium (`runScenarioStandalone` → `launchPlaywrightRun`). That is the
+ * generated-script / CLI path. In-app replay must pass an explicit
+ * `PageDriver` so Electron does not spawn a second browser.
+ *
+ * S66b — the driver-less path defaults `argv` to `process.argv.slice(2)` and
+ * `env` to `process.env` (host process). Keep those defaults. In-app callers
+ * pass an explicit driver and should not rely on host argv/env.
+ */
 export async function runScenario(
   scenario: Scenario,
+  options: RunScenarioHooks = {}
+): Promise<RunScenarioResult> {
+  if (options.driver === undefined) {
+    return await runScenarioStandalone(scenario, options);
+  }
+  return await runScenarioOnDriver(scenario, { ...options, driver: options.driver });
+}
+
+async function runScenarioStandalone(
+  scenario: Scenario,
   options: RunScenarioHooks
+): Promise<RunScenarioResult> {
+  const env = options.env ?? process.env;
+  const argv = options.argv ?? process.argv.slice(2);
+  const parsed = parseGeneratedArgv(argv, env);
+  if (options.headless !== undefined) {
+    parsed.headless = options.headless;
+  }
+  if (options.timeoutMs !== undefined) {
+    parsed.timeoutMs = options.timeoutMs;
+  }
+  if (options.maxAiRetries !== undefined) {
+    parsed.maxAiRetries = options.maxAiRetries;
+  }
+  if (options.aiRecovery !== undefined) {
+    parsed.aiRecovery = options.aiRecovery;
+  }
+  if (options.trace !== undefined) {
+    parsed.trace = options.trace;
+  }
+  if (options.smartModel !== undefined) {
+    parsed.smartModel = options.smartModel;
+  }
+  if (options.baseUrl !== undefined) {
+    parsed.baseUrl = options.baseUrl;
+  }
+  if (options.reportDir !== undefined) {
+    parsed.reportDir = options.reportDir;
+  }
+  if (parsed.help) {
+    process.stdout.write(generatedHelpText());
+    const runId = options.runId ?? newRunId();
+    return {
+      exitCode: 0,
+      report: {
+        schemaVersion: 1,
+        runId,
+        sessionId: scenario.sessionId,
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        exitCode: 0,
+        headless: false,
+        aiRecovery: false,
+        maxAiRetries: parsed.maxAiRetries,
+        smartModel: SMART_MODEL_PIN,
+        multimodal: true,
+        warnings: [],
+        steps: []
+      }
+    };
+  }
+  const { launchPlaywrightRun, resolveReportDir } = await import('./launch.ts');
+  const runId = options.runId ?? newRunId();
+  const scriptDir = options.scriptDir ?? process.cwd();
+  const reportDir = resolveReportDir(parsed.reportDir, scriptDir, runId);
+  const proof = env.SPYGLASS_PROOF_SCREENSHOT;
+  return await launchPlaywrightRun({
+    scenario,
+    parsed,
+    env,
+    reportDir,
+    runId,
+    ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
+    ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
+    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
+  });
+}
+
+async function runScenarioOnDriver(
+  scenario: Scenario,
+  options: RunScenarioHooks & { driver: PageDriver }
 ): Promise<RunScenarioResult> {
   const resolved = resolveRunnerOptions(options, options.env);
   const smartModel = pinSmartModel(resolved.smartModel);
@@ -419,14 +524,7 @@ async function captureFailure(
 }
 
 function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
-  if (baseUrl === undefined || baseUrl.length === 0) {
-    return startUrl;
-  }
-  try {
-    return new URL(startUrl, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).href;
-  } catch {
-    return startUrl;
-  }
+  return applyBaseUrl(baseUrl, startUrl);
 }
 
 function unique(values: string[]): string[] {

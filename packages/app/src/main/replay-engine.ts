@@ -4,7 +4,9 @@ import type { Scenario } from '@spyglass/contracts';
 import type { LlmGateway } from '@spyglass/llm';
 import {
   aiRecoveryEnabled,
+  generatedScenarioJsonPath,
   LlmRecoverer,
+  loadScenarioFile,
   newRunId,
   type PageDriver,
   type ReplayProgress,
@@ -27,6 +29,7 @@ export type ReplayStartResponse =
 
 export type ReplayEngineDeps = {
   session: () => SessionOrchestrator;
+  /** S44b: required. In-app replay must not omit `driver` (that launches Chromium). */
   driver: () => PageDriver;
   gateway: () => LlmGateway;
   model: () => string;
@@ -107,23 +110,81 @@ export class ReplayEngine {
 }
 
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
+  const refinedDir = join(sessionDir, 'refined');
+  const files = await listRefinedRevisionNames(refinedDir);
+  const latestName = files.at(-1);
+  const latest =
+    latestName !== undefined ? await readRevisionFile(refinedDir, latestName, true) : undefined;
+  // G56a: leftover generated/ from generate-first is not authoritative unless
+  // the latest rev-N is already finalized.
+  if (latest?.status === 'finalized' && latest.steps.length > 0) {
+    try {
+      return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
   const metaRaw = await readFile(join(sessionDir, 'meta.json'), 'utf8');
   const meta = JSON.parse(metaRaw) as { startUrl?: string };
   const startUrl = typeof meta.startUrl === 'string' ? meta.startUrl : '';
-  const refinedDir = join(sessionDir, 'refined');
-  const files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
-  files.sort((left, right) => Number(left.slice(4)) - Number(right.slice(4)));
   for (let index = files.length - 1; index >= 0; index -= 1) {
     const name = files[index];
     if (name === undefined) {
       continue;
     }
-    const revision = JSON.parse(
-      await readFile(join(refinedDir, name), 'utf8')
-    ) as RefinedRevisionFile;
-    if (revision.status === 'finalized' && revision.steps.length > 0) {
+    const revision = name === latestName ? latest : await readRevisionFile(refinedDir, name);
+    if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
       return scenarioFromRevision(revision, startUrl);
     }
   }
   throw new Error('no finalized revision');
+}
+
+async function listRefinedRevisionNames(refinedDir: string): Promise<string[]> {
+  let files: string[] = [];
+  try {
+    files = (await readdir(refinedDir)).filter((name) => /^rev-\d+\.json$/u.test(name));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+    return [];
+  }
+  files.sort(
+    (left, right) => Number.parseInt(left.slice(4), 10) - Number.parseInt(right.slice(4), 10)
+  );
+  return files;
+}
+
+/** L6-062: skip unreadable non-selected rev-N.json. C68a: latest must fail closed. */
+async function readRevisionFile(
+  refinedDir: string,
+  name: string,
+  required = false
+): Promise<RefinedRevisionFile | undefined> {
+  try {
+    const value = JSON.parse(await readFile(join(refinedDir, name), 'utf8')) as unknown;
+    if (typeof value !== 'object' || value === null) {
+      if (required) {
+        throw new Error(`corrupt revision ${name}`);
+      }
+      return undefined;
+    }
+    return value as RefinedRevisionFile;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('corrupt revision ')) {
+      throw error;
+    }
+    if (required) {
+      throw new Error(`corrupt revision ${name}`);
+    }
+    if (error instanceof SyntaxError) {
+      return undefined;
+    }
+    throw error;
+  }
 }

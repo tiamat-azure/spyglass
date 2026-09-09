@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "protocol": "prd-2.2-jplus1",
+  "measuredAt": "2026-09-08T14:18:21.335Z",
+  "wave": "J+0",
+  "headless": true,
+  "aiRecovery": false,
+  "sites": [
+    {
+      "id": "example-com",
+      "name": "example.com",
+      "startUrl": "https://example.com/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 528
+    },
+    {
+      "id": "example-org",
+      "name": "example.org",
+      "startUrl": "https://example.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 311
+    },
+    {
+      "id": "example-net",
+      "name": "example.net",
+      "startUrl": "https://example.net/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 288
+    },
+    {
+      "id": "iana",
+      "name": "iana.org",
+      "startUrl": "https://www.iana.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 403
+    },
+    {
+      "id": "w3c",
+      "name": "w3.org",
+      "startUrl": "https://www.w3.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 344
+    },
+    {
+      "id": "rfc-editor",
+      "name": "rfc-editor.org",
+      "startUrl": "https://www.rfc-editor.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 632
+    },
+    {
+      "id": "ietf",
+      "name": "ietf.org",
+      "startUrl": "https://www.ietf.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 452
+    },
+    {
+      "id": "unicode",
+      "name": "unicode.org",
+      "startUrl": "https://home.unicode.org/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 491
+    },
+    {
+      "id": "internic",
+      "name": "internic.net",
+      "startUrl": "https://www.internic.net/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 377
+    },
+    {
+      "id": "cern-info",
+      "name": "info.cern.ch",
+      "startUrl": "https://info.cern.ch/",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 643
+    }
+  ],
+  "replayWithoutAiRate": 1,
+  "replayWithAiRate": null,
+  "notes": [
+    "PRD §2.2 targets (>95% without AI on unchanged sites at J+1, >80% with AI on modified sites) are aspirational, not contractual.",
+    "This wave used --no-ai (no API keys). Modified-site AI recovery is measured on the local fixture, not on public hosts."
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "protocol": "prd-2.2-jplus1",
+  "measuredAt": "2026-09-08T14:17:00.832Z",
+  "wave": "local-immutable",
+  "headless": true,
+  "aiRecovery": false,
+  "sites": [
+    {
+      "id": "local-01",
+      "name": "corpus-site-01",
+      "startUrl": "http://127.0.0.1:43909/site-01",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 498
+    },
+    {
+      "id": "local-02",
+      "name": "corpus-site-02",
+      "startUrl": "http://127.0.0.1:43909/site-02",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 267
+    },
+    {
+      "id": "local-03",
+      "name": "corpus-site-03",
+      "startUrl": "http://127.0.0.1:43909/site-03",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 278
+    },
+    {
+      "id": "local-04",
+      "name": "corpus-site-04",
+      "startUrl": "http://127.0.0.1:43909/site-04",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 289
+    },
+    {
+      "id": "local-05",
+      "name": "corpus-site-05",
+      "startUrl": "http://127.0.0.1:43909/site-05",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 256
+    },
+    {
+      "id": "local-06",
+      "name": "corpus-site-06",
+      "startUrl": "http://127.0.0.1:43909/site-06",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 246
+    },
+    {
+      "id": "local-07",
+      "name": "corpus-site-07",
+      "startUrl": "http://127.0.0.1:43909/site-07",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 259
+    },
+    {
+      "id": "local-08",
+      "name": "corpus-site-08",
+      "startUrl": "http://127.0.0.1:43909/site-08",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 251
+    },
+    {
+      "id": "local-09",
+      "name": "corpus-site-09",
+      "startUrl": "http://127.0.0.1:43909/site-09",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 277
+    },
+    {
+      "id": "local-10",
+      "name": "corpus-site-10",
+      "startUrl": "http://127.0.0.1:43909/site-10",
+      "ok": true,
+      "exitCode": 0,
+      "mode": "script",
+      "durationMs": 247
+    }
+  ],
+  "replayWithoutAiRate": 1,
+  "replayWithAiRate": null,
+  "notes": [
+    "PRD §2.2 targets (>95% without AI on unchanged sites at J+1, >80% with AI on modified sites) are aspirational, not contractual.",
+    "This wave used --no-ai (no API keys). Modified-site AI recovery is measured on the local fixture, not on public hosts."
+  ]
+}
