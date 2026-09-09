@@ -636,6 +636,9 @@ Applied on tip `6f162f336c39bb266e54d61ec8d61e34bea4aa3d`. Product decisions
   request-target / throw cannot hang the client or become an unhandled
   rejection.
 
+Unit tests after this pass: **415 passed, 1 skipped**, 54 files
+(`pnpm lint`, `pnpm typecheck`, `pnpm test`).
+
 ## Residuals
 
 - Lot 7 auto-apply / PR (F-62–F-65) is out of scope.
