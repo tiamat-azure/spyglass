@@ -63,12 +63,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (274 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **645 passed**, 1 skipped (62 files) |
+| `pnpm test` | **653 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (75), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (50),
-`upgrade.test.ts` (25), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (75), `patch-redact.test.ts` (10), `lot7-parameters.test.ts` (52),
+`upgrade.test.ts` (26), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -250,4 +250,9 @@ ENOENT-only, no large `existing[0]` under fallback, atomic small
 fallback fetch. Pass-25 (L7-180 … L7-189): unique `runIds`, halt/status
 IPC errors, restore starting ref on PR-prep refusal, unstage on restore,
 sessionId match, dest TOCTOU lock, bundle manifest check, export
-symlink refusal, no explicit large under fallback.
+symlink refusal, no explicit large under fallback. Pass-26 (L7-190 …
+L7-201): log STT bookkeeping failures, close timeout-only SIGKILL,
+propagate replay stop, redact recovery `lastError`, EPERM not
+already-exists, skip Content-Length with `content-encoding`, in-process
+`createEngineFromEnv`, parameterized symlink errors, first-use persist
+warn, reuse `largeOk`, trim `STT_MODEL_PATH`. Held: W26, C26, I26.

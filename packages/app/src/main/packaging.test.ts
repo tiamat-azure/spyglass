@@ -159,7 +159,9 @@ describe('packaged Observe', () => {
     const voiceEditIdx = main.indexOf('IPC.voiceEdit');
     expect(voiceEditIdx).toBeGreaterThan(-1);
     const voiceEditHandler = main.slice(voiceEditIdx, voiceEditIdx + 1400);
-    expect(voiceEditHandler).toContain('/* L7-022: upgrade bookkeeping must not fail voice-edit */');
+    expect(voiceEditHandler).toContain(
+      '/* L7-022: upgrade bookkeeping must not fail voice-edit */'
+    );
     expect(voiceEditHandler).toContain('[spyglass] STT upgrade bookkeeping failed:');
     expect(voiceEditHandler).toContain('console.error');
     const ws = readFileSync(join(appRoot, '../../packages/stt/src/ws-localhost.ts'), 'utf8');
@@ -292,13 +294,13 @@ describe('packaged Observe', () => {
     expect(sessionBundle).toContain('destination is not empty');
     expect(sessionBundle).toContain('session already exists');
     expect(sessionBundle).toContain('mtimeMs');
-    expect(sessionBundle).toContain('export refused: symlinks are not allowed');
-    expect(sessionBundle).toContain('import refused: symlinks are not allowed');
+    expect(sessionBundle).toContain('refused: symlinks are not allowed');
+    expect(sessionBundle).toContain("action: 'import' | 'export'");
     const importFn = sessionBundle.slice(
       sessionBundle.indexOf('export async function importSessionFolder')
     );
-    expect(importFn.indexOf('assertNoSymlinks(source)')).toBeGreaterThan(-1);
-    expect(importFn.indexOf('assertNoSymlinks(source)')).toBeLessThan(
+    expect(importFn.indexOf("assertNoSymlinks(source, 'import')")).toBeGreaterThan(-1);
+    expect(importFn.indexOf("assertNoSymlinks(source, 'import')")).toBeLessThan(
       importFn.indexOf('readSessionMeta(source)')
     );
     const replaceFn = sessionBundle.slice(sessionBundle.indexOf('async function replaceDirectory'));
