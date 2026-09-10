@@ -2,8 +2,10 @@ export const STT_SAMPLE_RATE = 16_000;
 export const STT_CHANNELS = 1;
 export const PARTIAL_WINDOW_MS = 400;
 export const WHISPER_TIMEOUT_MS_DEFAULT = 8_000;
-/** stopCapture flush: whisper timeout plus journal settle. Must be ≥ whisper timeout. */
-export const VOICE_FLUSH_MS = WHISPER_TIMEOUT_MS_DEFAULT + 2_000;
+/** Journal-settle margin on top of the whisper-cli timeout. */
+export const VOICE_FLUSH_MARGIN_MS = 2_000;
+/** Default stopCapture flush when `STT_WHISPER_TIMEOUT_MS` is unset. */
+export const VOICE_FLUSH_MS = WHISPER_TIMEOUT_MS_DEFAULT + VOICE_FLUSH_MARGIN_MS;
 
 /**
  * L27b: whisper-cli process timeout (`beginWhisperFromEnv`). Distinct from
@@ -16,6 +18,14 @@ export function parseWhisperTimeoutMs(env: NodeJS.ProcessEnv = process.env): num
   }
   const parsed = Number.parseInt(raw, 10);
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : WHISPER_TIMEOUT_MS_DEFAULT;
+}
+
+/**
+ * L38a-cap: stopCapture / endUtterance flush. Always whisper timeout plus
+ * journal settle, so flush ≥ configured whisper timeout (P3-N1).
+ */
+export function parseVoiceFlushMs(env: NodeJS.ProcessEnv = process.env): number {
+  return parseWhisperTimeoutMs(env) + VOICE_FLUSH_MARGIN_MS;
 }
 
 export const VOICE_CORRELATION_MS_DEFAULT = 8_000;

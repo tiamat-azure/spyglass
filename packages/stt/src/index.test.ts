@@ -11,6 +11,8 @@ import {
   parseAudioRetention,
   parseClientMessage,
   parseMockTranscripts,
+  parseVoiceFlushMs,
+  parseWhisperTimeoutMs,
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
@@ -451,6 +453,11 @@ describe('@spyglass/stt', () => {
   it('flush wait is at least the whisper timeout', () => {
     expect(WHISPER_TIMEOUT_MS_DEFAULT).toBe(8_000);
     expect(VOICE_FLUSH_MS).toBeGreaterThanOrEqual(WHISPER_TIMEOUT_MS_DEFAULT);
+    expect(parseVoiceFlushMs({})).toBe(VOICE_FLUSH_MS);
+    const oversized = { STT_WHISPER_TIMEOUT_MS: '40000' };
+    expect(parseWhisperTimeoutMs(oversized)).toBe(40_000);
+    expect(parseVoiceFlushMs(oversized)).toBe(42_000);
+    expect(parseVoiceFlushMs(oversized)).toBeGreaterThanOrEqual(parseWhisperTimeoutMs(oversized));
   });
 
   it('abort after end cancels that utterance’s in-flight finalize, not the whole engine', async () => {

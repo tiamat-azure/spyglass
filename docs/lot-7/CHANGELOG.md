@@ -1453,11 +1453,20 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 - **L7-278:** `SMALL_MIN_BYTES` is 10MB so truncated ggml-small stubs
   fail `existingSmallOk` / atomic download.
 
-Held (do not invent): **L7-P38 L38a** (whisper timeout vs
-`VOICE_FLUSH_MS`).
+Held (do not invent): none.
 
-Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
-**753 passed**, 1 skipped (62 files).
+## L38a-cap (Captain lock)
+
+- **L38a-cap:** `parseVoiceFlushMs` is whisper timeout plus
+  `VOICE_FLUSH_MARGIN_MS` (2s), so flush ≥ configured
+  `STT_WHISPER_TIMEOUT_MS` (P3-N1). `STT_WHISPER_TIMEOUT_MS=40000`
+  stays 40s (L27b); flush is 42s. Voice-bridge `stopCapture` and
+  `endUtterance` waiters use `parseVoiceFlushMs(this.env)`, not the
+  10s default constant. `STT_MAX_LATENCY_MS` stays independent.
+
+Ask-user P38 **CLEAR**. Held: none.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts after green.
 
 ## CI — macOS Electron e2e close hang
 

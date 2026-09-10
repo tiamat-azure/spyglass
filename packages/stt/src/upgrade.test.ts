@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseWhisperTimeoutMs, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
+import {
+  parseVoiceFlushMs,
+  parseWhisperTimeoutMs,
+  VOICE_FLUSH_MS,
+  WHISPER_TIMEOUT_MS_DEFAULT
+} from './protocol.ts';
 import {
   createEngineFromEnv,
   createEngineFromEnvAsync,
@@ -164,6 +169,14 @@ describe('Lot 7 STT precision upgrade (F-38 / F-39 / ADR-0017)', () => {
     ).toBe(40_000);
     expect(parseMaxLatencyMs({ STT_WHISPER_TIMEOUT_MS: '40000', STT_MAX_LATENCY_MS: '1500' })).toBe(
       1500
+    );
+    expect(parseVoiceFlushMs({})).toBe(VOICE_FLUSH_MS);
+    expect(parseVoiceFlushMs({ STT_WHISPER_TIMEOUT_MS: '40000' })).toBe(42_000);
+    expect(parseVoiceFlushMs({ STT_WHISPER_TIMEOUT_MS: '40000' })).toBeGreaterThanOrEqual(
+      parseWhisperTimeoutMs({ STT_WHISPER_TIMEOUT_MS: '40000' })
+    );
+    expect(parseVoiceFlushMs({ STT_WHISPER_TIMEOUT_MS: '40000', STT_MAX_LATENCY_MS: '1500' })).toBe(
+      42_000
     );
   });
 });

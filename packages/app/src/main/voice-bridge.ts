@@ -8,6 +8,7 @@ import {
   gateVadUtterance,
   type InProcessStt,
   parseServerMessage,
+  parseVoiceFlushMs,
   pcmRms,
   type ServerMessage,
   type SidecarHandle,
@@ -15,7 +16,6 @@ import {
   type SttEngineName,
   startSidecarServer,
   type VadState,
-  VOICE_FLUSH_MS,
   type VoiceMode
 } from '@spyglass/stt';
 
@@ -181,7 +181,7 @@ export class VoiceBridge {
       }
     }
     this.vad = createVadState();
-    await Promise.race([Promise.all(this.pendingFinals), sleep(VOICE_FLUSH_MS)]);
+    await Promise.race([Promise.all(this.pendingFinals), sleep(parseVoiceFlushMs(this.env))]);
   }
 
   private nextUtteranceId(): string {
@@ -471,7 +471,7 @@ export class VoiceBridge {
     this.trackFinal(
       new Promise<void>((resolve) => {
         this.finalWaiters.set(live.id, resolve);
-        setTimeout(resolve, VOICE_FLUSH_MS);
+        setTimeout(resolve, parseVoiceFlushMs(this.env));
       })
     );
   }

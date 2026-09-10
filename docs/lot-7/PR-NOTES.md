@@ -456,6 +456,7 @@ after `resolveSttModelDir`). D34a + L36a/b/c stay locked. Pass-38
 descriptor-only compare clones before mutate; `git diff -z`;
 detectDefaultBranch fail-closed on hard git; L7-177 slice ends at
 `isMissingPathError`; L7-230 timeout ×2; forward healthWriteError
-without flipping apply ok; ggml-small min 10MB. Ask-user held:
-**L38a** (whisper timeout vs `VOICE_FLUSH_MS`). Ask-user otherwise
-**CLEAR**.
+without flipping apply ok; ggml-small min 10MB. **L38a-cap** locked
+(flush = parsed whisper timeout + 2s so flush ≥ whisper timeout;
+`STT_WHISPER_TIMEOUT_MS=40000` stays 40s / flush 42s). D34a +
+L36a/b/c + L37a-sync stay locked. Ask-user P38 **CLEAR**. Held: none.

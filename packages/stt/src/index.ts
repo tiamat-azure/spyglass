@@ -37,10 +37,12 @@ export {
   parseCorrelationMarginMs,
   parseMockTranscripts,
   parseServerMessage,
+  parseVoiceFlushMs,
   parseWhisperTimeoutMs,
   STT_CHANNELS,
   STT_SAMPLE_RATE,
   VOICE_CORRELATION_MS_DEFAULT,
+  VOICE_FLUSH_MARGIN_MS,
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';

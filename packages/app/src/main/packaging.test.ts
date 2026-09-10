@@ -240,7 +240,10 @@ describe('packaged Observe', () => {
     expect(ipcShared).toContain('{ ok: true } | { ok: false; error: string }');
     expect(ipcShared).toContain('datasetPath?: string');
     expect(preload).toContain('SttUpgradeDecideResponse');
-    expect(bridge).toContain('VOICE_FLUSH_MS');
+    expect(bridge).toContain('parseVoiceFlushMs(this.env)');
+    expect(bridge).toContain('sleep(parseVoiceFlushMs(this.env))');
+    expect(bridge).toContain('setTimeout(resolve, parseVoiceFlushMs(this.env))');
+    expect(bridge).not.toContain('sleep(VOICE_FLUSH_MS)');
     expect(bridge).not.toContain('sleep(4_000)');
     expect(bridge).toContain('this.trackFinal(journal)');
     expect(bridge).toContain('void journal.finally');
