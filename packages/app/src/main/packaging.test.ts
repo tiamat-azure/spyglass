@@ -327,7 +327,17 @@ describe('packaged Observe', () => {
       main.indexOf('function resolveSttModelDir'),
       main.indexOf('async function pickSessionDirectory')
     );
-    expect(resolveDir).toContain('return fromEnv.trim()');
+    expect(resolveDir).toContain('publishResolvedSttModelDir');
+    expect(resolveDir).toContain('process.env');
+    expect(resolveDir).toContain("join(app.getPath('userData'), 'whisper')");
+    expect(main).toContain('resolveSttModelDir()');
+    const readyIdx = main.indexOf('await app.whenReady()');
+    const publishIdx = main.indexOf('resolveSttModelDir()', readyIdx);
+    const sttEnvIdx = main.indexOf('sttEnv.STT_MODEL_DIR = resolveSttModelDir()');
+    expect(readyIdx).toBeGreaterThan(-1);
+    expect(publishIdx).toBeGreaterThan(readyIdx);
+    expect(sttEnvIdx).toBeGreaterThan(publishIdx);
+    expect(sttEnvIdx).toBeLessThan(main.indexOf('voiceBridge = new VoiceBridge'));
     expect(whisper).toContain('firstUsePending');
     expect(whisper).toContain('void noteFirstUse');
     expect(whisper).toContain('warnOnFinalFailure');

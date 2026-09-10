@@ -1416,11 +1416,18 @@ Ask-user still held: none.
 - **L7-270:** L7-257 proves beforeDom-only vs afterDom-only secrets
   (not a combined vacuous case). S11a asserts `paths.length > 0`.
 
-Held (do not invent): **L7-P37 L37a** (`STT_MODEL_DIR` /
-`resolveSttModelDir` sync). Ask-user queue otherwise **CLEAR**.
-
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **750 passed**, 1 skipped (62 files).
+
+## Captain lock L37a-sync (one STT model directory)
+
+- **L37a-sync:** After `resolveSttModelDir()`, `process.env.STT_MODEL_DIR`
+  is set to the resolved path (`userData/whisper` when unset). VoiceBridge
+  env gets the same dir so accept/status/fallback and the STT engine share
+  one model directory. Ask-user queue **CLEAR**.
+
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**752 passed**, 1 skipped (62 files).
 
 ## CI — macOS Electron e2e close hang
 

@@ -70,7 +70,11 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
-import { resolveSttLargeExpectedSha256, sttUpgradeFakeEnabled } from './stt-upgrade-policy.ts';
+import {
+  publishResolvedSttModelDir,
+  resolveSttLargeExpectedSha256,
+  sttUpgradeFakeEnabled
+} from './stt-upgrade-policy.ts';
 import { SttUpgradeStore, sttUpgradeStorePath } from './stt-upgrade-store.ts';
 import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
@@ -314,11 +318,7 @@ function enqueueSttUpgradeDecide<T>(task: () => Promise<T>): Promise<T> {
 }
 
 function resolveSttModelDir(): string {
-  const fromEnv = process.env.STT_MODEL_DIR;
-  if (fromEnv !== undefined && fromEnv.trim().length > 0) {
-    return fromEnv.trim();
-  }
-  return join(app.getPath('userData'), 'whisper');
+  return publishResolvedSttModelDir(process.env, join(app.getPath('userData'), 'whisper'));
 }
 
 async function pickSessionDirectory(
@@ -1165,6 +1165,7 @@ void (async () => {
   }
 
   await app.whenReady();
+  resolveSttModelDir();
 
   const winRef: { current: BrowserWindow | undefined } = { current: undefined };
   registerIpc(cdpPort, winRef);
@@ -1283,6 +1284,7 @@ void (async () => {
     );
     activeSession.attachProbe();
     const sttEnv: NodeJS.ProcessEnv = { ...process.env };
+    sttEnv.STT_MODEL_DIR = resolveSttModelDir();
     if (sttEnv.SPYGLASS_STT_RESOURCES === undefined || sttEnv.SPYGLASS_STT_RESOURCES.length === 0) {
       sttEnv.SPYGLASS_STT_RESOURCES = app.isPackaged
         ? join(process.resourcesPath, 'stt')

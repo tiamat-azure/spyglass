@@ -35,3 +35,15 @@ export function resolveSttLargeExpectedSha256(
   }
   return STT_LARGE_SHA256;
 }
+
+/**
+ * L37a-sync: write the resolved model directory back onto `env.STT_MODEL_DIR`
+ * so accept/status/fallback and the STT engine share one directory.
+ */
+export function publishResolvedSttModelDir(env: NodeJS.ProcessEnv, fallbackDir: string): string {
+  const fromEnv = env.STT_MODEL_DIR;
+  const resolved =
+    fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv.trim() : fallbackDir;
+  env.STT_MODEL_DIR = resolved;
+  return resolved;
+}

@@ -2,6 +2,7 @@ import { STT_LARGE_SHA256 } from '@spyglass/stt';
 import { describe, expect, it } from 'vitest';
 import {
   allowSttUpgradeEnvEscapes,
+  publishResolvedSttModelDir,
   resolveSttLargeExpectedSha256,
   sttUpgradeFakeEnabled
 } from './stt-upgrade-policy.ts';
@@ -57,5 +58,22 @@ describe('E18a STT upgrade env escapes', () => {
   it('falls back to the pinned digest when env SHA256 is empty', () => {
     expect(resolveSttLargeExpectedSha256({ STT_LARGE_SHA256: '  ' }, false)).toBe(STT_LARGE_SHA256);
     expect(resolveSttLargeExpectedSha256({}, false)).toBe(STT_LARGE_SHA256);
+  });
+});
+
+describe('L37a-sync STT model dir publish', () => {
+  it('writes the fallback dir onto STT_MODEL_DIR when unset or blank', () => {
+    const env: NodeJS.ProcessEnv = {};
+    expect(publishResolvedSttModelDir(env, '/userData/whisper')).toBe('/userData/whisper');
+    expect(env.STT_MODEL_DIR).toBe('/userData/whisper');
+    const blank: NodeJS.ProcessEnv = { STT_MODEL_DIR: '  ' };
+    expect(publishResolvedSttModelDir(blank, '/userData/whisper')).toBe('/userData/whisper');
+    expect(blank.STT_MODEL_DIR).toBe('/userData/whisper');
+  });
+
+  it('trims an existing STT_MODEL_DIR and writes it back', () => {
+    const env: NodeJS.ProcessEnv = { STT_MODEL_DIR: ' /opt/whisper ' };
+    expect(publishResolvedSttModelDir(env, '/userData/whisper')).toBe('/opt/whisper');
+    expect(env.STT_MODEL_DIR).toBe('/opt/whisper');
   });
 });

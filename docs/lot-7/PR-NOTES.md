@@ -64,12 +64,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (276 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **750 passed**, 1 skipped (62 files) |
+| `pnpm test` | **752 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
 Lot 7-focused unit tests: `lot7-patch.test.ts` (99), `patch-redact.test.ts` (20), `lot7-parameters.test.ts` (76),
-`upgrade.test.ts` (38), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
+`upgrade.test.ts` (38), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (8).
 
 ### Screenshots (illustrative fixtures)
 
@@ -306,6 +306,9 @@ fails fast even without `--dataset`) is in `CHANGELOG.md`.
   `pin`.
 - **L36c-cancelled:** User stop via stepGate is `cancelled` (exit 0), not
   `failed` + exit 1. Replay start returns `{ ok: true, status: 'cancelled' }`.
+- **L37a-sync:** After `resolveSttModelDir()`, `STT_MODEL_DIR` is published
+  (default `userData/whisper`) so accept/status/fallback and the STT
+  engine share one model directory.
 - **L7-231:** Replay next/stop IPC returns a structured error instead of
   an unhandled rejection.
 - **A30a:** Assisted apply requires a resolved `sessionDir`. Missing dir
@@ -446,6 +449,7 @@ offer only on newly-proposed and not while decide in flight; no
 `git branch -D` while restore failed; keep assisted-apply success when
 post-apply `saveHealth` fails; win32 recorded.json restore tmp after dest
 rm; regular-file model selection; v1.9.2 ubuntu/Windows CLI URLs;
-before-vs-after recovery secret coverage. Ask-user held: **L37a**
-(`STT_MODEL_DIR` / `resolveSttModelDir` sync). D34a + L36a/b/c stay
-locked.
+before-vs-after recovery secret coverage. **L37a-sync** locked
+(accept/status/fallback and the STT engine share one `STT_MODEL_DIR`
+after `resolveSttModelDir`). D34a + L36a/b/c stay locked. Ask-user
+queue **CLEAR**.
