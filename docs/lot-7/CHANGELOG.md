@@ -1456,6 +1456,9 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 Held (do not invent): **L7-P38 L38a** (whisper timeout vs
 `VOICE_FLUSH_MS`).
 
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**753 passed**, 1 skipped (62 files).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
