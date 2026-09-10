@@ -517,7 +517,16 @@ async function replaceDirectory(
     if (await pathExists(dest)) {
       throw new SessionBundleError(options.existsCode, options.existsError);
     }
-    await rename(staging, dest);
+    try {
+      await rename(staging, dest);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      // L7-298: a dest created after pathExists must not leak ENOTEMPTY/EEXIST.
+      if (code === 'EEXIST' || code === 'ENOTEMPTY') {
+        throw new SessionBundleError(options.existsCode, options.existsError);
+      }
+      throw err;
+    }
     return;
   }
   // O29b: never rename/rm a non-directory dest (file-at-dest), even with overwrite.

@@ -378,6 +378,7 @@ describe('packaged Observe', () => {
     expect(exportFn.indexOf('await cp(source, staging')).toBeLessThan(
       exportFn.indexOf("assertNoSymlinks(staging, 'export')")
     );
+    expect(exportFn).toContain('dereference: false');
     const destLock = sessionBundle.slice(
       sessionBundle.indexOf('async function withDestLock'),
       sessionBundle.indexOf('function isSafeSessionId')
@@ -392,6 +393,7 @@ describe('packaged Observe', () => {
     expect(noOverwritePublish).not.toContain("code === 'EPERM'");
     expect(noOverwritePublish).toContain('allowEmptyDest');
     expect(noOverwritePublish).toContain('vacateEmptyDirectory(dest)');
+    expect(noOverwritePublish).toContain("code === 'EEXIST' || code === 'ENOTEMPTY'");
     const replaceCatch = replaceFn.slice(replaceFn.indexOf('} catch (error)'));
     expect(replaceCatch).not.toContain('await rm(dest');
     expect(replaceCatch).toContain('await rename(backup, dest)');
@@ -466,7 +468,7 @@ describe('packaged Observe', () => {
     expect(nextHandler).toContain('replayHalted');
     expect(nextHandler).toContain('replayStepwiseActive');
     expect(nextHandler).not.toContain('!replayHaltBtn.disabled');
-    const haltHandler = renderer.slice(haltIdx, haltIdx + 1100);
+    const haltHandler = renderer.slice(haltIdx, haltIdx + 2200);
     expect(haltHandler).toContain('api.replay');
     expect(haltHandler).toContain('result.ok');
     expect(haltHandler).toContain('result.error');
@@ -474,6 +476,15 @@ describe('packaged Observe', () => {
     expect(haltHandler).toContain('replayHalted = true');
     expect(haltHandler).toContain('replayNextBtn.disabled = true');
     expect(haltHandler).toContain('replayHaltBtn.disabled = true');
+    // L7-293 / L7-170: Halt-eager UI must not stay sticky when stop fails.
+    expect(haltHandler).toContain('restoreHaltUi()');
+    expect(haltHandler.indexOf('if (!result.ok)')).toBeGreaterThan(-1);
+    expect(haltHandler.indexOf('restoreHaltUi()')).toBeGreaterThan(
+      haltHandler.indexOf('if (!result.ok)')
+    );
+    expect(haltHandler).toContain('replayHalted = false');
+    expect(haltHandler).toContain('replayHaltBtn.disabled = false');
+    expect(haltHandler).toContain('replayNextBtn.disabled = !stepwiseBeforeHalt');
     const statusStart = renderer.indexOf('void api.sttUpgrade');
     const statusEnd = renderer.indexOf('void api.stagehand.cdp()');
     expect(statusStart).toBeGreaterThan(-1);
@@ -484,6 +495,8 @@ describe('packaged Observe', () => {
     expect(statusCall).toContain('sttUpgrade.hidden = true');
     const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
     expect(closeElectron).toContain('export const CLOSE_TIMEOUT_MS = 12_000');
+    expect(closeElectron).toContain('ELECTRON_E2E_TEST_TIMEOUT_MS');
+    expect(closeElectron).toContain('CHROME_WAIT_MS + CLOSE_TIMEOUT_MS + KILL_EXIT_GRACE_MS');
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');
     expect(closeElectron).toContain("kill('SIGKILL')");
@@ -509,5 +522,16 @@ describe('packaged Observe', () => {
     expect(lot7E2e).toContain('CHROME_WAIT_MS + CLOSE_TIMEOUT_MS + KILL_EXIT_GRACE_MS');
     expect(lot7E2e).not.toContain('test.setTimeout(60_000)');
     expect(lot7E2e).toContain('CHROME_WAIT_MS = 45_000');
+    const emptyShell = readFileSync(join(appRoot, 'e2e/empty-shell.spec.ts'), 'utf8');
+    const lot1E2e = readFileSync(join(appRoot, 'e2e/lot1-capture.spec.ts'), 'utf8');
+    const lot2E2e = readFileSync(join(appRoot, 'e2e/lot2-observer.spec.ts'), 'utf8');
+    const lot3E2e = readFileSync(join(appRoot, 'e2e/lot3-voice.spec.ts'), 'utf8');
+    const lot4E2e = readFileSync(join(appRoot, 'e2e/lot4-refine.spec.ts'), 'utf8');
+    const lot5E2e = readFileSync(join(appRoot, 'e2e/lot5-runner.spec.ts'), 'utf8');
+    for (const spec of [emptyShell, lot1E2e, lot2E2e, lot3E2e, lot4E2e, lot5E2e]) {
+      expect(spec).toContain('ELECTRON_E2E_TEST_TIMEOUT_MS');
+      expect(spec).toContain('closeElectron');
+    }
+    expect(emptyShell).toContain('test.setTimeout(ELECTRON_E2E_TEST_TIMEOUT_MS)');
   });
 });

@@ -1920,6 +1920,7 @@ describe('Lot 7 F-47 session export/import', () => {
     const noOverwrite = body.slice(0, backupIdx);
     expect(noOverwrite).toContain('pathExists(dest)');
     expect(noOverwrite).not.toContain("code === 'EPERM'");
+    expect(noOverwrite).toContain("code === 'EEXIST' || code === 'ENOTEMPTY'");
     const existsIdx = noOverwrite.indexOf('pathExists(dest)');
     const renameIdx = noOverwrite.indexOf('await rename(staging, dest)');
     expect(existsIdx).toBeGreaterThan(-1);
@@ -1986,6 +1987,7 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(body.indexOf('await cp(source, staging')).toBeLessThan(
       body.indexOf("assertNoSymlinks(staging, 'export')")
     );
+    expect(body).toContain('{ recursive: true, dereference: false }');
   });
 
   it('does not follow a source spyglass-session.json symlink on export (L7-154)', async () => {
@@ -2045,6 +2047,23 @@ describe('Lot 7 F-47 session export/import', () => {
         err.bundleCode === 'invalid-meta' &&
         /sessionId does not match meta.json/.test(err.message)
     );
+    await expect(stat(join(root, 'imported'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(root, 'imported', 'ses_export'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    });
+    const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
+    const importFn = sourceBetween(
+      src,
+      'export async function importSessionFolder',
+      'export async function readSessionMeta'
+    );
+    expect(importFn.indexOf('assertBundleManifestAgrees')).toBeGreaterThan(-1);
+    expect(importFn.indexOf('assertBundleManifestAgrees')).toBeLessThan(
+      importFn.indexOf('withDestLock')
+    );
+    expect(importFn.indexOf('assertBundleManifestAgrees')).toBeLessThan(
+      importFn.indexOf('replaceDirectory')
+    );
   });
 
   it('tags missing/invalid bundle manifest as SessionBundleError invalid-meta (L7-258)', async () => {
@@ -2065,6 +2084,7 @@ describe('Lot 7 F-47 session export/import', () => {
         err.bundleCode === 'invalid-meta' &&
         /missing spyglass-session.json/.test(err.message)
     );
+    await expect(stat(join(root, 'imported-missing'))).rejects.toMatchObject({ code: 'ENOENT' });
     await writeFile(join(dest, SESSION_BUNDLE_MANIFEST), '{not json\n', 'utf8');
     await expect(importSessionFolder(dest, join(root, 'imported-bad'))).rejects.toSatisfy(
       (err: unknown) =>
@@ -2072,6 +2092,7 @@ describe('Lot 7 F-47 session export/import', () => {
         err.bundleCode === 'invalid-meta' &&
         /invalid spyglass-session.json/.test(err.message)
     );
+    await expect(stat(join(root, 'imported-bad'))).rejects.toMatchObject({ code: 'ENOENT' });
     const noMeta = join(root, 'no-meta');
     await mkdir(noMeta, { recursive: true });
     await expect(exportSessionFolder(noMeta, join(root, 'out'))).rejects.toSatisfy(
@@ -2112,6 +2133,16 @@ describe('Lot 7 F-47 session export/import', () => {
     const rejected = results.filter((entry) => entry.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
+    const lost = rejected[0];
+    expect(lost?.status).toBe('rejected');
+    if (lost?.status === 'rejected') {
+      expect(isSessionBundleError(lost.reason)).toBe(true);
+      if (isSessionBundleError(lost.reason)) {
+        expect(lost.reason.bundleCode).toBe('session-exists');
+      }
+      expect(lost.reason).not.toMatchObject({ code: 'ENOTEMPTY' });
+      expect(lost.reason).not.toMatchObject({ code: 'EEXIST' });
+    }
     expect(await readFile(join(sessionsRoot, 'ses_export', 'raw.jsonl'), 'utf8')).toBe(
       '{"schemaVersion":1}\n'
     );

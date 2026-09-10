@@ -453,7 +453,24 @@ export async function applyAssistedPatches(input: {
     if (created !== undefined) {
       return created;
     }
-    const onBranch = await currentBranch(git, repoRoot);
+    let onBranch: string;
+    try {
+      // L7-295: currentBranch → gitOk throws GitApplyError; do not escape apply.
+      onBranch = await currentBranch(git, repoRoot);
+    } catch (error) {
+      const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, [
+        scenarioRel
+      ]);
+      return refusalWithRestore(
+        {
+          ok: false,
+          code: isGitApplyError(error) ? 'git-error' : 'internal-error',
+          reason: error instanceof Error ? error.message : String(error)
+        },
+        revertError,
+        starting
+      );
+    }
     if (isDefaultBranchName(onBranch, defaultBranch)) {
       const revertError = await restoreStartingBranch(git, repoRoot, starting, branch, [
         scenarioRel
@@ -771,7 +788,7 @@ async function restoreStartingBranch(
   const target = startingCheckoutRef(starting);
   let revertError: string | undefined;
   try {
-    const status = await git(['status', '--porcelain'], cwd);
+    const status = await git(['status', '--porcelain', '-z'], cwd);
     if (status.code !== 0) {
       revertError = status.stderr.trim() || 'git status failed';
     } else {
@@ -834,18 +851,38 @@ async function restoreStartingBranch(
 
 function trackedDirtyPaths(porcelain: string): string[] {
   const paths: string[] = [];
-  for (const line of porcelain.split('\n')) {
-    if (line.length < 4) {
+  // L7-294: `-z` is NUL-separated and unquoted (spaces / non-ASCII). Tests may
+  // still stub newline porcelain; keep that split when no NUL is present.
+  const useNul = porcelain.includes('\0');
+  const records = porcelain.split(useNul ? '\0' : '\n');
+  let skipNext = false;
+  for (const record of records) {
+    if (skipNext) {
+      skipNext = false;
       continue;
     }
-    const xy = line.slice(0, 2);
+    if (record.length < 3) {
+      continue;
+    }
+    const xy = record.slice(0, 2);
     if (xy === '??' || xy === '!!') {
       continue;
     }
-    const rest = line.slice(3).trim();
-    const renamed = rest.split(' -> ');
-    const raw = renamed[renamed.length - 1] ?? '';
-    const path = raw.replace(/^"(.*)"$/u, '$1').replaceAll('\\', '/');
+    const rest = record.slice(3).trim();
+    if (!useNul) {
+      const renamed = rest.split(' -> ');
+      const raw = renamed[renamed.length - 1] ?? '';
+      const path = raw.replace(/^"(.*)"$/u, '$1').replaceAll('\\', '/');
+      if (path.length > 0) {
+        paths.push(path);
+      }
+      continue;
+    }
+    // `git status --porcelain -z` rename/copy: `XY newpath\0oldpath\0`.
+    if (xy.startsWith('R') || xy.startsWith('C')) {
+      skipNext = true;
+    }
+    const path = rest.replaceAll('\\', '/');
     if (path.length > 0) {
       paths.push(path);
     }

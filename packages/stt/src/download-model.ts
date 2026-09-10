@@ -7,6 +7,8 @@ import { pipeline } from 'node:stream/promises';
 
 /** Reject HTML/error bodies when downloading the ~575 Mo large model. */
 export const STT_LARGE_MIN_BYTES = 1_000_000;
+/** Hard cap so a 200 with missing/encoded Content-Length cannot fill the disk (L7-299). */
+export const STT_STREAM_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 /** Bound hung Hugging Face fetches so upgrade IPC cannot stall forever (L7-018). */
 export const STT_LARGE_DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -16,6 +18,7 @@ export type StreamToFileAtomicInput = {
   expectedBytes?: number;
   expectedSha256?: string;
   minBytes?: number;
+  maxBytes?: number;
 };
 
 /**
@@ -31,16 +34,29 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
   await rm(partial, { force: true });
   const hash = createHash('sha256');
   const minBytes = input.minBytes ?? 0;
+  const maxBytes = input.maxBytes ?? STT_STREAM_MAX_BYTES;
   // L7-290: a Content-Length already below minBytes cannot become a valid dest.
   if (input.expectedBytes !== undefined && minBytes > 0 && input.expectedBytes < minBytes) {
     throw new Error(
       `downloaded file too small (${String(input.expectedBytes)} < ${String(minBytes)} bytes)`
     );
   }
+  // L7-299: a huge/missing Content-Length must not stream unbounded.
+  if (input.expectedBytes !== undefined && input.expectedBytes > maxBytes) {
+    throw new Error(
+      `downloaded file too large (${String(input.expectedBytes)} > ${String(maxBytes)} bytes)`
+    );
+  }
   let bytes = 0;
   const hasher = new Transform({
     transform(chunk: Buffer, _enc, callback) {
       bytes += chunk.length;
+      if (bytes > maxBytes) {
+        callback(
+          new Error(`downloaded size ${String(bytes)} exceeds max ${String(maxBytes)} bytes`)
+        );
+        return;
+      }
       if (input.expectedBytes !== undefined && bytes > input.expectedBytes) {
         callback(
           new Error(
@@ -90,6 +106,7 @@ export async function downloadResponseToFileAtomic(input: {
   response: Response;
   expectedSha256?: string;
   minBytes: number;
+  maxBytes?: number;
 }): Promise<{ bytes: number; sha256: string }> {
   if (!input.response.ok) {
     const body = input.response.body;
@@ -118,7 +135,8 @@ export async function downloadResponseToFileAtomic(input: {
   const opts: StreamToFileAtomicInput = {
     dest: input.dest,
     stream,
-    minBytes: input.minBytes
+    minBytes: input.minBytes,
+    maxBytes: input.maxBytes ?? STT_STREAM_MAX_BYTES
   };
   if (expectedBytes !== undefined) {
     opts.expectedBytes = expectedBytes;

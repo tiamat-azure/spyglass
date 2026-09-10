@@ -11,6 +11,7 @@ export {
   existingVerifiedDownloadOk,
   STT_LARGE_DOWNLOAD_TIMEOUT_MS,
   STT_LARGE_MIN_BYTES,
+  STT_STREAM_MAX_BYTES,
   streamToFileAtomic,
   sttLargeDownloadTimeoutMs,
   writeFileAtomic

@@ -2260,8 +2260,16 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       'function trackedDirtyPaths'
     );
     expect(restoreFn).not.toContain("'-f'");
+    expect(restoreFn).toContain("['status', '--porcelain', '-z']");
     expect(restoreFn).toContain("['reset', 'HEAD', '--', file]");
     expect(restoreFn).toContain("['checkout', target]");
+    const dirtyFn = sourceBetween(
+      src,
+      'function trackedDirtyPaths',
+      'async function leftoverPatchOnlyExpectedScenario'
+    );
+    expect(dirtyFn).toContain("useNul ? '\\0' : '\\n'");
+    expect(dirtyFn).toContain("xy.startsWith('R')");
     const deleteIdx = restoreFn.indexOf("['branch', '-D', danglingPatchBranch]");
     expect(deleteIdx).toBeGreaterThan(-1);
     expect(restoreFn.indexOf('return revertError')).toBeGreaterThan(-1);
@@ -2345,6 +2353,50 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     }
     expect(result.code).toBe('git-error');
     expect(result.reason).toMatch(/status probe exploded/);
+  });
+
+  it('maps a throwing currentBranch after checkout -b to git-error (L7-295)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7295-');
+    await initGitRepo(dir);
+    const scn = scenario([clickStep(0, '#old')]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    let created = false;
+    const git = async (args: readonly string[], cwd: string) => {
+      if (args[0] === 'rev-parse' && args.includes('--abbrev-ref') && created) {
+        throw new GitApplyError('abbrev-ref exploded');
+      }
+      const result = await defaultGitExec(args, cwd);
+      if (args[0] === 'checkout' && args.includes('-b')) {
+        created = true;
+      }
+      return result;
+    };
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git,
+      preparePr: async () => ({})
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.code).toBe('git-error');
+    expect(result.reason).toMatch(/abbrev-ref exploded/);
+    const head = (
+      await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: dir })
+    ).stdout.trim();
+    expect(head).toBe('main');
   });
 
   it('refuses a fill step with a click suggestion without rewriting type (L7-049)', async () => {

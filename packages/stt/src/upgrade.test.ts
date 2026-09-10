@@ -524,6 +524,39 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     expect(engine.model).not.toBe(custom);
   });
 
+  it('does not requireSmallModelFile on a non-fallback resolved model (L7-300)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7300-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    const custom = join(dir, 'custom-weights.bin');
+    await writeFile(custom, 'usable-small\n', 'utf8');
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_FILE: 'custom-weights.bin'
+    });
+    expect(engine.model).toBe(custom);
+    const viaPath = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_MODEL_DIR: dir,
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: custom
+    });
+    expect(viaPath.model).toBe(custom);
+    const src = await readFile(new URL('./resolve-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('function selectWhisperModel');
+    const end = src.indexOf('function sameResolvedPath');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body.indexOf('if (fallback)')).toBeGreaterThan(-1);
+    expect(body.indexOf('requireSmallModelFile')).toBeGreaterThan(body.indexOf('if (fallback)'));
+    expect(body.indexOf('requireSmallModelFile')).toBeLessThan(
+      body.indexOf('isExistingRegularFile(choice.file)')
+    );
+  });
+
   it('treats syntactic path variants as the conventional large/small files (L7-132)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7132-'));
     await mkdir(dir, { recursive: true });

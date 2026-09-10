@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
-import { closeElectron } from './close-electron.ts';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -108,7 +108,7 @@ async function endHoldMic(chrome: Page): Promise<void> {
 
 test.describe('Lot 3 voice', () => {
   test('hold/VAD UI, partial→final, before/after correlation, no raw audio', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -176,7 +176,7 @@ test.describe('Lot 3 voice', () => {
   });
 
   test('offline dictation works with the network cut', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv({
       SPYGLASS_LLM_OFFLINE: '1',
       SPYGLASS_LLM_TRANSPORT: 'offline'
@@ -218,7 +218,7 @@ test.describe('Lot 3 voice', () => {
   });
 
   test('continuous energy VAD starts and ends utterances', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -253,7 +253,7 @@ test.describe('Lot 3 voice', () => {
   });
 
   test('C2b: utterance that starts before a click is before, not after', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -300,7 +300,7 @@ test.describe('Lot 3 voice', () => {
   });
 
   test('Stop while holding disarms the mic and still journals voice.final', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,

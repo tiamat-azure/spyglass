@@ -6,6 +6,13 @@ export const CLOSE_TIMEOUT_MS = 12_000;
 export const ELECTRON_CLOSE_TIMEOUT_MESSAGE = 'electron close timeout';
 /** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
 export const KILL_EXIT_GRACE_MS = 2_000;
+/** L7-279 / L7-292: waitForChrome / waitForPage budget; must stay in the test timeout. */
+export const CHROME_WAIT_MS = 45_000;
+/** Margin covers electron.launch (45s) so a chrome miss can still close/kill. */
+export const TEST_TIMEOUT_MARGIN_MS = 45_000;
+/** Chrome wait + close timeout + kill grace + launch margin (not the 60s default). */
+export const ELECTRON_E2E_TEST_TIMEOUT_MS =
+  CHROME_WAIT_MS + CLOSE_TIMEOUT_MS + KILL_EXIT_GRACE_MS + TEST_TIMEOUT_MARGIN_MS;
 
 export type ElectronChild = {
   kill: (signal?: NodeJS.Signals) => boolean;

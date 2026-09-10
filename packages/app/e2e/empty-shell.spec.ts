@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
-import { closeElectron } from './close-electron.ts';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 /** @spyglass/app package root; `package.json` `"main"` is `./out/main/index.js`. */
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,6 +61,8 @@ async function guestWindow(
 
 test.describe('Lot 0 two-zone shell', () => {
   test('launches URL bar, chat pane, and WebContentsView', async () => {
+    // L7-292: chrome wait + close timeout + kill grace + launch margin.
+    test.setTimeout(ELECTRON_E2E_TEST_TIMEOUT_MS);
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -107,6 +109,7 @@ test.describe('Lot 0 two-zone shell', () => {
   });
 
   test('manual navigation and popup redirect stay in one page', async () => {
+    test.setTimeout(ELECTRON_E2E_TEST_TIMEOUT_MS);
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -169,7 +172,7 @@ test.describe('Lot 0 two-zone shell', () => {
   });
 
   test('Stagehand observe attaches to the displayed page', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,

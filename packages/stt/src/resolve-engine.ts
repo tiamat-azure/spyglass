@@ -243,15 +243,23 @@ function selectWhisperModel(selection: WhisperModelSelection, fallback: boolean)
     modelDir: selection.modelDir
   });
   if (choice.kind === 'small') {
-    // L7-096: fallback must load the conventional small file, never a
-    // custom STT_MODEL_PATH that merely is not named like the large file.
-    // M4a/P6a still honour explicit path on the non-fallback branch above.
-    return requireSmallModelFile(
-      selection.smallPath,
-      selection.explicitOk && selection.explicit !== undefined
-        ? selection.explicit
-        : selection.paths.model
-    );
+    if (fallback) {
+      // L7-096: fallback must load the conventional small file, never a
+      // custom STT_MODEL_PATH that merely is not named like the large file.
+      return requireSmallModelFile(
+        selection.smallPath,
+        selection.explicitOk && selection.explicit !== undefined
+          ? selection.explicit
+          : selection.paths.model
+      );
+    }
+    // L7-300: non-fallback already resolved a usable file under STT_MODEL_DIR
+    // / STT_MODEL_PATH; do not require the default small basename unless that
+    // file is the actual choice.
+    if (isExistingRegularFile(choice.file)) {
+      return choice.file;
+    }
+    return selection.paths.model;
   }
   return choice.file;
 }

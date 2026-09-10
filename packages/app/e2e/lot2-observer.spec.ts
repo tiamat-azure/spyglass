@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
-import { closeElectron } from './close-electron.ts';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -81,7 +81,7 @@ async function latestRawJsonl(sessionsDir: string): Promise<string> {
 
 test.describe('Lot 2 observer', () => {
   test('gabarit paints under 200ms then enrichment replaces in place', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv({
       SPYGLASS_LLM_MOCK_DELAY_MS: '1200'
     });
@@ -120,7 +120,7 @@ test.describe('Lot 2 observer', () => {
   });
 
   test('offline / enrichment disabled keeps a complete gabarit chat with no event loss', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv({
       SPYGLASS_LLM_OFFLINE: '1',
       SPYGLASS_LLM_TRANSPORT: 'offline'
@@ -163,7 +163,7 @@ test.describe('Lot 2 observer', () => {
   });
 
   test('lowered token ceiling warns then suspends enrichment while recording continues', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv({
       SESSION_TOKEN_LIMIT_FAST: '100',
       SPYGLASS_LLM_MOCK_TOKENS: '80',

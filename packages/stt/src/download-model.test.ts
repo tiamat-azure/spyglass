@@ -10,6 +10,7 @@ import {
   downloadUrlToFileAtomic,
   existingVerifiedDownloadOk,
   streamToFileAtomic,
+  STT_STREAM_MAX_BYTES,
   writeFileAtomic
 } from './download-model.ts';
 import { notifyFirstUseLatency } from './whisper-engine.ts';
@@ -111,6 +112,72 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     expect(body.indexOf('bytes > input.expectedBytes')).toBeLessThan(
       body.indexOf('await pipeline')
     );
+  });
+
+  it('aborts oversized bodies even when Content-Length is missing or encoded (L7-299)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7299-'));
+    const dest = join(dir, 'model.bin');
+    await writeFile(dest, 'keep-me');
+    await expect(
+      streamToFileAtomic({
+        dest,
+        stream: Readable.from(Buffer.alloc(200)),
+        minBytes: 1,
+        maxBytes: 50
+      })
+    ).rejects.toThrow(/exceeds max/);
+    expect(await readFile(dest, 'utf8')).toBe('keep-me');
+    await expect(
+      streamToFileAtomic({
+        dest,
+        stream: Readable.from(Buffer.from('tiny')),
+        expectedBytes: 99_999_999,
+        minBytes: 1,
+        maxBytes: 1000
+      })
+    ).rejects.toThrow(/too large/);
+    expect(await readFile(dest, 'utf8')).toBe('keep-me');
+
+    const encodedDest = join(dir, 'encoded.bin');
+    const payload = Buffer.alloc(8_192, 7);
+    const encoded = new Response(payload, {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-encoding': 'gzip' }
+    });
+    await expect(
+      downloadResponseToFileAtomic({
+        dest: encodedDest,
+        response: encoded,
+        minBytes: 1,
+        maxBytes: 100
+      })
+    ).rejects.toThrow(/exceeds max/);
+    await expect(readFile(encodedDest)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const hugeLength = new Response('short', {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'content-length': String(STT_STREAM_MAX_BYTES + 1) }
+    });
+    const hugeDest = join(dir, 'huge.bin');
+    await expect(
+      downloadResponseToFileAtomic({ dest: hugeDest, response: hugeLength, minBytes: 1 })
+    ).rejects.toThrow(/too large/);
+    await expect(readFile(hugeDest)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const src = await readFile(new URL('./download-model.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function streamToFileAtomic');
+    const end = src.indexOf('export async function writeFileAtomic');
+    const body = src.slice(start, end);
+    expect(body).toContain('bytes > maxBytes');
+    expect(body.indexOf('bytes > maxBytes')).toBeLessThan(body.indexOf('await pipeline'));
+    expect(body.indexOf('expectedBytes > maxBytes')).toBeGreaterThan(-1);
+    expect(body.indexOf('expectedBytes > maxBytes')).toBeLessThan(body.indexOf('await pipeline'));
+    const helperStart = src.indexOf('export async function downloadResponseToFileAtomic');
+    const helperEnd = src.indexOf('export function sttLargeDownloadTimeoutMs');
+    const helper = src.slice(helperStart, helperEnd);
+    expect(helper).toContain('maxBytes: input.maxBytes ?? STT_STREAM_MAX_BYTES');
   });
 
   it('skips only when dest is a regular file with minBytes and SHA-256 (L7-263)', async () => {

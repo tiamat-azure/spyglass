@@ -892,19 +892,28 @@ replayHaltBtn.addEventListener('click', () => {
   if (api === undefined || replayHaltBtn.disabled) {
     return;
   }
+  const stepwiseBeforeHalt = replayStepwiseActive;
   replayHalted = true;
   replayStepwiseActive = false;
   replayNextBtn.disabled = true;
   replayHaltBtn.disabled = true;
+  const restoreHaltUi = (): void => {
+    replayHalted = false;
+    replayStepwiseActive = stepwiseBeforeHalt;
+    replayHaltBtn.disabled = false;
+    replayNextBtn.disabled = !stepwiseBeforeHalt;
+  };
   void api.replay
     .stop()
     .then((result) => {
       if (!result.ok) {
         replayStatus.textContent = result.error;
+        restoreHaltUi();
       }
     })
     .catch((error: unknown) => {
       replayStatus.textContent = error instanceof Error ? error.message : String(error);
+      restoreHaltUi();
     });
 });
 
