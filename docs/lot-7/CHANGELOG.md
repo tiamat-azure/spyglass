@@ -1489,7 +1489,8 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user **CLEAR**. Held: none.
 
-Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts after green.
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**755 passed**, 1 skipped (62 files).
 
 ## CI — macOS Electron e2e close hang
 
