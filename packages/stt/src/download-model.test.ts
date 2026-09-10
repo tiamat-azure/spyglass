@@ -9,8 +9,8 @@ import {
   downloadResponseToFileAtomic,
   downloadUrlToFileAtomic,
   existingVerifiedDownloadOk,
-  streamToFileAtomic,
   STT_STREAM_MAX_BYTES,
+  streamToFileAtomic,
   writeFileAtomic
 } from './download-model.ts';
 import { notifyFirstUseLatency } from './whisper-engine.ts';

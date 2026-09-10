@@ -64,12 +64,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (276 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **753 passed**, 1 skipped (62 files) |
+| `pnpm test` | **762 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
-Lot 7-focused unit tests: `lot7-patch.test.ts` (99), `patch-redact.test.ts` (20), `lot7-parameters.test.ts` (76),
-`upgrade.test.ts` (38), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (8).
+Lot 7-focused unit tests: `lot7-patch.test.ts` (100), `patch-redact.test.ts` (20), `lot7-parameters.test.ts` (76),
+`upgrade.test.ts` (39), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (8).
 
 ### Screenshots (illustrative fixtures)
 
@@ -470,5 +470,11 @@ index map. Pass-40 (L7-286 … L7-291): spawn git codes are not quiet
 exit 1; extract covers camelCase secret selectors; L7-020 backup
 name is `dest.spyglass-prev-<hex>`; F-59 stop does not click `#b`;
 atomic download rejects small Content-Length before publish; trim
-STT model paths before resolveWhisperPaths. Ask-user **CLEAR**. Held:
-none.
+STT model paths before resolveWhisperPaths. Pass-41 (L7-292 … L7-300):
+e2e close/kill timeout budget on empty-shell and lot1–lot5; Halt UI
+restores on stop failure; restore porcelain `-z`; post-`checkout -b`
+`currentBranch` is structured git-error; export `cp` does not
+dereference; bad import stays unpublished; concurrent import loser is
+`session-exists` not ENOTEMPTY; STT stream maxBytes cap; non-fallback
+`selectWhisperModel` does not `requireSmallModelFile`. Ask-user
+**CLEAR**. Held: none.

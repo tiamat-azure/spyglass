@@ -1531,6 +1531,41 @@ Ask-user **CLEAR**. Held: none.
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **759 passed**, 1 skipped (62 files).
 
+## Pass-41 adversarial fixes (L7-292 … L7-300)
+
+- **L7-292:** `empty-shell` and lot1–lot5 e2e specs that `await
+  closeElectron()` use `ELECTRON_E2E_TEST_TIMEOUT_MS` (chrome wait +
+  12s close + kill grace + launch margin), same budget idea as L7-279.
+- **L7-293:** Renderer Halt restores `replayHalted` / stepwise /
+  Next+Arrêter enablement when `replay.stop` returns `ok:false` or
+  throws (L7-170 Halt-eager must not stay sticky).
+- **L7-294:** `restoreStartingBranch` porcelain uses `-z`;
+  `trackedDirtyPaths` NUL-splits so whitespace/non-ASCII paths are
+  not mis-parsed as unexpected dirty (L7-273).
+- **L7-295:** After `checkout -b` succeeds, `currentBranch()`
+  `GitApplyError` is mapped to a structured apply failure + restore,
+  not an uncaught throw from `applyAssistedPatches`.
+- **L7-296:** Export `cp` keeps `{ dereference: false }` so a
+  symlink added between walk and copy is not materialized past
+  `assertNoSymlinks` (L7-208).
+- **L7-297:** Mismatched/missing-manifest import refuses before
+  `replaceDirectory` / `withDestLock`; `sessionsRoot` stays unpublished
+  (L7-187 / L7-258).
+- **L7-298:** Concurrent import loser is structured
+  `SessionBundleError` `session-exists`; no-overwrite rename maps
+  `EEXIST`/`ENOTEMPTY` (L7-186).
+- **L7-299:** `streamToFileAtomic` always caps at
+  `STT_STREAM_MAX_BYTES` (including content-encoding and missing/huge
+  Content-Length) so a 200 cannot fill disk unbounded (L7-290).
+- **L7-300:** `selectWhisperModel` calls `requireSmallModelFile` only
+  on the fallback path; a non-fallback resolved file under
+  `STT_MODEL_DIR` / explicit path is used as-is.
+
+Ask-user **CLEAR**. Held: none.
+
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**762 passed**, 1 skipped (62 files).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
