@@ -30,6 +30,7 @@ import {
   detectDefaultBranch,
   GIT_EXEC_MAX_BUFFER_BYTES,
   GIT_EXEC_TIMEOUT_MS,
+  GIT_SPAWN_FAILURE_EXIT_CODE,
   GIT_TIMEOUT_EXIT_CODE,
   GitApplyError,
   type GitExec,
@@ -993,6 +994,14 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const ordinary = gitExecResultFromFailure({ code: 1, stderr: 'error: failed to push' });
     expect(ordinary.timedOut).toBeUndefined();
     expect(ordinary.code).toBe(1);
+    for (const code of ['ENOENT', 'EACCES', 'ENOTDIR'] as const) {
+      const spawnFail = gitExecResultFromFailure({
+        code,
+        message: `spawn git ${code}`
+      });
+      expect(spawnFail.code).toBe(GIT_SPAWN_FAILURE_EXIT_CODE);
+      expect(spawnFail.code).not.toBe(1);
+    }
   });
 
   it('retries push after a non-fast-forward when origin already has the branch (L7-094)', async () => {
@@ -2766,6 +2775,9 @@ describe('detectDefaultBranch G28b', () => {
       return { stdout: '', stderr: 'unexpected', code: 1 };
     };
     await expect(detectDefaultBranch(emptyOk, cwd)).rejects.toSatisfy(isGitApplyError);
+    const spawnFail: GitExec = async () =>
+      gitExecResultFromFailure({ code: 'ENOENT', message: 'spawn git ENOENT' });
+    await expect(detectDefaultBranch(spawnFail, cwd)).rejects.toSatisfy(isGitApplyError);
   });
 });
 

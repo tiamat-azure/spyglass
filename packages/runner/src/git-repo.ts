@@ -19,6 +19,8 @@ export type GitExecResult = {
 
 /** GNU `timeout(1)` convention; not a normal git exit code 1. */
 export const GIT_TIMEOUT_EXIT_CODE = 124;
+/** Spawn ENOENT/EACCES/ENOTDIR — not git `--quiet` missing (exit 1). */
+export const GIT_SPAWN_FAILURE_EXIT_CODE = 127;
 
 export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecResult>;
 
@@ -108,6 +110,9 @@ export function gitExecResultFromFailure(error: unknown): GitExecResult {
     numericCode = err.code;
   } else if (timedOut) {
     numericCode = GIT_TIMEOUT_EXIT_CODE;
+  } else if (typeof err.code === 'string') {
+    // L7-286: ENOENT/EACCES/ENOTDIR must not look like `--quiet` exit 1.
+    numericCode = GIT_SPAWN_FAILURE_EXIT_CODE;
   }
   return {
     stdout: err.stdout ?? '',

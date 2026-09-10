@@ -72,8 +72,8 @@ function isExistingRegularFile(path: string): boolean {
 }
 
 export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): string[] {
-  const explicit = env.STT_MODEL_PATH;
-  const dir = env.STT_MODEL_DIR;
+  const explicit = env.STT_MODEL_PATH?.trim();
+  const dir = env.STT_MODEL_DIR?.trim();
   const resources = env.SPYGLASS_STT_RESOURCES;
   const file = configuredSttModelFile(env) ?? STT_SMALL_MODEL_FILE;
   const candidates: string[] = [];
@@ -141,7 +141,7 @@ export function pickPreferredWhisperModel(
     skipByPath.set(path, skip);
     return skip;
   };
-  const explicit = env.STT_MODEL_PATH;
+  const explicit = env.STT_MODEL_PATH?.trim();
   if (explicit !== undefined && explicit.length > 0) {
     const hit = existing.find((path) => path === explicit);
     if (hit !== undefined) {

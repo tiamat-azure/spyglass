@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rename,
   rm,
@@ -708,6 +709,21 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(isSecretSelector('#userPin')).toBe(true);
     expect(isSecretSelector('#pinCode')).toBe(true);
     expect(isSecretSelector('#apiKey')).toBe(true);
+    const camel: Scenario = {
+      schemaVersion: 1,
+      sessionId: 'ses_params',
+      startUrl: 'https://exemple.test/pay',
+      steps: [
+        fillStep(0, '#userPin', '4321'),
+        fillStep(1, '#pinCode', '9999'),
+        fillStep(2, '#apiKey', 'live-key')
+      ]
+    };
+    const camelExtracted = extractScenarioParameters(camel);
+    expect(camelExtracted.dataset.secrets).toEqual(['user_pin', 'pin_code', 'api_key']);
+    expect(camelExtracted.dataset.values.user_pin).toBe('4321');
+    expect(camelExtracted.dataset.values.pin_code).toBe('9999');
+    expect(camelExtracted.dataset.values.api_key).toBe('live-key');
   });
 
   it('resolves a relative dataset path from scriptDir (L7-014)', async () => {
@@ -1671,9 +1687,10 @@ describe('Lot 7 F-47 session export/import', () => {
     await exportSessionFolder(sessionDir, dest, { overwrite: true });
     await expect(readFile(join(dest, 'stale.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await readFile(join(dest, 'raw.jsonl'), 'utf8')).toBe('{"schemaVersion":1}\n');
-    await expect(readFile(join(root, 'bundle.spyglass-prev', 'stale.txt'))).rejects.toMatchObject({
-      code: 'ENOENT'
-    });
+    const leftoverBackups = (await readdir(root)).filter((name) =>
+      name.startsWith('bundle.spyglass-prev')
+    );
+    expect(leftoverBackups).toEqual([]);
   });
 
   it('refuses a file destination even when overwrite is set (O29b)', async () => {
@@ -2256,5 +2273,7 @@ describe('Lot 7 F-59 step gate', () => {
     expect(result.report.steps[1]?.status).toBe('cancelled');
     expect(result.report.steps[1]?.error).toMatch(/stopped by user/);
     expect(result.report.steps[0]?.status).toBe('passed');
+    expect(driver.clicks).not.toContain('#b');
+    expect(driver.fills.map((entry) => entry.selector)).toEqual(['#a']);
   });
 });

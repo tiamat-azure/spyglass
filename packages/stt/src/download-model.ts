@@ -30,8 +30,25 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
   const partial = `${input.dest}.partial-${randomBytes(8).toString('hex')}`;
   await rm(partial, { force: true });
   const hash = createHash('sha256');
+  const minBytes = input.minBytes ?? 0;
+  // L7-290: a Content-Length already below minBytes cannot become a valid dest.
+  if (input.expectedBytes !== undefined && minBytes > 0 && input.expectedBytes < minBytes) {
+    throw new Error(
+      `downloaded file too small (${String(input.expectedBytes)} < ${String(minBytes)} bytes)`
+    );
+  }
+  let bytes = 0;
   const hasher = new Transform({
     transform(chunk: Buffer, _enc, callback) {
+      bytes += chunk.length;
+      if (input.expectedBytes !== undefined && bytes > input.expectedBytes) {
+        callback(
+          new Error(
+            `downloaded size ${String(bytes)} !== Content-Length ${String(input.expectedBytes)}`
+          )
+        );
+        return;
+      }
       hash.update(chunk);
       callback(null, chunk);
     }
@@ -40,8 +57,7 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
     await pipeline(input.stream, hasher, createWriteStream(partial));
     const sha256 = hash.digest('hex');
     const onDisk = (await stat(partial)).size;
-    const minBytes = input.minBytes ?? 0;
-    // L7-283: size checks use the on-disk partial, then rename only if OK.
+    // L7-283 / L7-290: size checks use the on-disk partial, then rename only if OK.
     if (minBytes > 0 && onDisk < minBytes) {
       throw new Error(`downloaded file too small (${String(onDisk)} < ${String(minBytes)} bytes)`);
     }

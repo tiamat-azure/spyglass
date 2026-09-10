@@ -60,7 +60,13 @@ export function extractScenarioParameters(scenario: Scenario): {
     const value = typeof recorded === 'string' ? recorded : '';
     // R10a: shared explicit parameterRef last-write-wins; no conflict warn/error.
     setOwnString(values, name, value);
-    if (isSecretParameterName(name) || looksMaskedParameterValue(value)) {
+    // L7-287: classify via selector tokens as well as the slugged parameter name
+    // so `#userPin` / `#pinCode` match isSecretSelector on the extract path.
+    if (
+      isSecretParameterName(name) ||
+      isSecretSelector(step.action.descriptor.selector) ||
+      looksMaskedParameterValue(value)
+    ) {
       if (!secrets.includes(name)) {
         secrets.push(name);
       }
@@ -318,7 +324,8 @@ function nameFromSelector(selector: string): string {
 }
 
 function slug(value: string): string {
-  const cleaned = value
+  const withCamel = value.replace(/(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/gu, '_');
+  const cleaned = withCamel
     .toLowerCase()
     .replace(/[^a-z0-9]+/gu, '_')
     .replace(/^_+|_+$/gu, '');

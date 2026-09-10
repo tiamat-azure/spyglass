@@ -1506,6 +1506,30 @@ Ask-user **CLEAR**. Held: none.
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **757 passed**, 1 skipped (62 files).
 
+## Pass-40 adversarial fixes (L7-286 … L7-291)
+
+- **L7-286:** `gitExecResultFromFailure` maps spawn string codes
+  (`ENOENT` / `EACCES` / `ENOTDIR`) to `GIT_SPAWN_FAILURE_EXIT_CODE`
+  (127), not quiet git exit 1, so `detectDefaultBranch` hard-fails.
+- **L7-287:** Extract classifies `#userPin` / `#pinCode` / `#apiKey`
+  as secrets (`user_pin` / `pin_code` / `api_key`); slug splits camelCase
+  and extract uses `isSecretSelector`.
+- **L7-288:** L7-020 overwrite test asserts no leftover
+  `dest.spyglass-prev-*` (real backup name), not a fake
+  `bundle.spyglass-prev`.
+- **L7-289:** F-59 stop test asserts `driver.clicks` does not include
+  `#b` (gate runs before `performAction`).
+- **L7-290:** `streamToFileAtomic` rejects `expectedBytes < minBytes`
+  before streaming and aborts when the body exceeds Content-Length
+  (L7-283 post-size checks stay).
+- **L7-291:** `beginWhisperFromEnv` trims `STT_MODEL_DIR` /
+  `STT_MODEL_PATH` via `resolveSttModelDir` before
+  `resolveWhisperPaths`.
+
+Ask-user **CLEAR**. Held: none.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts after green.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

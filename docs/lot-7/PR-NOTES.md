@@ -466,4 +466,9 @@ health I/O is `healthWriteError` not apply `internal-error`; atomic
 download size-check before rename. **L7-284** dangling
 `scenario.json` symlink fails closed (no parent+basename inside
 `--repo`). **L7-285** leftover reuse requires step order, not only
-index map. Ask-user **CLEAR**. Held: none.
+index map. Pass-40 (L7-286 … L7-291): spawn git codes are not quiet
+exit 1; extract covers camelCase secret selectors; L7-020 backup
+name is `dest.spyglass-prev-<hex>`; F-59 stop does not click `#b`;
+atomic download rejects small Content-Length before publish; trim
+STT model paths before resolveWhisperPaths. Ask-user **CLEAR**. Held:
+none.

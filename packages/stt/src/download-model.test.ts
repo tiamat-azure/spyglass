@@ -79,6 +79,40 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
     expect(renameIdx).toBeGreaterThan(body.indexOf('onDisk !== input.expectedBytes'));
   });
 
+  it('rejects a Content-Length already below minBytes before publishing (L7-290)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7290-'));
+    const dest = join(dir, 'model.bin');
+    await writeFile(dest, 'keep-me');
+    await expect(
+      streamToFileAtomic({
+        dest,
+        stream: Readable.from(Buffer.from('tiny')),
+        expectedBytes: 50,
+        minBytes: 1_000_000
+      })
+    ).rejects.toThrow(/too small/);
+    expect(await readFile(dest, 'utf8')).toBe('keep-me');
+    await expect(
+      streamToFileAtomic({
+        dest,
+        stream: Readable.from(Buffer.alloc(200)),
+        expectedBytes: 10,
+        minBytes: 1
+      })
+    ).rejects.toThrow(/Content-Length/);
+    expect(await readFile(dest, 'utf8')).toBe('keep-me');
+    const src = await readFile(new URL('./download-model.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function streamToFileAtomic');
+    const end = src.indexOf('export async function writeFileAtomic');
+    const body = src.slice(start, end);
+    expect(body.indexOf('expectedBytes < minBytes')).toBeGreaterThan(-1);
+    expect(body.indexOf('expectedBytes < minBytes')).toBeLessThan(body.indexOf('await pipeline'));
+    expect(body.indexOf('bytes > input.expectedBytes')).toBeGreaterThan(-1);
+    expect(body.indexOf('bytes > input.expectedBytes')).toBeLessThan(
+      body.indexOf('await pipeline')
+    );
+  });
+
   it('skips only when dest is a regular file with minBytes and SHA-256 (L7-263)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7263-'));
     const dest = join(dir, 'model.bin');

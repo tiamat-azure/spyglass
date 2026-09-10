@@ -49,6 +49,7 @@ export type { GitExec, GitExecResult } from './git-repo.ts';
 export {
   defaultGitExec,
   detectDefaultBranch,
+  GIT_SPAWN_FAILURE_EXIT_CODE,
   GIT_TIMEOUT_EXIT_CODE,
   GitApplyError,
   gitExecResultFromFailure,

@@ -94,7 +94,8 @@ function isReadyEngine(value: SttEngine | WhisperBuildContext): value is SttEngi
 }
 
 function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildContext {
-  const paths = resolveWhisperPaths(env);
+  const normalized = envWithTrimmedSttModelPaths(env);
+  const paths = resolveWhisperPaths(normalized);
   if (paths === undefined) {
     throw new Error(
       `STT_ENGINE=whisper but whisper-cli and/or ${STT_SMALL_MODEL_FILE} are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.`
@@ -103,14 +104,30 @@ function beginWhisperFromEnv(env: NodeJS.ProcessEnv): SttEngine | WhisperBuildCo
   const language =
     env.STT_LANGUAGE === undefined || env.STT_LANGUAGE.length === 0 ? 'fr' : env.STT_LANGUAGE;
   const timeoutMs = parseWhisperTimeoutMs(env);
-  const modelDir = resolveSttModelDir(env) ?? dirname(paths.model);
+  const modelDir = resolveSttModelDir(normalized) ?? dirname(paths.model);
   return {
     paths,
     language,
     timeoutMs,
     modelDir,
-    selection: collectModelSelection(env, paths, modelDir)
+    selection: collectModelSelection(normalized, paths, modelDir)
   };
+}
+
+/** L7-291: trim STT_MODEL_DIR / STT_MODEL_PATH before resolveWhisperPaths. */
+function envWithTrimmedSttModelPaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const next: NodeJS.ProcessEnv = { ...env };
+  const modelDir = resolveSttModelDir(env);
+  if (modelDir !== undefined) {
+    next.STT_MODEL_DIR = modelDir;
+  }
+  const explicit = env.STT_MODEL_PATH?.trim();
+  if (explicit !== undefined && explicit.length > 0) {
+    next.STT_MODEL_PATH = explicit;
+  } else {
+    delete next.STT_MODEL_PATH;
+  }
+  return next;
 }
 
 function finishWhisperFromEnv(

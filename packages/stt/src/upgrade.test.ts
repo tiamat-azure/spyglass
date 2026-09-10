@@ -550,6 +550,35 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
     );
   });
 
+  it('trims padded STT_MODEL_PATH before resolveWhisperPaths (L7-291)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7291-'));
+    await writeFile(join(dir, 'whisper-cli'), '#!/bin/sh\n', { encoding: 'utf8' });
+    const small = join(dir, STT_SMALL_MODEL_FILE);
+    await writeFile(small, 'small-weights\n', 'utf8');
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_PATH: ` ${small} `
+    });
+    expect(engine.model).toBe(small);
+    const viaDir = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'whisper',
+      STT_BIN: join(dir, 'whisper-cli'),
+      STT_MODEL_DIR: ` ${dir} `
+    });
+    expect(viaDir.model).toBe(small);
+    const src = await readFile(new URL('./resolve-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('function beginWhisperFromEnv');
+    const end = src.indexOf('function finishWhisperFromEnv');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    expect(body.indexOf('envWithTrimmedSttModelPaths')).toBeGreaterThan(-1);
+    expect(body.indexOf('resolveWhisperPaths(normalized)')).toBeGreaterThan(
+      body.indexOf('envWithTrimmedSttModelPaths')
+    );
+  });
+
   it('lists STT_MODEL_DIR and STT_MODEL_PATH dirname for fallback markers (L7-209)', () => {
     expect(
       largeFallbackMarkerDirs({ STT_MODEL_DIR: '/models' }, ['/other/ggml-large-v3-turbo-q5_0.bin'])
