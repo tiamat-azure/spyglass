@@ -60,11 +60,21 @@ export async function processSuggestedPatch(input: {
     return {};
   }
   const persisted = redactSuggestedPatchForPersistence(input.suggested, input.scenario);
-  let health = await loadHealth(sessionDir, persisted.sessionId);
-  // L7-028 / L7-153: empty patches still record on a clean success — that run resets F-63 candidates.
-  health = recordSuggestedPatches(health, persisted, policy);
-  const healthPath = await saveHealth(sessionDir, health);
-  const result: PatchLifecycleResult = { health, healthPath };
+  const result: PatchLifecycleResult = {};
+  let health: ScenarioHealth;
+  try {
+    health = await loadHealth(sessionDir, persisted.sessionId);
+    // L7-028 / L7-153: empty patches still record on a clean success — that run resets F-63 candidates.
+    health = recordSuggestedPatches(health, persisted, policy);
+    result.health = health;
+    result.healthPath = await saveHealth(sessionDir, health);
+  } catch (healthError) {
+    // L7-282: pre-apply health I/O is not an assisted-apply failure (L7-266 / L7-277).
+    const message = healthError instanceof Error ? healthError.message : String(healthError);
+    result.healthWriteError = message;
+    console.error(`spyglass: health load/write before assisted apply failed: ${message}`);
+    return result;
+  }
   if (!policy.assistedApply || persisted.patches.length === 0) {
     return result;
   }

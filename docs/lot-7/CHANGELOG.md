@@ -1469,6 +1469,28 @@ Ask-user P38 **CLEAR**. Held: none.
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **753 passed**, 1 skipped (62 files).
 
+## Pass-39 adversarial fixes (L7-279 … L7-283)
+
+- **L7-279:** `lot7-finition.spec.ts` `test.setTimeout` is chrome wait
+  (45s) + `CLOSE_TIMEOUT_MS` (12s) + kill grace (2s) + margin, so a
+  chrome miss can finish close/kill before the Playwright ceiling.
+- **L7-280:** `realpathExisting` still rethrows non-missing errors
+  (no bare catch / no catch-return). Behavior: EACCES is not mapped to
+  session-exists.
+- **L7-281:** L7-064 symlink `meta.json` target is invalid for
+  `readSessionMeta`, so `/import refused: symlinks/` is symlink policy
+  (not a successful read-through).
+- **L7-282:** Pre-apply `loadHealth` / health-write failures set
+  `healthWriteError`; they are not `assistedApply { ok:false,
+  code:'internal-error' }` (L7-266 / L7-277).
+- **L7-283:** `streamToFileAtomic` checks on-disk partial size
+  (`minBytes` / `expectedBytes`) and only then renames; undersize does
+  not replace dest.
+
+Ask-user **CLEAR**. Held: none.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts after green.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

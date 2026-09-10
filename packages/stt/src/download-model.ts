@@ -30,10 +30,8 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
   const partial = `${input.dest}.partial-${randomBytes(8).toString('hex')}`;
   await rm(partial, { force: true });
   const hash = createHash('sha256');
-  let bytes = 0;
   const hasher = new Transform({
     transform(chunk: Buffer, _enc, callback) {
-      bytes += chunk.length;
       hash.update(chunk);
       callback(null, chunk);
     }
@@ -41,13 +39,15 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
   try {
     await pipeline(input.stream, hasher, createWriteStream(partial));
     const sha256 = hash.digest('hex');
+    const onDisk = (await stat(partial)).size;
     const minBytes = input.minBytes ?? 0;
-    if (minBytes > 0 && bytes < minBytes) {
-      throw new Error(`downloaded file too small (${String(bytes)} < ${String(minBytes)} bytes)`);
+    // L7-283: size checks use the on-disk partial, then rename only if OK.
+    if (minBytes > 0 && onDisk < minBytes) {
+      throw new Error(`downloaded file too small (${String(onDisk)} < ${String(minBytes)} bytes)`);
     }
-    if (input.expectedBytes !== undefined && bytes !== input.expectedBytes) {
+    if (input.expectedBytes !== undefined && onDisk !== input.expectedBytes) {
       throw new Error(
-        `downloaded size ${String(bytes)} !== Content-Length ${String(input.expectedBytes)}`
+        `downloaded size ${String(onDisk)} !== Content-Length ${String(input.expectedBytes)}`
       );
     }
     if (
@@ -58,7 +58,7 @@ export async function streamToFileAtomic(input: StreamToFileAtomicInput): Promis
       throw new Error('downloaded file digest mismatch');
     }
     await rename(partial, input.dest);
-    return { bytes, sha256 };
+    return { bytes: onDisk, sha256 };
   } catch (error) {
     await rm(partial, { force: true }).catch(() => undefined);
     throw error;

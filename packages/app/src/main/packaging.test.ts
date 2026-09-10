@@ -483,6 +483,7 @@ describe('packaged Observe', () => {
     expect(statusCall).toContain('.catch(');
     expect(statusCall).toContain('sttUpgrade.hidden = true');
     const closeElectron = readFileSync(join(appRoot, 'e2e/close-electron.ts'), 'utf8');
+    expect(closeElectron).toContain('export const CLOSE_TIMEOUT_MS = 12_000');
     expect(closeElectron).toContain('clearTimeout(timer)');
     expect(closeElectron).toContain('timer.unref()');
     expect(closeElectron).toContain("kill('SIGKILL')");
@@ -504,5 +505,9 @@ describe('packaged Observe', () => {
       closeBody.indexOf('killElectronChild(child)')
     );
     expect(closeBody).not.toMatch(/catch \(error\) \{\s*killElectronChild/);
+    const lot7E2e = readFileSync(join(appRoot, 'e2e/lot7-finition.spec.ts'), 'utf8');
+    expect(lot7E2e).toContain('CHROME_WAIT_MS + CLOSE_TIMEOUT_MS + KILL_EXIT_GRACE_MS');
+    expect(lot7E2e).not.toContain('test.setTimeout(60_000)');
+    expect(lot7E2e).toContain('CHROME_WAIT_MS = 45_000');
   });
 });

@@ -459,4 +459,8 @@ detectDefaultBranch fail-closed on hard git; L7-177 slice ends at
 without flipping apply ok; ggml-small min 10MB. **L38a-cap** locked
 (flush = parsed whisper timeout + 2s so flush ≥ whisper timeout;
 `STT_WHISPER_TIMEOUT_MS=40000` stays 40s / flush 42s). D34a +
-L36a/b/c + L37a-sync stay locked. Ask-user P38 **CLEAR**. Held: none.
+L36a/b/c + L37a-sync stay locked. Pass-39 (L7-279 … L7-283): chrome
+wait + close/kill timeout budget; `realpathExisting` rethrows
+non-missing errors; L7-064 symlink target is invalid meta; pre-apply
+health I/O is `healthWriteError` not apply `internal-error`; atomic
+download size-check before rename. Ask-user **CLEAR**. Held: none.

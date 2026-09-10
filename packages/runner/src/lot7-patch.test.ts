@@ -2772,10 +2772,8 @@ describe('Lot 7 health.json wiring after recovery', () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.report.exitCode).toBe(0);
-    expect(result.assistedApply?.ok).toBe(false);
-    if (result.assistedApply !== undefined && !result.assistedApply.ok) {
-      expect(result.assistedApply.code).toBe('internal-error');
-    }
+    expect(result.assistedApply).toBeUndefined();
+    expect(result.healthWriteError).toMatch(/unreadable health\.json/);
     const reportRaw = await readFile(join(reportDir, 'report.json'), 'utf8');
     expect(reportRaw).toContain('ses_lot7');
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
@@ -2783,12 +2781,28 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(lifecycle).toContain('try {');
     expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
     expect(lifecycle).toContain('suggested: liveSuggested');
-    expect(lifecycle).toContain("code: 'internal-error'");
     expect(lifecycle).toContain('lifecycle.healthWriteError');
     expect(lifecycle).toContain('result.assistedApply = lifecycle.assistedApply');
+    expect(lifecycle).toContain('result.healthWriteError = error instanceof Error');
+    expect(lifecycle).not.toMatch(/code: 'internal-error'/);
     expect(lifecycle.indexOf('result.assistedApply = lifecycle.assistedApply')).toBeLessThan(
-      lifecycle.indexOf("code: 'internal-error'")
+      lifecycle.indexOf('result.healthWriteError = error instanceof Error')
     );
+    const applyOnDir = join(sessionDir, 'runs', 'run_lot7_apply');
+    await mkdir(applyOnDir, { recursive: true });
+    const applyOn = await runScenario(scenario([clickStep(0, '#go')]), {
+      driver: new MemoryPageDriver({
+        url: 'https://exemple.test/start',
+        elements: [{ selector: '#go', visible: true }]
+      }),
+      aiRecovery: false,
+      reportDir: applyOnDir,
+      sessionDir,
+      env: { PATCH_ASSISTED_APPLY: 'true' }
+    });
+    expect(applyOn.exitCode).toBe(0);
+    expect(applyOn.assistedApply).toBeUndefined();
+    expect(applyOn.healthWriteError).toMatch(/unreadable health\.json/);
   });
 
   it('does not reset candidates on a failed empty-patch run (L7-153)', async () => {

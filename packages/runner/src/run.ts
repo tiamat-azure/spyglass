@@ -511,11 +511,8 @@ async function runScenarioOnDriver(
         result.assistedApply = lifecycle.assistedApply;
       }
     } catch (error) {
-      result.assistedApply = {
-        ok: false,
-        code: 'internal-error',
-        reason: error instanceof Error ? error.message : String(error)
-      };
+      // L7-282: remaining throws are health I/O (or equivalent), not apply-after-L7-266.
+      result.healthWriteError = error instanceof Error ? error.message : String(error);
     }
   }
   if (runDir !== undefined) {

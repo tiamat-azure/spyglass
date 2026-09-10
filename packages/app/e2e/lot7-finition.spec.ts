@@ -4,15 +4,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, test } from '@playwright/test';
-import { closeElectron } from './close-electron.ts';
+import { CLOSE_TIMEOUT_MS, closeElectron, KILL_EXIT_GRACE_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const bundledElectron = require('electron') as string;
+/** L7-279: waitForChrome budget; must stay in the test timeout formula. */
+const CHROME_WAIT_MS = 45_000;
+/** Margin covers electron.launch (45s) so a chrome miss can still close/kill. */
+const TEST_TIMEOUT_MARGIN_MS = 45_000;
 
 test.describe('Lot 7 chrome (F-47 / F-59 / F-38)', () => {
   test('replay pas-à-pas, export/import, and STT upgrade controls are present', async () => {
-    test.setTimeout(60_000);
+    // L7-279: chrome wait + close timeout + kill grace + margin (not the 60s default).
+    test.setTimeout(
+      CHROME_WAIT_MS + CLOSE_TIMEOUT_MS + KILL_EXIT_GRACE_MS + TEST_TIMEOUT_MARGIN_MS
+    );
     const userData = await mkdtemp(join(tmpdir(), 'spyglass-lot7-e2e-'));
     const env: NodeJS.ProcessEnv = { ...process.env };
     delete env.ELECTRON_RENDERER_URL;
@@ -57,7 +64,7 @@ async function waitForChrome(
   electronApp: Awaited<ReturnType<typeof electron.launch>>
 ): Promise<import('@playwright/test').Page> {
   const started = Date.now();
-  while (Date.now() - started < 45_000) {
+  while (Date.now() - started < CHROME_WAIT_MS) {
     for (const page of electronApp.windows()) {
       try {
         if ((await page.locator('#record-btn').count()) > 0) {

@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -1851,6 +1852,13 @@ describe('Lot 7 F-47 session export/import', () => {
     );
     expect(body).toContain('isMissingPathError');
     expect(body).not.toMatch(/catch \{/);
+    expect(body).not.toMatch(/catch \([^)]*\) \{\s*return /);
+    expect(body).toContain('if (!isMissingPathError(error))');
+    expect(body).toContain('throw error');
+    expect(body).toContain('throw parentError');
+    const resolveIdx = body.lastIndexOf('return resolve(path)');
+    expect(resolveIdx).toBeGreaterThan(body.indexOf('throw error'));
+    expect(resolveIdx).toBeGreaterThan(body.indexOf('throw parentError'));
     const missing = sourceBetween(
       src,
       'function isMissingPathError',
@@ -1859,6 +1867,42 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(missing).toContain("code === 'ENOENT'");
     expect(missing).toContain("code === 'ENOTDIR'");
   });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'does not swallow realpathExisting EACCES as session-exists (L7-280)',
+    async () => {
+      const root = await tempDir('spyglass-lot7-l7280-');
+      const sessionDir = join(root, 'ses_export');
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'meta.json'),
+        `${JSON.stringify({ sessionId: 'ses_export', schemaVersion: 1 }, null, 2)}\n`,
+        'utf8'
+      );
+      const bundle = join(root, 'bundle');
+      await exportSessionFolder(sessionDir, bundle);
+      const sessionsRoot = join(root, 'imported');
+      const blocked = join(sessionsRoot, 'ses_export');
+      await mkdir(blocked, { recursive: true });
+      await chmod(blocked, 0);
+      try {
+        await expect(importSessionFolder(bundle, sessionsRoot)).rejects.toSatisfy(
+          (err: unknown) => {
+            const code = (err as NodeJS.ErrnoException).code;
+            const message = err instanceof Error ? err.message : String(err);
+            return (
+              (code === 'EACCES' ||
+                code === 'EPERM' ||
+                /EACCES|EPERM|permission denied/i.test(message)) &&
+              !/session already exists/.test(message)
+            );
+          }
+        );
+      } finally {
+        await chmod(blocked, 0o700).catch(() => undefined);
+      }
+    }
+  );
 
   it('does not map EPERM to destination already exists (L7-195)', async () => {
     const src = await readFile(new URL('./session-bundle.ts', import.meta.url), 'utf8');
@@ -2077,7 +2121,9 @@ describe('Lot 7 F-47 session export/import', () => {
     const dest = join(root, 'bundle');
     await exportSessionFolder(sessionDir, dest);
     const leaked = join(root, 'secret.json');
-    await writeFile(leaked, '{"sessionId":"leaked"}\n', 'utf8');
+    // L7-281: target is invalid for readSessionMeta so refusal cannot be
+    // "read through the link, then later fail the walk".
+    await writeFile(leaked, 'not-valid-session-meta\n', 'utf8');
     await rm(join(dest, 'meta.json'));
     await symlink(leaked, join(dest, 'meta.json'));
     await expect(importSessionFolder(dest, join(root, 'imported'))).rejects.toThrow(

@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
 /** Playwright `electronApp.close()` waits for `app.quit()` / process exit. */
-const CLOSE_TIMEOUT_MS = 12_000;
+export const CLOSE_TIMEOUT_MS = 12_000;
 /** L7-191 / C31a: only this rejection from the close race may force-kill. */
 export const ELECTRON_CLOSE_TIMEOUT_MESSAGE = 'electron close timeout';
 /** L7-103: brief wait after SIGKILL so `rm(userData)` is not racing the process. */
