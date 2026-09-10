@@ -407,9 +407,17 @@ describe('packaged Observe', () => {
     expect(decideFn).toContain('existingVerifiedDownloadOk');
     expect(decideFn).toContain('STT_LARGE_MIN_BYTES');
     expect(decideFn).toContain('await rm(dest, { force: true })');
-    expect(decideFn.indexOf('existingVerifiedDownloadOk')).toBeLessThan(
+    const verifyIdx = decideFn.indexOf('existingVerifiedDownloadOk');
+    const downloadTryIdx = decideFn.lastIndexOf(
+      'try {',
       decideFn.indexOf('downloadUrlToFileAtomic')
     );
+    const downloadCatchIdx = decideFn.indexOf('} catch (error)', verifyIdx);
+    expect(verifyIdx).toBeGreaterThan(-1);
+    expect(downloadTryIdx).toBeGreaterThan(-1);
+    expect(verifyIdx).toBeGreaterThan(downloadTryIdx);
+    expect(verifyIdx).toBeLessThan(downloadCatchIdx);
+    expect(verifyIdx).toBeLessThan(decideFn.indexOf('downloadUrlToFileAtomic'));
     expect(decideFn).not.toContain('largeModelPresent');
     expect(decideFn).not.toContain("process.env.SPYGLASS_STT_UPGRADE_FAKE === '1'");
     expect(decideFn).not.toContain('process.env.STT_LARGE_SHA256');

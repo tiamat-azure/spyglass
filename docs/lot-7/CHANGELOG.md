@@ -1429,6 +1429,33 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **752 passed**, 1 skipped (62 files).
 
+## Pass-38 adversarial fixes (L7-271 … L7-278)
+
+- **L7-271:** Large-accept hash/read of an existing dest runs inside the
+  download try/catch (`existingVerifiedDownloadOk` also catches I/O)
+  so a post-stat read failure is `download-failed`, not an unhandled
+  rejection.
+- **L7-272:** `leftoverMatchesDescriptorOnlyApply` clones each default
+  step before applying leftover descriptor/patchHistory and compares
+  those fields, not whole-scenario stringify after aliasing leftover’s
+  descriptor onto the clone.
+- **L7-273:** Leftover `git diff --name-only` uses `-z` / NUL split so
+  paths with spaces or unicode are not mis-parsed.
+- **L7-274:** `detectDefaultBranch` fails closed on timed-out / fatal
+  git probes and on code-0 empty/unusable origin/HEAD; `--quiet` exit 1
+  is still “missing”.
+- **L7-275:** L7-177 `sourceBetween` ends at `isMissingPathError` so
+  the helper definition cannot satisfy the call assertion.
+- **L7-276:** L7-230 test timeout is `GIT_TEST_MS * 2` for two real git
+  apply cycles under CI load.
+- **L7-277:** `runScenario` forwards `healthWriteError` and keeps
+  `assistedApply` as returned (apply ok stays ok; L7-266).
+- **L7-278:** `SMALL_MIN_BYTES` is 10MB so truncated ggml-small stubs
+  fail `existingSmallOk` / atomic download.
+
+Held (do not invent): **L7-P38 L38a** (whisper timeout vs
+`VOICE_FLUSH_MS`).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

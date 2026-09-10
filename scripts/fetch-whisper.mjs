@@ -310,7 +310,7 @@ async function ensureWhisperCli() {
 }
 
 /** Reject truncated HTML/error bodies; real ggml-small-q5_1.bin is ~190MB. */
-const SMALL_MIN_BYTES = 1_000_000;
+const SMALL_MIN_BYTES = 10_000_000;
 
 function existingSmallOk(dest) {
   try {

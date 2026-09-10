@@ -46,6 +46,8 @@ export type RunScenarioResult = {
   runDir?: string;
   healthPath?: string;
   assistedApply?: import('./assisted-apply.ts').AssistedApplyResult;
+  /** L7-266 / L7-277: apply succeeded; health.json write failed. */
+  healthWriteError?: string;
 };
 
 export type ResolveAiRecoveryInput = {

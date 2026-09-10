@@ -1847,11 +1847,17 @@ describe('Lot 7 F-47 session export/import', () => {
     const body = sourceBetween(
       src,
       'async function realpathExisting',
-      'async function recoverOrphanedBackup'
+      'function isMissingPathError'
     );
     expect(body).toContain('isMissingPathError');
-    expect(body).toContain("code === 'ENOENT'");
     expect(body).not.toMatch(/catch \{/);
+    const missing = sourceBetween(
+      src,
+      'function isMissingPathError',
+      'async function vacateEmptyDirectory'
+    );
+    expect(missing).toContain("code === 'ENOENT'");
+    expect(missing).toContain("code === 'ENOTDIR'");
   });
 
   it('does not map EPERM to destination already exists (L7-195)', async () => {

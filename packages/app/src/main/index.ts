@@ -1123,18 +1123,20 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       // L7-221 / L7-263: skip only a regular file that already meets the same
       // minBytes + SHA-256 checks as a real large download. Stubs/truncated
       // files are removed and the fetch continues. FAKE stays E18a-gated.
+      // L7-271: hash/read of an existing dest stays inside this try so I/O
+      // failures become download-failed, not an unhandled rejection.
       const dest = largeModelPath(modelDir);
       const expectedSha256 = resolveSttLargeExpectedSha256(process.env, app.isPackaged);
-      const alreadyOk = await existingVerifiedDownloadOk({
-        dest,
-        minBytes: STT_LARGE_MIN_BYTES,
-        expectedSha256
-      });
-      if (alreadyOk) {
-        return { ok: true };
-      }
-      await rm(dest, { force: true }).catch(() => undefined);
       try {
+        const alreadyOk = await existingVerifiedDownloadOk({
+          dest,
+          minBytes: STT_LARGE_MIN_BYTES,
+          expectedSha256
+        });
+        if (alreadyOk) {
+          return { ok: true };
+        }
+        await rm(dest, { force: true }).catch(() => undefined);
         await mkdir(modelDir, { recursive: true });
         if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
           await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));

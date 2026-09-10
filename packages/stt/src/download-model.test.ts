@@ -73,6 +73,16 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
       })
     ).toBe(false);
     expect(await existingVerifiedDownloadOk({ dest, minBytes: 1, expectedSha256: '' })).toBe(false);
+    const src = await readFile(new URL('./download-model.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('export async function existingVerifiedDownloadOk');
+    expect(start).toBeGreaterThan(-1);
+    const body = src.slice(start);
+    expect(body.indexOf('await pipeline(createReadStream(input.dest), hash)')).toBeGreaterThan(
+      body.indexOf('try {')
+    );
+    expect(body.indexOf('await pipeline(createReadStream(input.dest), hash)')).toBeLessThan(
+      body.indexOf('} catch {')
+    );
   });
 
   it('writeFileAtomic publishes without buffering callers', async () => {
@@ -223,6 +233,8 @@ describe('W3a fetch-whisper --large', () => {
     expect(body).toContain('existingSmallOk');
     expect(body).not.toMatch(/\bawait download\(/);
     expect(src).toContain('async function downloadResponseAtomic');
+    expect(src).toMatch(/const SMALL_MIN_BYTES = 10_000_000/);
+    expect(src).not.toMatch(/const SMALL_MIN_BYTES = 1_000_000/);
   });
 
   it('ensures ggml-small-q5_1.bin on --large before returning (W18a)', async () => {

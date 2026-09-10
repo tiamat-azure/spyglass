@@ -1977,6 +1977,17 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
     expect(src).toContain('leftoverMatchesDescriptorOnlyApply');
     expect(src).toContain("git(['show'");
+    expect(src).toContain("git(['diff', '-z', '--name-only'");
+    expect(src).toContain(".split('\\0')");
+    const matchFn = sourceBetween(
+      src,
+      'function leftoverMatchesDescriptorOnlyApply',
+      'async function afterLocalCommitRefusal'
+    );
+    expect(matchFn).toContain('cloneDescriptor');
+    expect(matchFn).toContain('structuredClone(base)');
+    expect(matchFn).not.toContain('base.action.descriptor = step.action.descriptor');
+    expect(matchFn).not.toContain('JSON.stringify(expected) === JSON.stringify(leftover)');
   });
 
   it('restores starting ref when leftover rev-parse fails (L7-172)', async () => {
@@ -2630,6 +2641,29 @@ describe('detectDefaultBranch G28b', () => {
     await expect(detectDefaultBranch(git, cwd)).rejects.toSatisfy(isUnresolvedDefaultBranchError);
     await expect(detectDefaultBranch(git, cwd)).rejects.toThrow(/origin\/HEAD|main\/master/u);
   });
+
+  it('does not soft-continue when a git probe hard-fails (L7-274)', async () => {
+    const fatal: GitExec = async () => ({
+      stdout: '',
+      stderr: 'fatal: not a git repository',
+      code: 128
+    });
+    await expect(detectDefaultBranch(fatal, cwd)).rejects.toSatisfy(isGitApplyError);
+    const timed: GitExec = async (args) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: '', stderr: '', code: 1 };
+      }
+      return { stdout: '', stderr: 'killed', code: GIT_TIMEOUT_EXIT_CODE, timedOut: true };
+    };
+    await expect(detectDefaultBranch(timed, cwd)).rejects.toSatisfy(isGitApplyError);
+    const emptyOk: GitExec = async (args) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: '\n', stderr: '', code: 0 };
+      }
+      return { stdout: '', stderr: 'unexpected', code: 1 };
+    };
+    await expect(detectDefaultBranch(emptyOk, cwd)).rejects.toSatisfy(isGitApplyError);
+  });
 });
 
 describe('Lot 7 health.json wiring after recovery', () => {
@@ -2750,6 +2784,11 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(lifecycle).toContain('await processSuggestedPatch(lifecycleInput)');
     expect(lifecycle).toContain('suggested: liveSuggested');
     expect(lifecycle).toContain("code: 'internal-error'");
+    expect(lifecycle).toContain('lifecycle.healthWriteError');
+    expect(lifecycle).toContain('result.assistedApply = lifecycle.assistedApply');
+    expect(lifecycle.indexOf('result.assistedApply = lifecycle.assistedApply')).toBeLessThan(
+      lifecycle.indexOf("code: 'internal-error'")
+    );
   });
 
   it('does not reset candidates on a failed empty-patch run (L7-153)', async () => {
@@ -2901,7 +2940,9 @@ describe('Lot 7 health.json wiring after recovery', () => {
     expect(working.steps[1]?.action.descriptor.selector).toBe('#old');
   });
 
-  it('writes recorded/redacted fill args on the patch branch and keeps health/artifacts scrubbed (L36a-scrub / L7-230)', async () => {
+  it('writes recorded/redacted fill args on the patch branch and keeps health/artifacts scrubbed (L36a-scrub / L7-230)', {
+    timeout: GIT_TEST_MS * 2
+  }, async () => {
     const root = await tempDir('spyglass-lot7-l7230-');
     const repo = join(root, 'repo');
     const sessionDir = join(root, 'session');

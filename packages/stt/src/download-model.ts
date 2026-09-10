@@ -166,10 +166,10 @@ export async function existingVerifiedDownloadOk(input: {
     if (!st.isFile() || st.size < input.minBytes) {
       return false;
     }
+    const hash = createHash('sha256');
+    await pipeline(createReadStream(input.dest), hash);
+    return hash.digest('hex') === expected;
   } catch {
     return false;
   }
-  const hash = createHash('sha256');
-  await pipeline(createReadStream(input.dest), hash);
-  return hash.digest('hex') === expected;
 }

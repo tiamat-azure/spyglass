@@ -64,7 +64,7 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (276 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **752 passed**, 1 skipped (62 files) |
+| `pnpm test` | **753 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
@@ -451,5 +451,11 @@ post-apply `saveHealth` fails; win32 recorded.json restore tmp after dest
 rm; regular-file model selection; v1.9.2 ubuntu/Windows CLI URLs;
 before-vs-after recovery secret coverage. **L37a-sync** locked
 (accept/status/fallback and the STT engine share one `STT_MODEL_DIR`
-after `resolveSttModelDir`). D34a + L36a/b/c stay locked. Ask-user
-queue **CLEAR**.
+after `resolveSttModelDir`). D34a + L36a/b/c stay locked. Pass-38
+(L7-271 … L7-278): hash-read inside download try/catch; leftover
+descriptor-only compare clones before mutate; `git diff -z`;
+detectDefaultBranch fail-closed on hard git; L7-177 slice ends at
+`isMissingPathError`; L7-230 timeout ×2; forward healthWriteError
+without flipping apply ok; ggml-small min 10MB. Ask-user held:
+**L38a** (whisper timeout vs `VOICE_FLUSH_MS`). Ask-user otherwise
+**CLEAR**.

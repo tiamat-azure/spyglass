@@ -504,6 +504,9 @@ async function runScenarioOnDriver(
       if (lifecycle.healthPath !== undefined) {
         result.healthPath = lifecycle.healthPath;
       }
+      if (lifecycle.healthWriteError !== undefined) {
+        result.healthWriteError = lifecycle.healthWriteError;
+      }
       if (lifecycle.assistedApply !== undefined) {
         result.assistedApply = lifecycle.assistedApply;
       }

@@ -165,15 +165,24 @@ export async function currentBranch(exec: GitExec, cwd: string): Promise<string>
  */
 export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<string> {
   const originHead = await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], cwd);
+  if (isGitProbeHardFailure(originHead)) {
+    throw new GitApplyError(
+      originHead.stderr.trim() || 'git symbolic-ref refs/remotes/origin/HEAD failed'
+    );
+  }
   if (originHead.code === 0) {
     const ref = originHead.stdout.trim();
     const short = ref.replace(/^refs\/remotes\/origin\//u, '');
     if (isUsableDefaultBranch(short)) {
       return short;
     }
+    throw new GitApplyError('git symbolic-ref origin/HEAD returned an unusable name');
   }
   for (const name of DEFAULT_BRANCH_NAMES) {
     const local = await exec(['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], cwd);
+    if (isGitProbeHardFailure(local)) {
+      throw new GitApplyError(local.stderr.trim() || `git rev-parse refs/heads/${name} failed`);
+    }
     if (local.code === 0) {
       return name;
     }
@@ -183,11 +192,24 @@ export async function detectDefaultBranch(exec: GitExec, cwd: string): Promise<s
       ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${name}`],
       cwd
     );
+    if (isGitProbeHardFailure(remote)) {
+      throw new GitApplyError(
+        remote.stderr.trim() || `git rev-parse refs/remotes/origin/${name} failed`
+      );
+    }
     if (remote.code === 0) {
       return name;
     }
   }
   throw new UnresolvedDefaultBranchError();
+}
+
+/** `--quiet` missing is exit 1. Timeout / fatal / other non-zero must not continue. */
+function isGitProbeHardFailure(result: GitExecResult): boolean {
+  if (result.timedOut === true) {
+    return true;
+  }
+  return result.code !== 0 && result.code !== 1;
 }
 
 export function isDefaultBranchName(branch: string, defaultBranch?: string): boolean {

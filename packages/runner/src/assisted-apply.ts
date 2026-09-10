@@ -856,13 +856,13 @@ async function leftoverPatchOnlyExpectedScenario(
   if (ancestor.code !== 0) {
     return false;
   }
-  const diff = await git(['diff', '--name-only', `${defaultBranch}...HEAD`], cwd);
+  const diff = await git(['diff', '-z', '--name-only', `${defaultBranch}...HEAD`], cwd);
   if (diff.code !== 0) {
     return false;
   }
   const files = diff.stdout
-    .split('\n')
-    .map((line) => line.trim().replaceAll('\\', '/'))
+    .split('\0')
+    .map((line) => line.replaceAll('\\', '/'))
     .filter((line) => line.length > 0);
   if (files.length === 0 || files.some((file) => file !== scenarioRel)) {
     return false;
@@ -885,24 +885,38 @@ function leftoverMatchesDescriptorOnlyApply(
   leftover: Scenario,
   patches: ReadonlyArray<{ stepIndex: number }>
 ): boolean {
+  if (fromDefault.steps.length !== leftover.steps.length) {
+    return false;
+  }
   const patched = new Set(patches.map((entry) => entry.stepIndex));
-  const expected = structuredClone(fromDefault) as Scenario;
-  for (const step of leftover.steps) {
-    const base = expected.steps.find((entry) => entry.index === step.index);
-    if (base === undefined) {
+  const leftoverByIndex = new Map(leftover.steps.map((step) => [step.index, step]));
+  if (leftoverByIndex.size !== leftover.steps.length) {
+    return false;
+  }
+  for (const base of fromDefault.steps) {
+    const live = leftoverByIndex.get(base.index);
+    if (live === undefined) {
       return false;
     }
-    if (!patched.has(step.index)) {
-      continue;
+    const expected = structuredClone(base);
+    if (patched.has(base.index)) {
+      expected.action = {
+        ...expected.action,
+        descriptor: cloneDescriptor(live.action.descriptor)
+      };
+      if (live.patchHistory !== undefined) {
+        expected.patchHistory = structuredClone(live.patchHistory);
+      } else {
+        delete expected.patchHistory;
+      }
     }
-    base.action.descriptor = step.action.descriptor;
-    if (step.patchHistory !== undefined) {
-      base.patchHistory = step.patchHistory;
-    } else {
-      delete base.patchHistory;
+    if (JSON.stringify(expected) !== JSON.stringify(live)) {
+      return false;
     }
   }
-  return JSON.stringify(expected) === JSON.stringify(leftover);
+  const fromMeta = { ...fromDefault, steps: [] };
+  const liveMeta = { ...leftover, steps: [] };
+  return JSON.stringify(fromMeta) === JSON.stringify(liveMeta);
 }
 
 /** P12a / P14a / L7-183: local commit stays on the patch branch; restore starting ref. */
