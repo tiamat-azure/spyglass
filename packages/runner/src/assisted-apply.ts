@@ -1,4 +1,4 @@
-import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { lstat, readFile, realpath, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type {
   RefinedStep,
@@ -133,6 +133,7 @@ export function isInsideRepo(repoRoot: string, filePath: string): boolean {
 /**
  * L7-009: follow symlinks for the repo, the scenario file, and its parent.
  * A worktree-relative scenario.json that points outside `--repo` is refused.
+ * L7-284: do not synthesize parent+basename for a dangling symlink.
  */
 export async function resolveScenarioInRepo(
   repoRoot: string,
@@ -172,6 +173,15 @@ async function realpathExisting(path: string): Promise<string | undefined> {
   try {
     return await realpath(path);
   } catch {
+    try {
+      const st = await lstat(path);
+      if (st.isSymbolicLink()) {
+        // L7-284: dangling/broken symlink must not look inside via parent+basename.
+        return undefined;
+      }
+    } catch {
+      // missing path: fall through to parent join
+    }
     try {
       const parent = await realpath(dirname(path));
       return join(parent, basename(path));
@@ -889,13 +899,11 @@ function leftoverMatchesDescriptorOnlyApply(
     return false;
   }
   const patched = new Set(patches.map((entry) => entry.stepIndex));
-  const leftoverByIndex = new Map(leftover.steps.map((step) => [step.index, step]));
-  if (leftoverByIndex.size !== leftover.steps.length) {
-    return false;
-  }
-  for (const base of fromDefault.steps) {
-    const live = leftoverByIndex.get(base.index);
-    if (live === undefined) {
+  for (let i = 0; i < fromDefault.steps.length; i++) {
+    const base = fromDefault.steps[i];
+    const live = leftover.steps[i];
+    // L7-285: leftover reuse requires the same step order, not only index map.
+    if (base === undefined || live === undefined || base.index !== live.index) {
       return false;
     }
     const expected = structuredClone(base);

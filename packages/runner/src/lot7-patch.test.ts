@@ -751,6 +751,56 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(onDisk.steps[0]?.action.descriptor.selector).toBe('#old');
   });
 
+  it('refuses a dangling scenario.json symlink that would look inside via parent join (L7-284)', async () => {
+    const root = await tempDir('spyglass-lot7-l7284-');
+    const repo = join(root, 'repo');
+    const outside = join(root, 'outside');
+    await mkdir(repo, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await initGitRepo(repo);
+    const scn = scenario([clickStep(0, '#old')]);
+    const outsideFile = join(outside, 'scenario.json');
+    const scenarioPath = join(repo, 'scenario.json');
+    try {
+      await symlink(outsideFile, scenarioPath);
+    } catch (error) {
+      if (isSymlinkPrivilegeError(error)) {
+        return;
+      }
+      throw error;
+    }
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('scenario-outside-repo');
+    }
+    await expect(readFile(outsideFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
+    const fn = sourceBetween(
+      src,
+      'async function realpathExisting',
+      'export async function applyAssistedPatches'
+    );
+    expect(fn).toContain('st.isSymbolicLink()');
+    const symlinkIdx = fn.indexOf('st.isSymbolicLink()');
+    expect(symlinkIdx).toBeGreaterThan(-1);
+    expect(fn.indexOf('return undefined', symlinkIdx)).toBeGreaterThan(symlinkIdx);
+    expect(fn.indexOf('return undefined', symlinkIdx)).toBeLessThan(
+      fn.indexOf('join(parent, basename(path))')
+    );
+  });
+
   it('refuses when the scenario parent cannot be realpath-ed (L7-056)', async () => {
     const dir = await tempDir('spyglass-lot7-missing-parent-');
     await initGitRepo(dir);
@@ -1986,8 +2036,61 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     );
     expect(matchFn).toContain('cloneDescriptor');
     expect(matchFn).toContain('structuredClone(base)');
+    expect(matchFn).toContain('base.index !== live.index');
+    expect(matchFn).not.toContain('leftoverByIndex');
     expect(matchFn).not.toContain('base.action.descriptor = step.action.descriptor');
     expect(matchFn).not.toContain('JSON.stringify(expected) === JSON.stringify(leftover)');
+  });
+
+  it('does not skipMutate a leftover scenario.json that only reorders steps (L7-285)', async () => {
+    const dir = await tempDir('spyglass-lot7-l7285-');
+    await initGitRepo(dir);
+    const step0 = clickStep(0, '#old');
+    const step1 = clickStep(1, '#keep');
+    const scn = scenario([step0, step1]);
+    const scenarioPath = join(dir, 'scenario.json');
+    await writeFile(scenarioPath, `${JSON.stringify(scn, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'seed'], { cwd: dir });
+    let health = emptyHealth('ses_lot7');
+    const policy = resolvePatchPolicy({ PATCH_ASSISTED_APPLY: 'true' }, { repo: dir });
+    health = recordSuggestedPatches(health, patch('#new', 'run_a'), policy);
+    health = recordSuggestedPatches(health, patch('#new', 'run_b'), policy);
+    const leftover = patchBranchName(
+      'ses_lot7',
+      patchSetHash([{ stepIndex: 0, hash: descriptorHash({ type: 'click', selector: '#new' }) }])
+    );
+    await execFileAsync('git', ['checkout', '-b', leftover], { cwd: dir });
+    const patched0: RefinedStep = {
+      ...step0,
+      action: {
+        ...step0.action,
+        descriptor: { ...step0.action.descriptor, selector: '#new' }
+      }
+    };
+    const reordered = scenario([step1, patched0]);
+    await writeFile(scenarioPath, `${JSON.stringify(reordered, null, 2)}\n`, 'utf8');
+    await execFileAsync('git', ['add', 'scenario.json'], { cwd: dir });
+    await execFileAsync('git', ['commit', '-m', 'leftover reordered steps'], { cwd: dir });
+    await execFileAsync('git', ['checkout', 'main'], { cwd: dir });
+    const result = await applyAssistedPatches({
+      health,
+      suggested: patch('#new', 'run_b'),
+      scenario: scn,
+      scenarioPath,
+      policy,
+      git: defaultGitExec,
+      preparePr: async () => ({}),
+      createPr: async () => ({ ok: true })
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const patched = await gitShowJson<Scenario>(dir, `${result.branch}:scenario.json`);
+    expect(patched.steps.map((step) => step.index)).toEqual([0, 1]);
+    expect(patched.steps[0]?.action.descriptor.selector).toBe('#new');
+    expect(patched.steps[1]?.action.descriptor.selector).toBe('#keep');
   });
 
   it('restores starting ref when leftover rev-parse fails (L7-172)', async () => {

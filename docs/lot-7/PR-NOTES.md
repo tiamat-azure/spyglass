@@ -463,4 +463,7 @@ L36a/b/c + L37a-sync stay locked. Pass-39 (L7-279 … L7-283): chrome
 wait + close/kill timeout budget; `realpathExisting` rethrows
 non-missing errors; L7-064 symlink target is invalid meta; pre-apply
 health I/O is `healthWriteError` not apply `internal-error`; atomic
-download size-check before rename. Ask-user **CLEAR**. Held: none.
+download size-check before rename. **L7-284** dangling
+`scenario.json` symlink fails closed (no parent+basename inside
+`--repo`). **L7-285** leftover reuse requires step order, not only
+index map. Ask-user **CLEAR**. Held: none.

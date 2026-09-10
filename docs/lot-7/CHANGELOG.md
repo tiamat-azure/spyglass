@@ -1492,6 +1492,19 @@ Ask-user **CLEAR**. Held: none.
 Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 **755 passed**, 1 skipped (62 files).
 
+## Pass-39 chunk5 (L7-284 … L7-285)
+
+- **L7-284:** Assisted-apply `realpathExisting` fails closed on a dangling
+  `scenario.json` symlink (no `join(realpath(parent), basename)` that
+  looks inside `--repo`). F-64 containment stays meaningful.
+- **L7-285:** `leftoverMatchesDescriptorOnlyApply` requires the same step
+  **order** (not only an index map), so a leftover that only reorders
+  steps does not `skipMutate`.
+
+Ask-user **CLEAR**. Held: none.
+
+Local: `pnpm lint` / `pnpm typecheck` / `pnpm test` counts after green.
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e
