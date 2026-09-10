@@ -2126,6 +2126,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
       expect(result.code).toBe('restore-failed');
       expect(result.reason).toMatch(/refusing to discard uncommitted changes: extra\.txt/);
     }
+    const leftover = (
+      await execFileAsync('git', ['branch', '--list', 'spyglass/patch-*'], { cwd: dir })
+    ).stdout;
+    expect(leftover).toMatch(/spyglass\/patch-/);
     const src = await readFile(new URL('./assisted-apply.ts', import.meta.url), 'utf8');
     const restoreFn = sourceBetween(
       src,
@@ -2135,6 +2139,10 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(restoreFn).not.toContain("'-f'");
     expect(restoreFn).toContain("['reset', 'HEAD', '--', file]");
     expect(restoreFn).toContain("['checkout', target]");
+    const deleteIdx = restoreFn.indexOf("['branch', '-D', danglingPatchBranch]");
+    expect(deleteIdx).toBeGreaterThan(-1);
+    expect(restoreFn.indexOf('return revertError')).toBeGreaterThan(-1);
+    expect(restoreFn.indexOf('return revertError')).toBeLessThan(deleteIdx);
   });
 
   it('unstages scenario.json on restore after a failed commit (L7-184)', async () => {
@@ -2456,6 +2464,17 @@ describe('Lot 7 F-64 assisted git/PR path', { timeout: GIT_TEST_MS }, () => {
     expect(missingIdx).toBeGreaterThan(-1);
     expect(applyIdx).toBeGreaterThan(missingIdx);
     expect(fn).not.toMatch(/if \(sessionDir === undefined\) \{\s*return \{\};/);
+    expect(fn).toContain('healthWriteError');
+    expect(fn).toContain('result.assistedApply = assisted');
+    const applyAssign = fn.lastIndexOf('result.assistedApply = assisted');
+    const healthSave = fn.indexOf('await saveHealth(sessionDir, assisted.health)');
+    expect(applyAssign).toBeGreaterThan(-1);
+    expect(healthSave).toBeGreaterThan(applyAssign);
+    expect(fn.slice(applyAssign, healthSave)).toContain('try {');
+    expect(fn.indexOf('healthWriteError', applyAssign)).toBeGreaterThan(healthSave);
+    expect(fn.indexOf('healthWriteError', applyAssign)).toBeLessThan(
+      fn.indexOf('} catch (error)', applyAssign)
+    );
   });
 
   it('refuses processSuggestedPatch when scenarioPath is outside --repo (S28b)', async () => {

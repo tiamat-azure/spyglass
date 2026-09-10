@@ -338,6 +338,10 @@ describe('Lot 7 F-48 parameterization', () => {
       fn.indexOf('await rename(tmp, recordedPath)')
     );
     expect(fn).not.toMatch(/writeFile\(\s*recordedPath/);
+    expect(fn).toContain('destRemoved');
+    expect(fn).toContain('await rename(tmp, recordedPath).catch(() => undefined)');
+    expect(fn.indexOf('destRemoved = true')).toBeLessThan(fn.indexOf('} catch (error)'));
+    expect(fn.indexOf('if (destRemoved)')).toBeGreaterThan(fn.indexOf('} catch (error)'));
     const dir = await tempDir('spyglass-lot7-l7226-');
     const extracted = extractScenarioParameters(loginScenario('alice', 's3cret'));
     const paths = await writeGeneratedDatasets(dir, extracted.dataset);
@@ -881,8 +885,10 @@ describe('Lot 7 F-48 parameterization', () => {
   });
 
   it('redacts recovery snapshots with the combined before+after secret set (L7-257)', async () => {
-    const secret = 'live-only-after';
-    const step = fillStep(0, '#password', secret, 'password');
+    const beforeSecret = 'before-only-secret';
+    const afterSecret = 'after-only-secret';
+    const recordedArg = 'recorded-fill-arg';
+    const step = fillStep(0, '#password', recordedArg, 'password');
     step.verification.expected = '#gone';
     step.verification.timeoutMs = 40;
     const captured: Array<{ before: string; after: string }> = [];
@@ -897,12 +903,25 @@ describe('Lot 7 F-48 parameterization', () => {
     };
     const driver = new MemoryPageDriver({
       url: 'https://exemple.test/login',
-      text: `token ${secret} in both snapshots`,
+      text: `token ${beforeSecret} ${afterSecret} in both snapshots`,
       elements: [
         { selector: '#password', visible: true, value: '' },
         { selector: '#gone', visible: false }
       ]
     });
+    let snapCount = 0;
+    driver.snapshot = async () => {
+      snapCount += 1;
+      const text = `token ${beforeSecret} ${afterSecret} in both snapshots`;
+      return {
+        url: driver.urlValue,
+        title: driver.titleValue,
+        text,
+        values: {
+          '#password': snapCount === 1 ? beforeSecret : afterSecret
+        }
+      };
+    };
     const result = await runScenario(
       {
         schemaVersion: 1,
@@ -921,10 +940,13 @@ describe('Lot 7 F-48 parameterization', () => {
     expect(result.exitCode).toBe(1);
     expect(captured.length).toBeGreaterThan(0);
     for (const snap of captured) {
-      expect(snap.before).not.toContain(secret);
-      expect(snap.after).not.toContain(secret);
+      expect(snap.before).not.toContain(beforeSecret);
+      expect(snap.before).not.toContain(afterSecret);
+      expect(snap.after).not.toContain(beforeSecret);
+      expect(snap.after).not.toContain(afterSecret);
     }
     const src = await readFile(new URL('./run.ts', import.meta.url), 'utf8');
+    expect(src).toContain('collectParameterSecrets(redactFrom, [input.beforeDom, afterDom])');
     const fn = sourceBetween(
       src,
       'function redactSnapshotForRecovery',
@@ -1385,6 +1407,7 @@ describe('Lot 7 F-48 parameterization', () => {
     );
     expect(result.exitCode).toBe(1);
     expect(driver.screenshotWrites).toEqual([]);
+    expect(paths.length).toBeGreaterThan(0);
     expect(paths.every((path) => path === undefined)).toBe(true);
     expect(result.report.steps[0]?.screenshotRef).toBeUndefined();
   });

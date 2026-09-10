@@ -6,6 +6,7 @@ import { parseWhisperTimeoutMs, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts
 import {
   createEngineFromEnv,
   createEngineFromEnvAsync,
+  requireSmallModelFile,
   resolveSttEngineName
 } from './resolve-engine.ts';
 import {
@@ -582,6 +583,28 @@ describe('Lot 7 STT small-engine fallback (L7-016)', () => {
 
   it('pins the known large-model SHA-256 (S4a)', () => {
     expect(STT_LARGE_SHA256).toMatch(/^[0-9a-f]{64}$/u);
+  });
+
+  it('uses regular-file checks in collectModelSelection / requireSmallModelFile (L7-268)', async () => {
+    const src = await readFile(new URL('./resolve-engine.ts', import.meta.url), 'utf8');
+    const collectStart = src.indexOf('function collectModelSelection');
+    const collectEnd = src.indexOf('function needsLargeFallbackMarker');
+    expect(collectStart).toBeGreaterThan(-1);
+    expect(collectEnd).toBeGreaterThan(collectStart);
+    const collect = src.slice(collectStart, collectEnd);
+    expect(collect).toContain('isExistingRegularFile');
+    expect(collect).not.toContain('existsSync');
+    const requireStart = src.indexOf('export function requireSmallModelFile');
+    expect(requireStart).toBeGreaterThan(-1);
+    const requireFn = src.slice(requireStart);
+    expect(requireFn).toContain('isExistingRegularFile');
+    expect(requireFn).not.toContain('existsSync');
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7268-'));
+    const smallPath = join(dir, STT_SMALL_MODEL_FILE);
+    await mkdir(smallPath, { recursive: true });
+    expect(() => requireSmallModelFile(smallPath, 'refused.bin')).toThrow(
+      /STT large-model fallback requires/
+    );
   });
 });
 

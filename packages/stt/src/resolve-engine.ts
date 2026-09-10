@@ -1,10 +1,10 @@
-import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { createMockEngine } from './mock-engine.ts';
 import { parseMockTranscripts, parseWhisperTimeoutMs, type SttEngineName } from './protocol.ts';
 import {
   chooseWhisperModel,
+  isExistingRegularFile,
   largeFallbackMarkerDirs,
   parseMaxLatencyMs,
   readLargeFallback,
@@ -144,10 +144,11 @@ function collectModelSelection(
 ): WhisperModelSelection {
   const largePath = join(modelDir, STT_LARGE_MODEL_FILE);
   const smallPath = join(modelDir, STT_SMALL_MODEL_FILE);
-  const smallOk = existsSync(smallPath);
+  const smallOk = isExistingRegularFile(smallPath);
   const explicit = env.STT_MODEL_PATH?.trim();
-  const explicitOk = explicit !== undefined && explicit.length > 0 && existsSync(explicit);
-  const largeOk = existsSync(largePath);
+  const explicitOk =
+    explicit !== undefined && explicit.length > 0 && isExistingRegularFile(explicit);
+  const largeOk = isExistingRegularFile(largePath);
   const explicitIsConventional =
     (smallOk && explicit !== undefined && sameResolvedPath(explicit, smallPath)) ||
     (largeOk && explicit !== undefined && sameResolvedPath(explicit, largePath));
@@ -247,7 +248,7 @@ function sameResolvedPath(left: string, right: string): boolean {
  * L7-016: large-model fallback must load `ggml-small-q5_1.bin`, never the large weights.
  */
 export function requireSmallModelFile(smallPath: string, refusedPath: string): string {
-  if (existsSync(smallPath) && basename(smallPath) === STT_SMALL_MODEL_FILE) {
+  if (isExistingRegularFile(smallPath) && basename(smallPath) === STT_SMALL_MODEL_FILE) {
     return smallPath;
   }
   throw new Error(

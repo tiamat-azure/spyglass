@@ -158,12 +158,20 @@ describe('packaged Observe', () => {
     expect(main).toContain('voiceBridge?.abort()');
     const voiceEditIdx = main.indexOf('IPC.voiceEdit');
     expect(voiceEditIdx).toBeGreaterThan(-1);
-    const voiceEditHandler = main.slice(voiceEditIdx, voiceEditIdx + 1400);
+    const voiceEditHandler = main.slice(voiceEditIdx, voiceEditIdx + 1800);
     expect(voiceEditHandler).toContain(
       '/* L7-022: upgrade bookkeeping must not fail voice-edit */'
     );
     expect(voiceEditHandler).toContain('[spyglass] STT upgrade bookkeeping failed:');
     expect(voiceEditHandler).toContain('console.error');
+    expect(voiceEditHandler).toContain('newlyProposed');
+    expect(voiceEditHandler).toContain('sttUpgradeDecideInFlight === 0');
+    expect(voiceEditHandler.indexOf('const before = store.snapshot(modelDir)')).toBeLessThan(
+      voiceEditHandler.indexOf('await store.recordCorrection()')
+    );
+    expect(voiceEditHandler.indexOf('await store.recordCorrection()')).toBeLessThan(
+      voiceEditHandler.indexOf('newlyProposed')
+    );
     const ws = readFileSync(join(appRoot, '../../packages/stt/src/ws-localhost.ts'), 'utf8');
     expect(ws).toContain('export function isLoopbackWsHost');
     expect(ws).not.toContain("startsWith('127.0.0.1')");
@@ -378,16 +386,21 @@ describe('packaged Observe', () => {
     expect(replaceCatch).toContain('throw error');
     expect(main).toContain("error: 'fallback-unreadable'");
     expect(main).toContain("error: 'store-unavailable'");
+    expect(main).toContain('sttUpgradeDecideInFlight');
+    expect(main).toContain('sttUpgradeDecideInFlight += 1');
     const decideFn = main.slice(main.indexOf('IPC.sttUpgradeDecide'));
     expect(decideFn).toContain('sttUpgradeFakeEnabled(process.env, app.isPackaged)');
     expect(decideFn).toContain('resolveSttLargeExpectedSha256(process.env, app.isPackaged)');
     expect(decideFn).toContain('enqueueSttUpgradeDecide');
     expect(decideFn).toContain('refusedPermanently');
     expect(decideFn).toContain("error: 'refused'");
-    expect(decideFn).toContain('largeModelPresent');
-    expect(decideFn.indexOf('largeModelPresent')).toBeLessThan(
+    expect(decideFn).toContain('existingVerifiedDownloadOk');
+    expect(decideFn).toContain('STT_LARGE_MIN_BYTES');
+    expect(decideFn).toContain('await rm(dest, { force: true })');
+    expect(decideFn.indexOf('existingVerifiedDownloadOk')).toBeLessThan(
       decideFn.indexOf('downloadUrlToFileAtomic')
     );
+    expect(decideFn).not.toContain('largeModelPresent');
     expect(decideFn).not.toContain("process.env.SPYGLASS_STT_UPGRADE_FAKE === '1'");
     expect(decideFn).not.toContain('process.env.STT_LARGE_SHA256');
     const upgradeStore = readFileSync(join(appRoot, 'src/main/stt-upgrade-store.ts'), 'utf8');

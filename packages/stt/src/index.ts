@@ -8,6 +8,7 @@ export { correlateVoiceSegment } from './correlate.ts';
 export {
   downloadResponseToFileAtomic,
   downloadUrlToFileAtomic,
+  existingVerifiedDownloadOk,
   STT_LARGE_DOWNLOAD_TIMEOUT_MS,
   STT_LARGE_MIN_BYTES,
   streamToFileAtomic,

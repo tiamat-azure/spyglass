@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -145,4 +145,31 @@ export async function downloadUrlToFileAtomic(input: {
 
 export async function fileSize(path: string): Promise<number> {
   return (await stat(path)).size;
+}
+
+/**
+ * L7-263: skip a large-model download only when dest is a regular file that
+ * meets the same minBytes + SHA-256 checks as a real download. Stubs and
+ * truncated files must be removed and re-fetched.
+ */
+export async function existingVerifiedDownloadOk(input: {
+  dest: string;
+  minBytes: number;
+  expectedSha256: string;
+}): Promise<boolean> {
+  const expected = input.expectedSha256.trim().toLowerCase();
+  if (expected.length === 0) {
+    return false;
+  }
+  try {
+    const st = await stat(input.dest);
+    if (!st.isFile() || st.size < input.minBytes) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  const hash = createHash('sha256');
+  await pipeline(createReadStream(input.dest), hash);
+  return hash.digest('hex') === expected;
 }

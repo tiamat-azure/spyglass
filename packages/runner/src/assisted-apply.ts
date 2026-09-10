@@ -800,6 +800,8 @@ async function restoreStartingBranch(
   }
   if (revertError !== undefined) {
     console.error(`[spyglass] failed to restore ${target}: ${revertError}`);
+    // L7-265: do not `git branch -D` while HEAD may still be on the patch branch.
+    return revertError;
   }
   if (danglingPatchBranch !== undefined && danglingPatchBranch.length > 0) {
     try {

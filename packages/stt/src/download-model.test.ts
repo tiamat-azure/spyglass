@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   downloadResponseToFileAtomic,
   downloadUrlToFileAtomic,
+  existingVerifiedDownloadOk,
   streamToFileAtomic,
   writeFileAtomic
 } from './download-model.ts';
@@ -43,6 +44,35 @@ describe('Lot 7 STT download atomic publish (L7-005)', () => {
       })
     ).rejects.toThrow(/digest mismatch/);
     await expect(readFile(dest)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('skips only when dest is a regular file with minBytes and SHA-256 (L7-263)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-stt-l7263-'));
+    const dest = join(dir, 'model.bin');
+    const payload = Buffer.from('verified-large-stub');
+    const sha256 = createHash('sha256').update(payload).digest('hex');
+    expect(await existingVerifiedDownloadOk({ dest, minBytes: 1, expectedSha256: sha256 })).toBe(
+      false
+    );
+    await writeFile(dest, payload);
+    expect(
+      await existingVerifiedDownloadOk({ dest, minBytes: payload.length, expectedSha256: sha256 })
+    ).toBe(true);
+    expect(
+      await existingVerifiedDownloadOk({
+        dest,
+        minBytes: payload.length + 1,
+        expectedSha256: sha256
+      })
+    ).toBe(false);
+    expect(
+      await existingVerifiedDownloadOk({
+        dest,
+        minBytes: 1,
+        expectedSha256: '00'.repeat(32)
+      })
+    ).toBe(false);
+    expect(await existingVerifiedDownloadOk({ dest, minBytes: 1, expectedSha256: '' })).toBe(false);
   });
 
   it('writeFileAtomic publishes without buffering callers', async () => {
@@ -275,8 +305,10 @@ describe('W3a fetch-whisper --large', () => {
     );
     expect(src).toContain("plat === 'win32'");
     expect(src).toContain(
-      "url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.5/whisper-bin-x64.zip'"
+      "url: 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-bin-x64.zip'"
     );
+    expect(src).toContain('v1.9.2/whisper-bin-ubuntu-');
+    expect(src).not.toContain('v1.7.5/whisper-bin-');
     const winStart = src.indexOf("if (plat === 'win32')");
     expect(winStart).toBeGreaterThan(-1);
     const winEnd = src.indexOf('return undefined;', winStart);
@@ -356,8 +388,8 @@ describe('W3a fetch-whisper --large', () => {
     );
     expect(src).toContain('STT_WHISPER_CLI_SHA256');
     expect(src).toContain("createHash('sha256')");
-    expect(src).toMatch(/'whisper-bin-x64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
-    expect(src).toMatch(/'whisper-bin-arm64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).toMatch(/'whisper-bin-ubuntu-x64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
+    expect(src).toMatch(/'whisper-bin-ubuntu-arm64\.tar\.gz:whisper-cli':\s*'[0-9a-f]{64}'/);
     expect(src).not.toMatch(/'whisper-bin-x64\.zip:whisper-cli':/);
     expect(src).toMatch(/'whisper-bin-x64\.zip:whisper-cli\.exe':\s*'[0-9a-f]{64}'/);
     const helpersStart = src.indexOf('function expectedCliSha256');

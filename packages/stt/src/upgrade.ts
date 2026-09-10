@@ -89,7 +89,7 @@ export function shouldProposeUpgrade(input: {
 }
 
 /** L7-261 / L7-245: a directory named like a model must not count as available. */
-function isExistingRegularFile(path: string): boolean {
+export function isExistingRegularFile(path: string): boolean {
   try {
     return statSync(path).isFile();
   } catch {

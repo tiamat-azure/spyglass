@@ -64,12 +64,12 @@ pas** (F-59). Parameterized fill/select via `datasets/*.json` and
 |---|---|
 | `pnpm lint` | pass (276 files) |
 | `pnpm typecheck` | pass (6 packages) |
-| `pnpm test` | **744 passed**, 1 skipped (62 files) |
+| `pnpm test` | **750 passed**, 1 skipped (62 files) |
 | `pnpm test:schemas` | 2 passed |
 | `pnpm test:e2e` | **17 passed** (includes `lot7-finition.spec.ts`) |
 
 Lot 7-focused unit tests: `lot7-patch.test.ts` (99), `patch-redact.test.ts` (20), `lot7-parameters.test.ts` (76),
-`upgrade.test.ts` (37), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
+`upgrade.test.ts` (38), `stt-upgrade-store.test.ts` (6), `stt-upgrade-policy.test.ts` (6).
 
 ### Screenshots (illustrative fixtures)
 
@@ -440,5 +440,12 @@ download. **D34a** locked (Darwin skips Unix `whisper-cli` ensure).
 **L36a-scrub** locked (patch-branch `scenario.json` is recorded/redacted,
 not live secrets). **L36b-bound** locked (`SECRET_NAME` token boundaries;
 `#shipping_address` / `#spinner` are not `pin`). **L36c-cancelled** locked
-(user stop is `cancelled`, not `failed` + exit 1). Ask-user queue
-**CLEAR** (D34a + L36a/b/c).
+(user stop is `cancelled`, not `failed` + exit 1). Pass-37 (L7-263 …
+L7-270): verified large skip before accept short-circuit; voice-edit
+offer only on newly-proposed and not while decide in flight; no
+`git branch -D` while restore failed; keep assisted-apply success when
+post-apply `saveHealth` fails; win32 recorded.json restore tmp after dest
+rm; regular-file model selection; v1.9.2 ubuntu/Windows CLI URLs;
+before-vs-after recovery secret coverage. Ask-user held: **L37a**
+(`STT_MODEL_DIR` / `resolveSttModelDir` sync). D34a + L36a/b/c stay
+locked.

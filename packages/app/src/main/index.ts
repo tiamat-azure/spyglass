@@ -1,11 +1,11 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
 import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
 import {
   downloadUrlToFileAtomic,
+  existingVerifiedDownloadOk,
   largeModelPath,
-  largeModelPresent,
   readLargeFallback,
   STT_LARGE_MIN_BYTES,
   STT_LARGE_MODEL_FILE,
@@ -298,13 +298,19 @@ async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
   }
 }
 
+/** L7-264: in-flight decide (accept download) — do not re-emit offer from voice-edit. */
+let sttUpgradeDecideInFlight = 0;
+
 function enqueueSttUpgradeDecide<T>(task: () => Promise<T>): Promise<T> {
+  sttUpgradeDecideInFlight += 1;
   const run = sttUpgradeDecideQueue.then(task, task);
   sttUpgradeDecideQueue = run.then(
     () => undefined,
     () => undefined
   );
-  return run;
+  return run.finally(() => {
+    sttUpgradeDecideInFlight -= 1;
+  });
 }
 
 function resolveSttModelDir(): string {
@@ -848,11 +854,13 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
     if (edited !== undefined) {
       try {
         const store = await ensureSttUpgradeStore();
-        await store.recordCorrection();
         const modelDir = resolveSttModelDir();
+        const before = store.snapshot(modelDir);
+        await store.recordCorrection();
         const snap = store.snapshot(modelDir);
+        const newlyProposed = snap.decision === 'propose' && before.decision !== 'propose';
         const win = winRef.current;
-        if (win !== undefined && snap.decision === 'propose') {
+        if (win !== undefined && newlyProposed && sttUpgradeDecideInFlight === 0) {
           emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
         }
       } catch (error) {
@@ -1112,14 +1120,22 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         return { ok: false, error: 'store-unavailable' };
       }
       const modelDir = resolveSttModelDir();
-      // L7-221: queued duplicate accepts / already-present large must not
-      // re-fetch ~575MB; gate beyond refusedPermanently only.
-      if (largeModelPresent(modelDir)) {
+      // L7-221 / L7-263: skip only a regular file that already meets the same
+      // minBytes + SHA-256 checks as a real large download. Stubs/truncated
+      // files are removed and the fetch continues. FAKE stays E18a-gated.
+      const dest = largeModelPath(modelDir);
+      const expectedSha256 = resolveSttLargeExpectedSha256(process.env, app.isPackaged);
+      const alreadyOk = await existingVerifiedDownloadOk({
+        dest,
+        minBytes: STT_LARGE_MIN_BYTES,
+        expectedSha256
+      });
+      if (alreadyOk) {
         return { ok: true };
       }
+      await rm(dest, { force: true }).catch(() => undefined);
       try {
         await mkdir(modelDir, { recursive: true });
-        const dest = largeModelPath(modelDir);
         if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
           await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
           return { ok: true };

@@ -56,9 +56,9 @@ const CLI_MIN_BYTES = 10_000;
  * is empty.
  */
 const CLI_SHA256 = {
-  'whisper-bin-x64.tar.gz:whisper-cli':
+  'whisper-bin-ubuntu-x64.tar.gz:whisper-cli':
     '61fa94d25ba9a4695118883011f35e8521c158145ec73bcd8805a7c11760e6d7',
-  'whisper-bin-arm64.tar.gz:whisper-cli':
+  'whisper-bin-ubuntu-arm64.tar.gz:whisper-cli':
     '00cf54e258e9c7560666e5ae7d16e01ee02210b9ee5e943172e7df5f2ece4c80',
   'whisper-bin-x64.zip:whisper-cli.exe':
     '95e3c0b0e778ad9499eb0125f97c1dcf437dd9eb4ea77050b043574f93c2631d'
@@ -69,7 +69,7 @@ function cliAsset() {
   const arch = process.arch;
   if (plat === 'linux' && (arch === 'x64' || arch === 'arm64')) {
     return {
-      url: `https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.5/whisper-bin-${arch === 'arm64' ? 'arm64' : 'x64'}.tar.gz`,
+      url: `https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-bin-ubuntu-${arch === 'arm64' ? 'arm64' : 'x64'}.tar.gz`,
       name: 'whisper-cli'
     };
   }
@@ -80,7 +80,7 @@ function cliAsset() {
   }
   if (plat === 'win32') {
     return {
-      url: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.5/whisper-bin-x64.zip',
+      url: 'https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-bin-x64.zip',
       name: 'whisper-cli.exe'
     };
   }

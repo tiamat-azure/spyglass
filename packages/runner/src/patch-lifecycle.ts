@@ -18,6 +18,7 @@ export type PatchLifecycleResult = {
   health?: ScenarioHealth;
   healthPath?: string;
   assistedApply?: AssistedApplyResult;
+  healthWriteError?: string;
 };
 
 /**
@@ -106,7 +107,13 @@ export async function processSuggestedPatch(input: {
     result.assistedApply = assisted;
     if (assisted.ok) {
       result.health = assisted.health;
-      result.healthPath = await saveHealth(sessionDir, assisted.health);
+      try {
+        result.healthPath = await saveHealth(sessionDir, assisted.health);
+      } catch (healthError) {
+        const message = healthError instanceof Error ? healthError.message : String(healthError);
+        result.healthWriteError = message;
+        console.error(`spyglass: saveHealth after assisted apply failed: ${message}`);
+      }
     }
   } catch (error) {
     result.assistedApply = {

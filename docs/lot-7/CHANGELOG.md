@@ -1391,6 +1391,37 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
 
 Ask-user still held: none.
 
+## Pass-37 adversarial fixes (L7-263 … L7-270)
+
+- **L7-263:** Accept skip requires the same minBytes + SHA-256 checks as
+  a real large download (`existingVerifiedDownloadOk`). Stub/truncated
+  files are removed and fetch continues. `SPYGLASS_STT_UPGRADE_FAKE`
+  stays E18a (test/unpackaged only).
+- **L7-264:** Successful voice-edit emits `sttUpgradeOffer` only on the
+  transition into `propose`, and not while an accept download is in
+  flight (`sttUpgradeDecideInFlight`).
+- **L7-265:** `restoreStartingBranch` does not `git branch -D` the
+  dangling patch branch when restore failed (HEAD may still be on it).
+- **L7-266:** `saveHealth` after a successful assisted apply is nested
+  try/catch; apply success is kept and the health-write error is
+  `healthWriteError` (not `assistedApply.ok: false`).
+- **L7-267:** win32 `recorded.json` restore: if dest was removed and
+  rename fails, restore tmp onto `recordedPath` instead of also
+  deleting tmp.
+- **L7-268:** `collectModelSelection` / `requireSmallModelFile` use
+  regular-file checks (L7-245), not bare `existsSync`.
+- **L7-269:** `cliAsset()` Linux/Windows URLs and `CLI_SHA256` keys
+  match ggml-org v1.9.2 `whisper-bin-ubuntu-*` / `whisper-bin-x64.zip`.
+  D34a Darwin skip unchanged.
+- **L7-270:** L7-257 proves beforeDom-only vs afterDom-only secrets
+  (not a combined vacuous case). S11a asserts `paths.length > 0`.
+
+Held (do not invent): **L7-P37 L37a** (`STT_MODEL_DIR` /
+`resolveSttModelDir` sync). Ask-user queue otherwise **CLEAR**.
+
+Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
+**750 passed**, 1 skipped (62 files).
+
 ## CI — macOS Electron e2e close hang
 
 - Shared `closeElectron()` (timeout then `SIGKILL`) for every Electron e2e

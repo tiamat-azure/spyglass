@@ -270,6 +270,7 @@ export async function writeGeneratedDatasets(
   // (including secrets). Write a temp file, chmod 0o600, then rename so an
   // existing world-readable dest is never overwritten in place.
   const tmp = `${recordedPath}.tmp-${randomBytes(8).toString('hex')}`;
+  let destRemoved = false;
   try {
     await writeFile(tmp, `${JSON.stringify(recorded, null, 2)}\n`, {
       encoding: 'utf8',
@@ -280,10 +281,17 @@ export async function writeGeneratedDatasets(
     }
     if (process.platform === 'win32') {
       await rm(recordedPath, { force: true });
+      destRemoved = true;
     }
     await rename(tmp, recordedPath);
   } catch (error) {
-    await rm(tmp, { force: true }).catch(() => undefined);
+    // L7-267: after win32 rm(dest), do not also delete tmp — restore onto
+    // recordedPath so plaintext secrets are not double-deleted.
+    if (destRemoved) {
+      await rename(tmp, recordedPath).catch(() => undefined);
+    } else {
+      await rm(tmp, { force: true }).catch(() => undefined);
+    }
     throw error;
   }
   if (process.platform !== 'win32') {
