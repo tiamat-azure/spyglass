@@ -1475,7 +1475,7 @@ Local: `pnpm lint` 276 files, `pnpm typecheck` 6 packages, `pnpm test`
   (45s) + `CLOSE_TIMEOUT_MS` (12s) + kill grace (2s) + margin, so a
   chrome miss can finish close/kill before the Playwright ceiling.
 - **L7-280:** `realpathExisting` still rethrows non-missing errors
-  (no bare catch / no catch-return). Behavior: EACCES is not mapped to
+  (no bare catch / no catch-return). Behavior: ELOOP is not mapped to
   session-exists.
 - **L7-281:** L7-064 symlink `meta.json` target is invalid for
   `readSessionMeta`, so `/import refused: symlinks/` is symlink policy

@@ -1,6 +1,5 @@
 import { spawnSync } from 'node:child_process';
 import {
-  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -1868,8 +1867,8 @@ describe('Lot 7 F-47 session export/import', () => {
     expect(missing).toContain("code === 'ENOTDIR'");
   });
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'does not swallow realpathExisting EACCES as session-exists (L7-280)',
+  it.skipIf(process.platform === 'win32')(
+    'does not swallow realpathExisting ELOOP as session-exists (L7-280)',
     async () => {
       const root = await tempDir('spyglass-lot7-l7280-');
       const sessionDir = join(root, 'ses_export');
@@ -1882,25 +1881,17 @@ describe('Lot 7 F-47 session export/import', () => {
       const bundle = join(root, 'bundle');
       await exportSessionFolder(sessionDir, bundle);
       const sessionsRoot = join(root, 'imported');
-      const blocked = join(sessionsRoot, 'ses_export');
-      await mkdir(blocked, { recursive: true });
-      await chmod(blocked, 0);
-      try {
-        await expect(importSessionFolder(bundle, sessionsRoot)).rejects.toSatisfy(
-          (err: unknown) => {
-            const code = (err as NodeJS.ErrnoException).code;
-            const message = err instanceof Error ? err.message : String(err);
-            return (
-              (code === 'EACCES' ||
-                code === 'EPERM' ||
-                /EACCES|EPERM|permission denied/i.test(message)) &&
-              !/session already exists/.test(message)
-            );
-          }
+      await mkdir(sessionsRoot, { recursive: true });
+      const destPath = join(sessionsRoot, 'ses_export');
+      await symlink(destPath, destPath);
+      await expect(importSessionFolder(bundle, sessionsRoot)).rejects.toSatisfy((err: unknown) => {
+        const code = (err as NodeJS.ErrnoException).code;
+        const message = err instanceof Error ? err.message : String(err);
+        return (
+          (code === 'ELOOP' || /ELOOP|too many symbolic links/i.test(message)) &&
+          !/session already exists/.test(message)
         );
-      } finally {
-        await chmod(blocked, 0o700).catch(() => undefined);
-      }
+      });
     }
   );
 
