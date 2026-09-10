@@ -44,7 +44,7 @@ publishing to the public registry is not part of Lot 0. Register the
 | `@spyglass/runner` | Deterministic replay library, thin generated script (`scenario.ts`), verification, bounded AI recovery, CLI `spyglass-run` / `spyglass-generate` (Lots 5–6, ADR-0006) |
 | `@spyglass/probe` | Injected DOM probe (frames + open shadow, mask, denoise, local replay descriptor) |
 | `@spyglass/contracts` | Types + ajv validation wired to `docs/contracts/schemas` |
-| `@spyglass/stt` | Local STT sidecar — mock engine in CI, whisper.cpp for packaged/dev (ADR-0013) |
+| `@spyglass/stt` | Local STT sidecar - whisper.cpp for packaged/dev, mock engine restricted to CI/tests (ADR-0013) |
 
 ## Prerequisites
 
@@ -339,9 +339,11 @@ enrichment, expurgation, token ceilings, F-29 settings.
 Implemented (Lot 3): hold-to-talk + VAD mic capture (F-30), streaming
 partial→final STT (F-31), temporal correlation in `raw.jsonl` (F-32), local
 whisper.cpp sidecar over **main-only** localhost WebSocket (ADR-0004/0005/0013),
-`AUDIO_RETENTION=none` by default (F-49). CI uses the mock engine when
-whisper binaries/models are absent (`SPYGLASS_STT_ENGINE=mock`). Fetch weights
-with `node scripts/fetch-whisper.mjs` for the real packaged/dev path.
+`AUDIO_RETENTION=none` by default (F-49). Install the local engine with
+`node scripts/fetch-whisper.mjs` (CLI + shared libraries + weights, ~200 MB in
+`vendor/whisper/`). The mock engine emits **canned transcripts** and is only
+selected under CI/tests or with an explicit `SPYGLASS_STT_ENGINE=mock`; without
+an engine, dictation refuses to start instead of faking a transcription.
 
 Implemented (Lot 4): refine sealed `raw.jsonl` into `refined/rev-N.json` (F-41,
 F-46) without mutating the journal (F-42). Each step is intent → action →

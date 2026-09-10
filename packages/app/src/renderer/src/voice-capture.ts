@@ -147,7 +147,8 @@ export function attachVoiceCapture(
     const result = await api.voice.start(mode);
     if (!result.ok) {
       options.liveEl.hidden = false;
-      options.liveEl.textContent = result.error ?? 'dictée indisponible';
+      options.liveEl.dataset.kind = 'voice.error';
+      options.liveEl.textContent = result.error ?? 'Dictée indisponible.';
       return false;
     }
     if (!stillLive()) {

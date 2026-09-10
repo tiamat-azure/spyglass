@@ -10,7 +10,11 @@ node scripts/fetch-whisper.mjs
 
 That writes:
 
-- `whisper-cli` (or `whisper-cli.exe`) — prebuilt whisper.cpp
-- `ggml-small-q5_1.bin` — quantized multilingual `small` (~190 MB)
+- `whisper-cli` (or `whisper-cli.exe`) - prebuilt whisper.cpp
+- the shared libraries it loads (`libwhisper.*`, `libggml*`), side by side
+- `ggml-small-q5_1.bin` - quantized multilingual `small` (~190 MB)
+
+Without them, dictation refuses to start with an explicit message: the mock
+engine emits canned transcripts and is never selected outside CI and tests.
 
 Weights are **not** committed. Licences: `docs/LICENSES-whisper.md`.

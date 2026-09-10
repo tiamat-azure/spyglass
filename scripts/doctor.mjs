@@ -98,6 +98,19 @@ function checkElectronSandbox() {
   ];
 }
 
+/**
+ * @returns {string[]} warning lines when the local whisper.cpp engine is absent
+ * (dictation then refuses to start instead of emitting canned transcripts).
+ */
+function checkWhisperEngine() {
+  const dir = join(root, 'vendor', 'whisper');
+  const bin = ['whisper-cli', 'whisper-cli.exe'].some((name) => existsSync(join(dir, name)));
+  const model = existsSync(join(dir, 'ggml-small-q5_1.bin'));
+  if (bin && model) return [];
+  const missing = [!bin && 'whisper-cli', !model && 'ggml-small-q5_1.bin'].filter(Boolean);
+  return [`vendor/whisper: missing ${missing.join(' and ')}`];
+}
+
 /** Applies the one-time root ownership the Electron SUID helper needs. */
 function applySandboxFix() {
   const sandbox = chromeSandboxPath();
@@ -125,6 +138,7 @@ if (fixSandbox) {
 
 const linkProblems = checkWorkspaceLinks();
 const sandboxProblems = depsOnly ? [] : checkElectronSandbox();
+const whisperWarnings = depsOnly ? [] : checkWhisperEngine();
 
 if (linkProblems.length > 0) {
   console.error('doctor: incomplete pnpm install — workspace links are missing:');
@@ -139,6 +153,12 @@ if (sandboxProblems.length > 0) {
   console.error('  pnpm fix:sandbox');
   console.error('\nOr run without the Chromium sandbox (development only, less secure):');
   console.error('  SPYGLASS_NO_SANDBOX=1 pnpm dev\n');
+}
+
+if (whisperWarnings.length > 0) {
+  console.warn('doctor: local dictation (STT) is unavailable (everything else still works):');
+  for (const line of whisperWarnings) console.warn(`  ${line}`);
+  console.warn('\nFix:\n  node scripts/fetch-whisper.mjs\n');
 }
 
 process.exit(linkProblems.length + sandboxProblems.length > 0 ? 1 : 0);

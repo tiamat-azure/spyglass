@@ -20,7 +20,7 @@ Règle : une exigence du PRD ne répète jamais une justification d'ADR, elle la
 | [0010](0010-popup-et-nouvel-onglet.md) | D-10 Popup et nouvel onglet | Redirection dans la page courante ; `loginRedirect` confirmé (2026-09-08) | Actée |
 | [0011](0011-retention-des-captures.md) | D-11 Rétention des captures | Tampon glissant | Actée |
 | [0012](0012-modele-narration-fast.md) | D-12 Modèle de narration | Fournisseur distant, Claude Haiku par défaut | Actée |
-| [0013](0013-moteur-transcription-whisper-cpp.md) | D-13 Moteur de transcription | `whisper.cpp`, modèle `small` quantifié embarqué | Actée |
+| [0013](0013-moteur-transcription-whisper-cpp.md) | D-13 Moteur de transcription | `whisper.cpp`, modèle `small` quantifié embarqué ; binaire macOS indisponible en amont (amendée 2026-09-10) | Actée |
 | [0014](0014-modele-raisonnement-smart.md) | D-14 Modèle de raisonnement | Claude Sonnet par défaut, multimodalité attendue | Actée |
 | [0015](0015-souverainete-des-donnees.md) | D-15 Souveraineté des données | Aucune contrainte en v1, révisable | Actée |
 | [0016](0016-plafonnement-en-tokens.md) | D-16 Unité de plafonnement | Le token, jamais la devise | Actée |

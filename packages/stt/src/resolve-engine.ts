@@ -7,6 +7,29 @@ import {
 } from './protocol.ts';
 import { createWhisperEngine, resolveWhisperPaths, whisperAvailable } from './whisper-engine.ts';
 
+/**
+ * The engine could not be built. Carries a stable `code` so the Electron main
+ * process can turn it into an end-user message instead of leaking a path list.
+ */
+export class SttEngineUnavailableError extends Error {
+  readonly code = 'stt-engine-unavailable';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SttEngineUnavailableError';
+  }
+}
+
+/**
+ * The mock engine emits canned transcripts. Reaching it from a real session
+ * would look like a working dictation while ignoring the microphone, so it is
+ * only ever selected when explicitly asked for (`SPYGLASS_STT_ENGINE=mock`) or
+ * under a test runner.
+ */
+export function mockEngineAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CI === 'true' || env.NODE_ENV === 'test' || env.VITEST !== undefined;
+}
+
 export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttEngineName {
   if (env.SPYGLASS_STT_ENGINE === 'mock') {
     return 'mock';
@@ -14,7 +37,20 @@ export function resolveSttEngineName(env: NodeJS.ProcessEnv = process.env): SttE
   if (env.SPYGLASS_STT_ENGINE === 'whisper') {
     return 'whisper';
   }
-  return whisperAvailable(env) ? 'whisper' : 'mock';
+  if (whisperAvailable(env)) {
+    return 'whisper';
+  }
+  return mockEngineAllowed(env) ? 'mock' : 'whisper';
+}
+
+/** Human-readable reason why dictation cannot start, or `undefined` when it can. */
+export function sttEngineUnavailableReason(
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  if (resolveSttEngineName(env) === 'mock' || whisperAvailable(env)) {
+    return undefined;
+  }
+  return 'whisper-cli and/or ggml-small-q5_1.bin are missing. Run `node scripts/fetch-whisper.mjs`, or set STT_BIN / STT_MODEL_PATH.';
 }
 
 export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEngine {
@@ -22,8 +58,8 @@ export function createEngineFromEnv(env: NodeJS.ProcessEnv = process.env): SttEn
   if (name === 'whisper') {
     const paths = resolveWhisperPaths(env);
     if (paths === undefined) {
-      throw new Error(
-        'STT_ENGINE=whisper but whisper-cli and/or ggml-small-q5_1.bin are missing. Run scripts/fetch-whisper.mjs or set STT_BIN / STT_MODEL_PATH.'
+      throw new SttEngineUnavailableError(
+        `Local STT engine unavailable: ${sttEngineUnavailableReason(env) ?? 'whisper binaries are missing.'}`
       );
     }
     const language =

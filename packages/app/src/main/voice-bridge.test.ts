@@ -1,7 +1,41 @@
-import { describe, expect, it } from 'vitest';
-import { VoiceBridge } from './voice-bridge.ts';
+import { tmpdir } from 'node:os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { VoiceBridge, voiceStartErrorMessage } from './voice-bridge.ts';
 
 describe('VoiceBridge', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('refuses to start with canned transcripts when whisper is missing', async () => {
+    // Engine resolution also probes `process.cwd()/vendor/whisper`, present on a
+    // machine that ran `scripts/fetch-whisper.mjs`: point it at an empty dir.
+    vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: () => undefined,
+        onLevel: () => undefined,
+        onError: () => undefined
+      },
+      { STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin', SPYGLASS_STT_IN_PROCESS: '1' }
+    );
+    try {
+      await expect(bridge.startCapture('hold')).rejects.toThrow(/Local STT engine unavailable/u);
+      expect(bridge.isCapturing()).toBe(false);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
+  it('maps a start failure to an actionable French message', () => {
+    const missing = new Error('Local STT engine unavailable: ...');
+    missing.name = 'SttEngineUnavailableError';
+    expect(voiceStartErrorMessage(missing)).toContain('moteur de transcription local absent');
+    expect(voiceStartErrorMessage(new Error('voice capture refused'))).toContain('aucune session');
+    expect(voiceStartErrorMessage('boom')).toContain('Dictée indisponible');
+  });
+
   it('relays PCM through the in-process mock engine and returns a final', async () => {
     const partials: string[] = [];
     const finals: string[] = [];

@@ -189,6 +189,40 @@ test.describe('Lot 3 voice', () => {
     }
   });
 
+  test('a missing local engine refuses dictation instead of faking transcripts', async () => {
+    test.setTimeout(120_000);
+    const env = await launchEnv({
+      // No engine at all: neither the mock opt-in nor whisper binaries.
+      SPYGLASS_STT_ENGINE: '',
+      CI: '',
+      STT_BIN: '/nonexistent/whisper-cli',
+      STT_MODEL_PATH: '/nonexistent/model.bin',
+      SPYGLASS_STT_RESOURCES: '/nonexistent/stt'
+    });
+    const electronApp = await electron.launch({
+      cwd: appDir,
+      args: ['--no-sandbox', '--no-zygote', appDir],
+      executablePath: bundledElectron,
+      timeout: 45_000,
+      env
+    });
+    try {
+      const chrome = await chromeWindow(electronApp);
+      await chrome.locator('#record-btn').click();
+      await expect(chrome.locator('#record-btn')).toHaveText(/Stop/i, { timeout: 15_000 });
+      await beginHoldMic(chrome);
+      const live = chrome.locator('#voice-live');
+      await expect(live).toHaveAttribute('data-kind', 'voice.error', { timeout: 15_000 });
+      await expect(live).toContainText(/moteur de transcription local absent/u);
+      await chrome.mouse.up();
+      await chrome.waitForTimeout(1_000);
+      // The canned mock phrases must never reach the journal.
+      await expect(chrome.locator('#log li.chat-msg[data-kind="voice.final"]')).toHaveCount(0);
+    } finally {
+      await closeElectron(electronApp);
+    }
+  });
+
   test('offline dictation works with the network cut', async () => {
     test.setTimeout(120_000);
     const env = await launchEnv({

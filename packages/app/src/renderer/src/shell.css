@@ -673,6 +673,13 @@ h1 {
   background: var(--sg-surface);
 }
 
+/* An unavailable engine must not read like a transcription in progress. */
+.voice-live[data-kind="voice.error"] {
+  border-color: var(--sg-danger);
+  border-style: solid;
+  color: var(--sg-danger);
+}
+
 .voice-relation {
   letter-spacing: var(--sg-tracking-caps);
   text-transform: uppercase;

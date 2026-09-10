@@ -203,7 +203,7 @@ describe('packaged Observe', () => {
     expect(bridge).toContain('beginStop');
     expect(bridge).toContain('this.stopping');
     expect(bridge).toContain('voice capture refused');
-    expect(main).toContain("error: 'voice capture refused'");
+    expect(main).toContain('error: voiceStartErrorMessage(');
     expect(main).toContain('onStopRolledBack');
     expect(main).toContain("state.state === 'recording'");
   });

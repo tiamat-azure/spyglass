@@ -13,7 +13,9 @@ import {
   type SidecarHandle,
   STT_SAMPLE_RATE,
   type SttEngineName,
+  SttEngineUnavailableError,
   startSidecarServer,
+  sttEngineUnavailableReason,
   type VadState,
   VOICE_FLUSH_MS,
   type VoiceMode
@@ -31,6 +33,21 @@ export type VoiceBridgeHandlers = {
   onLevel: (rms: number) => void;
   onError: (message: string) => void;
 };
+
+/**
+ * End-user text for a failed `voice.start`. The renderer prints it verbatim in
+ * the composer, so it stays French and actionable; the technical detail goes to
+ * the main-process log.
+ */
+export function voiceStartErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.name === 'SttEngineUnavailableError') {
+    return 'Dictée indisponible : moteur de transcription local absent (voir README).';
+  }
+  if (error instanceof Error && error.message === 'voice capture refused') {
+    return 'Dictée indisponible : aucune session d’enregistrement active.';
+  }
+  return 'Dictée indisponible : le moteur de transcription n’a pas démarré.';
+}
 
 export type VoiceBridgeStatus = {
   engine: SttEngineName;
@@ -221,6 +238,12 @@ export class VoiceBridge {
   }
 
   private async connect(): Promise<VoiceBridgeStatus> {
+    // Check before booting anything: a sidecar child that dies on a missing
+    // engine only surfaces as `STT sidecar exited 1`, which hides the cause.
+    const unavailable = sttEngineUnavailableReason(this.env);
+    if (unavailable !== undefined) {
+      throw new SttEngineUnavailableError(`Local STT engine unavailable: ${unavailable}`);
+    }
     await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
       this.inProcess = createInProcessStt(this.env);

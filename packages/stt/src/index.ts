@@ -1,6 +1,7 @@
 /**
- * Local STT sidecar (Lot 3). whisper.cpp is the packaged/dev engine (ADR-0013);
- * CI uses the mock engine when binaries/models are absent.
+ * Local STT sidecar (Lot 3). whisper.cpp is the packaged/dev engine (ADR-0013).
+ * The mock engine emits canned transcripts and is reserved for CI and tests:
+ * a real session fails loudly rather than faking a transcription.
  */
 export const STT_PACKAGE = '@spyglass/stt' as const;
 
@@ -33,7 +34,13 @@ export {
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-export { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
+export {
+  createEngineFromEnv,
+  mockEngineAllowed,
+  resolveSttEngineName,
+  SttEngineUnavailableError,
+  sttEngineUnavailableReason
+} from './resolve-engine.ts';
 export type { SidecarHandle } from './sidecar.ts';
 export { runSidecarMain, startSidecarServer } from './sidecar.ts';
 export type { VadState, VadUtteranceGate } from './vad.ts';

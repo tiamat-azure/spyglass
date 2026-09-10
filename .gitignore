@@ -19,7 +19,7 @@ test-results/
 packages/app/test-results/
 docs/lot-6/corpus-runs/
 docs/lot-6/screenshots/*.html
-vendor/whisper/*.bin
-vendor/whisper/whisper-cli
-vendor/whisper/whisper-cli.exe
+# whisper.cpp payload installed by scripts/fetch-whisper.mjs (never committed)
+vendor/whisper/*
+!vendor/whisper/README.md
 

@@ -56,7 +56,7 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
-import { VoiceBridge } from './voice-bridge.ts';
+import { VoiceBridge, voiceStartErrorMessage } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
 // Software rendering is needed where no GPU or compositor is reachable: CI,
@@ -706,7 +706,7 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
           engine: status.engine,
           model: status.model,
           fakeCapture: status.fakeCapture,
-          error: 'voice capture refused'
+          error: voiceStartErrorMessage(new Error('voice capture refused'))
         };
       }
       return {
@@ -717,13 +717,14 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
         fakeCapture: status.fakeCapture
       };
     } catch (error) {
+      console.error('[voice] start failed:', error instanceof Error ? error.message : error);
       return {
         ok: false,
         mode: payload.mode,
         engine: 'mock',
         model: 'mock-offline',
         fakeCapture: true,
-        error: error instanceof Error ? error.message : String(error)
+        error: voiceStartErrorMessage(error)
       };
     }
   });

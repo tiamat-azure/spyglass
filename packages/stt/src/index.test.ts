@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { correlateVoiceSegment } from './correlate.ts';
 import type { SttEngine } from './engine.ts';
 import { createInProcessStt } from './in-process.ts';
@@ -14,14 +14,34 @@ import {
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-import { resolveSttEngineName } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  mockEngineAllowed,
+  resolveSttEngineName,
+  SttEngineUnavailableError,
+  sttEngineUnavailableReason
+} from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
 import { createWhisperEngine, runWhisperCli, whisperAvailable } from './whisper-engine.ts';
 import { isLoopbackWsHost } from './ws-localhost.ts';
 
+/**
+ * Engine resolution also probes `process.cwd()/vendor/whisper`, which exists on
+ * a developer machine that ran `scripts/fetch-whisper.mjs`. Point the cwd at an
+ * empty directory so these assertions do not depend on the host.
+ */
+function noWhisperEnv(): NodeJS.ProcessEnv {
+  vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
+  return { STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' };
+}
+
 describe('@spyglass/stt', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('exports a ready sidecar (no longer a scaffold)', () => {
     expect(STT_PACKAGE).toBe('@spyglass/stt');
     expect(sidecarStatus()).toBe('ready');
@@ -33,10 +53,22 @@ describe('@spyglass/stt', () => {
     expect(parseMockTranscripts('alpha|beta')).toEqual(['alpha', 'beta']);
   });
 
-  it('auto-selects mock when whisper binaries are absent', () => {
-    expect(resolveSttEngineName({ SPYGLASS_STT_ENGINE: 'mock' })).toBe('mock');
-    expect(whisperAvailable({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe(false);
-    expect(resolveSttEngineName({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe('mock');
+  it('only selects the mock engine when asked for it or under a test runner', () => {
+    const missing = noWhisperEnv();
+    expect(whisperAvailable(missing)).toBe(false);
+    expect(resolveSttEngineName({ ...missing, SPYGLASS_STT_ENGINE: 'mock' })).toBe('mock');
+    expect(resolveSttEngineName({ ...missing, CI: 'true' })).toBe('mock');
+    // A real session must never silently get canned transcripts.
+    expect(resolveSttEngineName(missing)).toBe('whisper');
+    expect(mockEngineAllowed(missing)).toBe(false);
+  });
+
+  it('fails loudly instead of faking a transcription when whisper is missing', () => {
+    const missing = noWhisperEnv();
+    expect(sttEngineUnavailableReason(missing)).toContain('fetch-whisper');
+    expect(sttEngineUnavailableReason({ ...missing, SPYGLASS_STT_ENGINE: 'mock' })).toBeUndefined();
+    expect(() => createEngineFromEnv(missing)).toThrow(SttEngineUnavailableError);
+    expect(createEngineFromEnv({ ...missing, SPYGLASS_STT_ENGINE: 'mock' }).name).toBe('mock');
   });
 
   it('correlates dictation before and after a DOM step', () => {
