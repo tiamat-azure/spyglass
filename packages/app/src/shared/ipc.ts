@@ -1,4 +1,4 @@
-export const SHELL_LOT = '5' as const;
+export const SHELL_LOT = '7' as const;
 
 export const BROWSER_PARTITION = 'persist:spyglass-browser';
 
@@ -48,7 +48,14 @@ export const IPC = {
   refineGet: 'spyglass:refine:get',
   refineState: 'spyglass:refine:state',
   replayStart: 'spyglass:replay:start',
-  replayProgress: 'spyglass:replay:progress'
+  replayProgress: 'spyglass:replay:progress',
+  replayNext: 'spyglass:replay:next',
+  replayStop: 'spyglass:replay:stop',
+  sessionExport: 'spyglass:session:export',
+  sessionImport: 'spyglass:session:import',
+  sttUpgradeStatus: 'spyglass:stt:upgrade-status',
+  sttUpgradeOffer: 'spyglass:stt:upgrade-offer',
+  sttUpgradeDecide: 'spyglass:stt:upgrade-decide'
 } as const;
 
 export type NavState = {
@@ -408,17 +415,51 @@ export type RefineStatePayload = {
 export type ReplayStartRequest = {
   forceAi?: boolean;
   noAi?: boolean;
+  stepByStep?: boolean;
+  /** F-48 / R32b: dataset JSON for parameterized in-app replay. */
+  datasetPath?: string;
 };
 
 export type ReplayStartResponse =
-  | { ok: true; runId: string }
+  | { ok: true; runId: string; status?: 'cancelled' }
   | { ok: false; error: string; runId?: string };
+
+/** L7-170: next/stop must not report ok when no ReplayEngine is bound. */
+export type ReplayControlResponse = { ok: true } | { ok: false; error: string };
 
 export type ReplayProgressPayload = {
   runId: string;
   stepIndex: number;
-  status: 'running' | 'passed' | 'failed' | 'recovering';
+  status: 'running' | 'passed' | 'failed' | 'recovering' | 'cancelled';
   mode: 'script' | 'AI';
   attempt: number;
   message: string;
 };
+
+export type SessionExportRequest = Record<string, never>;
+
+export type SessionExportResponse =
+  | { ok: true; dest: string; sessionId: string }
+  | { ok: false; error: string };
+
+export type SessionImportRequest = Record<string, never>;
+
+export type SessionImportResponse =
+  | { ok: true; sessionId: string; sessionDir: string }
+  | { ok: false; error: string };
+
+export type SttUpgradeStatus = {
+  correctionCount: number;
+  refusedPermanently: boolean;
+  largeAvailable: boolean;
+  propose: boolean;
+  fallback: boolean;
+  error?: string;
+};
+
+export type SttUpgradeDecideRequest = {
+  action: 'accept' | 'refuse';
+};
+
+/** L7-205: `sttUpgrade.decide()` ok/error, matching main + renderer. */
+export type SttUpgradeDecideResponse = { ok: true } | { ok: false; error: string };

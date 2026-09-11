@@ -121,7 +121,7 @@
         "selectorStrategy": { "enum": ["testId", "role+name", "id", "text", "css", "xpath"] },
         "description": { "type": "string", "description": "Libellé ObserveResult-compatible (F-22)" },
         "fallbackSelectors": { "type": "array", "items": { "type": "string" } },
-        "arguments": { "type": "array", "items": { "type": "string" } },
+        "arguments": { "type": "array", "items": { "type": ["string", "null"] } },
         "framePath": { "type": "array", "items": { "type": "string" } },
         "shadowPath": { "type": "array", "items": { "type": "string" } }
       }

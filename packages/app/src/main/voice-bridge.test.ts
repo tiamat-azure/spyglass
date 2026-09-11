@@ -502,6 +502,28 @@ describe('VoiceBridge', () => {
     }
   });
 
+  it('maps in-process STT init failure to a structured connect error (L7-248)', async () => {
+    const bridge = new VoiceBridge(
+      {
+        onPartial: () => undefined,
+        onFinal: () => undefined,
+        onLevel: () => undefined,
+        onError: () => undefined
+      },
+      {
+        SPYGLASS_STT_ENGINE: 'whisper',
+        SPYGLASS_STT_IN_PROCESS: '1',
+        STT_MODEL_DIR: '/no-such-spyglass-stt-models',
+        STT_BIN: '/no-such-spyglass-whisper-cli'
+      }
+    );
+    try {
+      await expect(bridge.startCapture('hold')).rejects.toThrow(/STT in-process engine failed/);
+    } finally {
+      await bridge.dispose();
+    }
+  });
+
   it('stop-failure rollback clears the stopping latch so capture can arm again', async () => {
     const bridge = new VoiceBridge(
       {

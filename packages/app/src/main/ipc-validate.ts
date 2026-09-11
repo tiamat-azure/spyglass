@@ -1,3 +1,4 @@
+import { isSessionBundleError } from '@spyglass/runner';
 import type {
   BrowserBounds,
   ConfigSetRequest,
@@ -271,20 +272,37 @@ export function parseRefineEditPayload(input: unknown): RefineEditRequest | unde
   return result;
 }
 
-export function parseReplayStartPayload(input: unknown): ReplayStartRequest {
-  if (input === undefined || input === null) {
+export function parseReplayStartPayload(input: unknown): ReplayStartRequest | undefined {
+  // L7-247: omitted payload is `{}`; `null` is typeof object and must not
+  // coerce (that would TypeError on property access, or silently look valid).
+  if (input === undefined) {
     return {};
   }
-  if (typeof input !== 'object') {
-    return {};
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return undefined;
   }
-  const record = input as { forceAi?: unknown; noAi?: unknown };
+  const record = input as {
+    forceAi?: unknown;
+    noAi?: unknown;
+    stepByStep?: unknown;
+    datasetPath?: unknown;
+  };
   const result: ReplayStartRequest = {};
   if (record.forceAi === true) {
     result.forceAi = true;
   }
   if (record.noAi === true) {
     result.noAi = true;
+  }
+  if (record.stepByStep === true) {
+    result.stepByStep = true;
+  }
+  // R32b: do not silently drop datasetPath (L7-035). Empty/non-string is omitted.
+  if (typeof record.datasetPath === 'string') {
+    const datasetPath = record.datasetPath.trim();
+    if (datasetPath.length > 0) {
+      result.datasetPath = datasetPath;
+    }
   }
   return result;
 }
@@ -310,4 +328,55 @@ export function asPcmFrame(input: unknown, maxBytes = 65_536): Buffer | undefine
     return input;
   }
   return undefined;
+}
+
+export function parseSttUpgradeDecide(input: unknown): 'accept' | 'refuse' | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  const action = (input as { action?: unknown }).action;
+  return action === 'accept' || action === 'refuse' ? action : undefined;
+}
+
+/** L7-088: session export/import IPC returns stable codes, not absolute paths. */
+export function sessionBundleIpcError(
+  error: unknown,
+  fallback: 'export-failed' | 'import-failed'
+): string {
+  if (typeof error !== 'object' || error === null) {
+    return fallback;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  if (isSessionBundleError(error)) {
+    return error.bundleCode;
+  }
+  if (code === 'ENOENT') {
+    return 'not-found';
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message.includes('destination is not empty') ||
+    message.includes('destination already exists')
+  ) {
+    return 'dest-not-empty';
+  }
+  if (message.includes('destination is not a directory')) {
+    return 'dest-not-directory';
+  }
+  if (message.includes('session already exists')) {
+    return 'session-exists';
+  }
+  if (message.includes('invalid sessionId')) {
+    return 'invalid-session';
+  }
+  if (message.includes('must not be the source') || message.includes('must not overlap')) {
+    return 'overlap';
+  }
+  if (message.includes('symlinks are not allowed')) {
+    return 'symlink';
+  }
+  if (message.includes('missing sessionId')) {
+    return 'invalid-meta';
+  }
+  return fallback;
 }

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -76,7 +77,7 @@ async function latestRawJsonl(sessionsDir: string): Promise<string> {
 
 test.describe('Lot 1 capture', () => {
   test('Record/Stop UI, 10-action fixture, retract, and act() without LLM', async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(Math.max(180_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -250,7 +251,7 @@ test.describe('Lot 1 capture', () => {
         await chrome.screenshot({ path: join(shotDir, 'act-replay-success.png') });
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

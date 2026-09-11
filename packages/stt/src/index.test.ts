@@ -1,24 +1,38 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { correlateVoiceSegment } from './correlate.ts';
 import type { SttEngine } from './engine.ts';
-import { createInProcessStt } from './in-process.ts';
+import { createInProcessStt, createInProcessSttFromEnv } from './in-process.ts';
 import { STT_PACKAGE, sidecarStatus } from './index.ts';
 import { createMockEngine } from './mock-engine.ts';
 import {
   parseAudioRetention,
   parseClientMessage,
   parseMockTranscripts,
+  parseVoiceFlushMs,
+  parseWhisperTimeoutMs,
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-import { resolveSttEngineName } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 import { startSidecarServer } from './sidecar.ts';
 import { createVadState, frameDurationMs, gateVadUtterance, pcmRms, pushVad } from './vad.ts';
 import { pcm16ToWav } from './wav.ts';
-import { createWhisperEngine, runWhisperCli, whisperAvailable } from './whisper-engine.ts';
+import {
+  createWhisperEngine,
+  FIRST_USE_BACKOFF_MS,
+  isCancelledTranscription,
+  pickPreferredWhisperModel,
+  resolveWhisperPaths,
+  runWhisperCli,
+  whisperAvailable
+} from './whisper-engine.ts';
 import { isLoopbackWsHost } from './ws-localhost.ts';
 
 describe('@spyglass/stt', () => {
@@ -37,6 +51,212 @@ describe('@spyglass/stt', () => {
     expect(resolveSttEngineName({ SPYGLASS_STT_ENGINE: 'mock' })).toBe('mock');
     expect(whisperAvailable({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe(false);
     expect(resolveSttEngineName({ STT_BIN: '/nope', STT_MODEL_PATH: '/nope.bin' })).toBe('mock');
+  });
+
+  it('prefers large weights when small and large both exist under STT resources (L7-125)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7125-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    const paths = resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir });
+    expect(paths?.bin).toBe(bin);
+    expect(paths?.model).toBe(large);
+    const explicit = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_PATH: small
+    });
+    expect(explicit?.model).toBe(small);
+  });
+
+  it('keeps STT_MODEL_FILE when that file exists even if large is present (M18a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-m18a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    const viaFile = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_FILE: 'ggml-small-q5_1.bin'
+    });
+    expect(viaFile?.model).toBe(small);
+    const viaModel = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL: 'ggml-small-q5_1.bin'
+    });
+    expect(viaModel?.model).toBe(small);
+    const missing = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_FILE: 'does-not-exist.bin'
+    });
+    expect(missing?.model).toBe(large);
+  });
+
+  it('ignores a directory that shadows a model filename (L7-245)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7245-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(bin, 'stub');
+    await mkdir(small);
+    expect(
+      resolveWhisperPaths({
+        STT_BIN: bin,
+        STT_MODEL_DIR: dir,
+        SPYGLASS_STT_RESOURCES: dir
+      })
+    ).toBeUndefined();
+    expect(whisperAvailable({ STT_BIN: bin, STT_MODEL_DIR: dir })).toBe(false);
+  });
+
+  it('does not let large basename override an existing STT_MODEL_FILE (M18a)', () => {
+    const small = '/res/ggml-small-q5_1.bin';
+    const large = '/res/ggml-large-v3-turbo-q5_0.bin';
+    expect(
+      pickPreferredWhisperModel([small, large], { STT_MODEL_FILE: 'ggml-small-q5_1.bin' })
+    ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([large, small], { STT_MODEL_FILE: 'ggml-small-q5_1.bin' })
+    ).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], {})).toBe(large);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_PATH: small,
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin'
+      })
+    ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(small);
+    expect(
+      pickPreferredWhisperModel([large], {
+        STT_MODEL_FILE: 'ggml-large-v3-turbo-q5_0.bin',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBeUndefined();
+  });
+
+  it('does not prefer large by existence when large-fallback.json is set (F23b)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-f23b-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await writeFile(join(dir, 'large-fallback.json'), `${JSON.stringify({ fallback: true })}\n`);
+    const paths = resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir });
+    expect(paths?.model).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })).toBe(small);
+    const viaModelDir = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_DIR: dir
+    });
+    expect(viaModelDir?.model).toBe(small);
+    expect(pickPreferredWhisperModel([small, large], { STT_LARGE_FALLBACK: '1' })).toBe(small);
+    const otherDir = join(tmpdir(), `spyglass-whisper-f23b-dir-${String(Date.now())}`);
+    await mkdir(otherDir, { recursive: true });
+    await writeFile(
+      join(otherDir, 'large-fallback.json'),
+      `${JSON.stringify({ fallback: true })}\n`
+    );
+    expect(pickPreferredWhisperModel([small, large], { STT_MODEL_DIR: otherDir })).toBe(small);
+    expect(
+      pickPreferredWhisperModel([small, large], {
+        STT_MODEL_PATH: large,
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(small);
+    const custom = join(dir, 'custom-weights.bin');
+    await writeFile(custom, 'custom-weights');
+    expect(
+      pickPreferredWhisperModel([custom, large], {
+        STT_MODEL_PATH: custom,
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBe(custom);
+    const explicit = resolveWhisperPaths({
+      SPYGLASS_STT_RESOURCES: dir,
+      STT_MODEL_PATH: large
+    });
+    expect(explicit?.model).toBe(small);
+  });
+
+  it('treats unreadable large-fallback.json as no marker when picking paths (I26a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-i26a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = join(dir, 'whisper-cli');
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(bin, 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await mkdir(join(dir, 'large-fallback.json'));
+    expect(() => resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })).not.toThrow();
+    expect(resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })?.model).toBe(large);
+    expect(pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })).toBe(large);
+    const empty = join(tmpdir(), `spyglass-whisper-i26a-empty-${String(Date.now())}`);
+    await mkdir(empty, { recursive: true });
+    await mkdir(join(empty, 'large-fallback.json'));
+    expect(resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: empty })).toBeUndefined();
+  });
+
+  it('still fail-louds on corrupt large-fallback.json during path pick when large exists (F16b)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-i26a-corrupt-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const small = join(dir, 'ggml-small-q5_1.bin');
+    const large = join(dir, 'ggml-large-v3-turbo-q5_0.bin');
+    await writeFile(join(dir, 'whisper-cli'), 'stub');
+    await writeFile(small, 'small-weights');
+    await writeFile(large, 'large-weights');
+    await writeFile(join(dir, 'large-fallback.json'), '{not json');
+    expect(() => resolveWhisperPaths({ SPYGLASS_STT_RESOURCES: dir })).toThrow(
+      /corrupt large-fallback.json/
+    );
+    expect(() =>
+      pickPreferredWhisperModel([small, large], { SPYGLASS_STT_RESOURCES: dir })
+    ).toThrow(/corrupt large-fallback.json/);
+  });
+
+  it('does not fall back onto large when fallback is set and small is missing (L7-178)', () => {
+    const large = '/models/ggml-large-v3-turbo-q5_0.bin';
+    expect(pickPreferredWhisperModel([large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(
+      pickPreferredWhisperModel([large], {
+        STT_MODEL_DIR: '/models',
+        STT_LARGE_FALLBACK: '1'
+      })
+    ).toBeUndefined();
+  });
+
+  it('does not pick large despite skipLarge when no small exists (W31a)', async () => {
+    const large = '/models/ggml-large-v3-turbo-q5_0.bin';
+    const custom = '/models/custom-weights.bin';
+    expect(pickPreferredWhisperModel([large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(pickPreferredWhisperModel([large, large], { STT_LARGE_FALLBACK: '1' })).toBeUndefined();
+    expect(pickPreferredWhisperModel([custom, large], { STT_LARGE_FALLBACK: '1' })).toBe(custom);
+    const src = await readFile(new URL('./whisper-engine.ts', import.meta.url), 'utf8');
+    const pickStart = src.indexOf('export function pickPreferredWhisperModel');
+    const pickEnd = src.indexOf('export function whisperAvailable');
+    expect(pickStart).toBeGreaterThan(-1);
+    expect(pickEnd).toBeGreaterThan(pickStart);
+    const pickBody = src.slice(pickStart, pickEnd);
+    expect(pickBody).toContain('if (skipLarge)');
+    expect(pickBody.indexOf('if (skipLarge)')).toBeLessThan(
+      pickBody.indexOf('return nonLarge ?? existing[0]')
+    );
+    expect(pickBody).toMatch(/if \(skipLarge\) \{\s*return nonLarge;/);
+    expect(pickBody).not.toMatch(/if \(skipLarge\) \{\s*return nonLarge \?\? existing\[0\]/);
   });
 
   it('correlates dictation before and after a DOM step', () => {
@@ -168,8 +388,55 @@ describe('@spyglass/stt', () => {
     expect(isLoopbackWsHost('10.0.0.1')).toBe(false);
   });
 
-  it('in-process session streams a final without opening a socket', async () => {
+  it('createInProcessStt is synchronous and is not a Promise (A5b)', () => {
     const session = createInProcessStt(
+      { SPYGLASS_STT_ENGINE: 'mock' },
+      createMockEngine(['hors ligne'])
+    );
+    expect(session).not.toBeInstanceOf(Promise);
+    expect(typeof session.begin).toBe('function');
+    expect(typeof session.dispose).toBe('function');
+  });
+
+  it('throws when whisper is required without a provided engine (A5b)', () => {
+    expect(() => createInProcessStt({ SPYGLASS_STT_ENGINE: 'whisper' })).toThrow(
+      /createInProcessSttFromEnv/
+    );
+  });
+
+  it('createInProcessSttFromEnv loads a mock engine from env (A5b)', async () => {
+    const session = await createInProcessSttFromEnv({
+      SPYGLASS_STT_ENGINE: 'mock',
+      SPYGLASS_STT_MOCK_TRANSCRIPTS: 'hors ligne'
+    });
+    expect(session).not.toBeInstanceOf(Promise);
+    expect(session.engine).toBe('mock');
+    session.begin('u1', 1);
+    session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
+    const final = await session.end(2);
+    expect(final?.text).toBe('hors ligne');
+    session.dispose();
+  });
+
+  it('createEngineFromEnv is synchronous and is not a Promise (A17b)', () => {
+    const engine = createEngineFromEnv({
+      SPYGLASS_STT_ENGINE: 'mock',
+      SPYGLASS_STT_MOCK_TRANSCRIPTS: 'hors ligne'
+    });
+    expect(engine).not.toBeInstanceOf(Promise);
+    expect(engine.name).toBe('mock');
+    expect(engine.model).toBe('mock-offline');
+  });
+
+  it('createEngineFromEnvAsync returns a Promise (A17b)', async () => {
+    const pending = createEngineFromEnvAsync({ SPYGLASS_STT_ENGINE: 'mock' });
+    expect(pending).toBeInstanceOf(Promise);
+    const engine = await pending;
+    expect(engine.name).toBe('mock');
+  });
+
+  it('in-process session streams a final without opening a socket', async () => {
+    const session = await createInProcessStt(
       { SPYGLASS_STT_ENGINE: 'mock' },
       createMockEngine(['hors ligne'])
     );
@@ -186,6 +453,11 @@ describe('@spyglass/stt', () => {
   it('flush wait is at least the whisper timeout', () => {
     expect(WHISPER_TIMEOUT_MS_DEFAULT).toBe(8_000);
     expect(VOICE_FLUSH_MS).toBeGreaterThanOrEqual(WHISPER_TIMEOUT_MS_DEFAULT);
+    expect(parseVoiceFlushMs({})).toBe(VOICE_FLUSH_MS);
+    const oversized = { STT_WHISPER_TIMEOUT_MS: '40000' };
+    expect(parseWhisperTimeoutMs(oversized)).toBe(40_000);
+    expect(parseVoiceFlushMs(oversized)).toBe(42_000);
+    expect(parseVoiceFlushMs(oversized)).toBeGreaterThanOrEqual(parseWhisperTimeoutMs(oversized));
   });
 
   it('abort after end cancels that utterance’s in-flight finalize, not the whole engine', async () => {
@@ -213,7 +485,7 @@ describe('@spyglass/stt', () => {
         disposed = true;
       }
     };
-    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    const session = await createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
     session.begin('u1', 1);
     session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
     const ending = session.end(2);
@@ -248,7 +520,7 @@ describe('@spyglass/stt', () => {
         return id;
       }
     };
-    const session = createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
+    const session = await createInProcessStt({ SPYGLASS_STT_ENGINE: 'mock' }, engine);
     session.begin('u1', 1);
     session.pushPcm(Buffer.alloc(4000, 1), () => undefined);
     const ending = session.end(2);
@@ -460,6 +732,303 @@ describe('@spyglass/stt', () => {
       engine.begin('u2');
       engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
       await expect(first).resolves.toBe('transcription locale');
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('runs the first-use latency hook once when two finals overlap (L7-059)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-firstuse-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 150 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const first = engine.finalize('u1');
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      const second = engine.finalize('u2');
+      await Promise.all([first, second]);
+      expect(calls).toBe(1);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('retries first-use latency with the second call sample when the first hook fails (L7-097)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7097-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 80 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 40);
+          });
+          throw new Error('first-use persist failed');
+        }
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const first = engine.finalize('u1');
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      const second = engine.finalize('u2');
+      await Promise.all([first, second]);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 400);
+      });
+      expect(calls).toBe(2);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('retries first-use latency on a later finalize when the first persist failed without overlap (L7-097)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7097-seq-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new Error('first-use persist failed');
+        }
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await engine.finalize('u1');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await engine.finalize('u2');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      expect(calls).toBe(2);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('caps first-use latency hook retries when persist keeps failing (L7-108)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7108-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        throw new Error('persist failed');
+      }
+    });
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const id = `u${String(index)}`;
+        engine.begin(id);
+        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
+        await engine.finalize(id);
+      }
+      expect(calls).toBeGreaterThan(0);
+      expect(calls).toBeLessThanOrEqual(3);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('does not persist first-use latency during backoff after the second failed persist (L7-108)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7108-backoff-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+        throw new Error('persist failed');
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await engine.finalize('u1');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await engine.finalize('u2');
+      const waited = Date.now();
+      while (calls < 2 && Date.now() - waited < 1_000) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
+      expect(calls).toBe(2);
+      engine.begin('u3');
+      engine.pushPcm('u3', Buffer.alloc(6400, 3), () => undefined);
+      await engine.finalize('u3');
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      // First isolated failure does not back off (L7-097). The second starts
+      // backoff (FIRST_USE_BACKOFF_MS); the third is skipped while that
+      // window is open. Do not insert extra delay after the second persist —
+      // Windows stub spawn already consumes part of the window.
+      expect(calls).toBe(2);
+      expect(FIRST_USE_BACKOFF_MS).toBeGreaterThanOrEqual(2_000);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('does not note first-use latency on abort or cancellation (F8a)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-f8a-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 400 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => {
+        calls += 1;
+      }
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      engine.abort('u1');
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(calls).toBe(0);
+      engine.begin('u2');
+      engine.pushPcm('u2', Buffer.alloc(6400, 2), () => undefined);
+      await expect(engine.finalize('u2')).resolves.toBe('transcription locale');
+      expect(calls).toBe(1);
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('treats AbortError as cancellation (F8a)', () => {
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+    expect(isCancelledTranscription(abort)).toBe(true);
+    const ac = new AbortController();
+    ac.abort();
+    expect(isCancelledTranscription(new Error('killed'), ac.signal)).toBe(true);
+    expect(isCancelledTranscription(new Error('whisper.cpp exceeded 80 ms'))).toBe(false);
+  });
+
+  it('does not block transcribe on a hanging first-use latency hook (L7-081)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-hanghook-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 40 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: () => new Promise(() => undefined)
+    });
+    try {
+      engine.begin('u1');
+      engine.pushPcm('u1', Buffer.alloc(6400, 1), () => undefined);
+      const result = await Promise.race([
+        engine.finalize('u1'),
+        new Promise<string>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('transcribe blocked on onFirstUseLatency'));
+          }, 2000);
+        })
+      ]);
+      expect(result).toBe('transcription locale');
+    } finally {
+      engine.dispose?.();
+    }
+  });
+
+  it('keeps at most one queued first-use sample while persist hangs (L7-127)', async () => {
+    const dir = join(tmpdir(), `spyglass-whisper-l7127-${String(Date.now())}`);
+    await mkdir(dir, { recursive: true });
+    const bin = await writeWhisperCliStub(dir, { delayMs: 20 });
+    const model = join(dir, 'ggml-small-q5_1.bin');
+    await writeFile(model, 'fake-weights');
+    let calls = 0;
+    let failFirst: (() => void) | undefined;
+    const engine = createWhisperEngine({
+      bin,
+      model,
+      timeoutMs: 8_000,
+      onFirstUseLatency: async () => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise<void>((_, reject) => {
+            failFirst = () => {
+              reject(new Error('first-use persist hung then failed'));
+            };
+          });
+        }
+      }
+    });
+    try {
+      for (let index = 0; index < 8; index += 1) {
+        const id = `u${String(index)}`;
+        engine.begin(id);
+        engine.pushPcm(id, Buffer.alloc(6400, 1), () => undefined);
+        await engine.finalize(id);
+      }
+      expect(calls).toBe(1);
+      expect(failFirst).toBeDefined();
+      failFirst?.();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 200);
+      });
+      // In-flight hang plus one queued retry — not one hook per finalize.
+      expect(calls).toBe(2);
     } finally {
       engine.dispose?.();
     }

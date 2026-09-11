@@ -1,4 +1,4 @@
-export const SHELL_LOT = '5' as const;
+export const SHELL_LOT = '7' as const;
 
 export function formatShellTitle(): string {
   return 'Spyglass';

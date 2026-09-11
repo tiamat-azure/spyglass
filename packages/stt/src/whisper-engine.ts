@@ -1,10 +1,18 @@
 import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
-import { closeSync, existsSync, openSync, readSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { SttEngine } from './engine.ts';
 import { PARTIAL_WINDOW_MS, STT_SAMPLE_RATE, WHISPER_TIMEOUT_MS_DEFAULT } from './protocol.ts';
+import {
+  isLargeFallbackError,
+  isUnreadableLargeFallbackError,
+  largeFallbackMarkerDirs,
+  readLargeFallbackSync,
+  STT_LARGE_MODEL_FILE,
+  STT_SMALL_MODEL_FILE
+} from './upgrade.ts';
 import { pcm16ToWav } from './wav.ts';
 
 export type WhisperPaths = {
@@ -44,25 +52,52 @@ export function whisperCandidateBins(env: NodeJS.ProcessEnv = process.env): stri
   return candidates;
 }
 
+/** Basename from STT_MODEL_FILE / STT_MODEL. Large names are skipped in pick (L7-217). */
+function configuredSttModelFile(env: NodeJS.ProcessEnv): string | undefined {
+  const raw = env.STT_MODEL_FILE ?? env.STT_MODEL;
+  if (raw === undefined || raw.trim().length === 0) {
+    return undefined;
+  }
+  const name = raw.trim();
+  return name.endsWith('.bin') ? name : `${name}.bin`;
+}
+
+/** L7-245: a directory named like a model must not count as available. */
+function isExistingRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
 export function whisperCandidateModels(env: NodeJS.ProcessEnv = process.env): string[] {
-  const explicit = env.STT_MODEL_PATH;
-  const dir = env.STT_MODEL_DIR;
+  const explicit = env.STT_MODEL_PATH?.trim();
+  const dir = env.STT_MODEL_DIR?.trim();
   const resources = env.SPYGLASS_STT_RESOURCES;
-  const name = env.STT_MODEL ?? 'ggml-small-q5_1.bin';
-  const file = name.endsWith('.bin') ? name : `${name}.bin`;
+  const file = configuredSttModelFile(env) ?? STT_SMALL_MODEL_FILE;
   const candidates: string[] = [];
   if (explicit !== undefined && explicit.length > 0) {
     candidates.push(explicit);
   }
   if (dir !== undefined && dir.length > 0) {
-    candidates.push(join(dir, file), join(dir, 'ggml-small-q5_1.bin'));
+    candidates.push(
+      join(dir, file),
+      join(dir, STT_LARGE_MODEL_FILE),
+      join(dir, STT_SMALL_MODEL_FILE)
+    );
   }
   if (resources !== undefined && resources.length > 0) {
-    candidates.push(join(resources, file), join(resources, 'ggml-small-q5_1.bin'));
+    candidates.push(
+      join(resources, file),
+      join(resources, STT_LARGE_MODEL_FILE),
+      join(resources, STT_SMALL_MODEL_FILE)
+    );
   }
   candidates.push(
     join(process.cwd(), 'vendor/whisper', file),
-    join(process.cwd(), 'vendor/whisper/ggml-small-q5_1.bin')
+    join(process.cwd(), 'vendor/whisper', STT_LARGE_MODEL_FILE),
+    join(process.cwd(), 'vendor/whisper', STT_SMALL_MODEL_FILE)
   );
   return candidates;
 }
@@ -71,15 +106,132 @@ export function resolveWhisperPaths(
   env: NodeJS.ProcessEnv = process.env
 ): WhisperPaths | undefined {
   const bin = whisperCandidateBins(env).find((path) => existsSync(path));
-  const model = whisperCandidateModels(env).find((path) => existsSync(path));
+  const existing = whisperCandidateModels(env).filter((path) => isExistingRegularFile(path));
+  const model = pickPreferredWhisperModel(existing, env);
   if (bin === undefined || model === undefined) {
     return undefined;
   }
   return { bin, model };
 }
 
+/**
+ * L7-125: when small and large both exist under resources/vendor, prefer large.
+ * Explicit STT_MODEL_PATH still wins for custom/small files (M4a / P6a).
+ * L7-189: an explicit path to the conventional large file is skipped when
+ * permanent fallback is on. M18a: an existing
+ * STT_MODEL_FILE / STT_MODEL match is chosen before that large basename
+ * search. F23b / F-39: existence-only large preference honours
+ * `large-fallback.json` (and `STT_LARGE_FALLBACK=1`) so callers of
+ * {@link resolveWhisperPaths} cannot bypass permanent fallback-to-small.
+ */
+export function pickPreferredWhisperModel(
+  existing: string[],
+  env: NodeJS.ProcessEnv
+): string | undefined {
+  if (existing.length === 0) {
+    return undefined;
+  }
+  const skipByPath = new Map<string, boolean>();
+  const skipLargePath = (path: string): boolean => {
+    const cached = skipByPath.get(path);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const skip = preferSmallAfterLargeFallback(path, env);
+    skipByPath.set(path, skip);
+    return skip;
+  };
+  const explicit = env.STT_MODEL_PATH?.trim();
+  if (explicit !== undefined && explicit.length > 0) {
+    const hit = existing.find((path) => path === explicit);
+    if (hit !== undefined) {
+      // L7-189 / F-39 / F23b: explicit large is skipped when permanent fallback is on.
+      // Custom non-large STT_MODEL_PATH still wins (M4a / P6a).
+      const hitIsLarge = basename(hit) === STT_LARGE_MODEL_FILE;
+      if (!hitIsLarge || !skipLargePath(hit)) {
+        return hit;
+      }
+    }
+  }
+  const configured = configuredSttModelFile(env);
+  if (configured !== undefined) {
+    const configuredBase = basename(configured);
+    const hit = existing.find((path) => path === configured || basename(path) === configuredBase);
+    if (hit !== undefined) {
+      // L7-217: configured large basename must not bypass F-39 / F23b / F28b.
+      const hitIsLarge = basename(hit) === STT_LARGE_MODEL_FILE;
+      if (!hitIsLarge || !skipLargePath(hit)) {
+        return hit;
+      }
+    }
+  }
+  const large = existing.find((path) => basename(path) === STT_LARGE_MODEL_FILE);
+  const skipLarge = large !== undefined && skipLargePath(large);
+  if (large !== undefined && !skipLarge) {
+    return large;
+  }
+  const small = existing.find((path) => basename(path) === STT_SMALL_MODEL_FILE);
+  if (small !== undefined) {
+    return small;
+  }
+  const nonLarge = existing.find((path) => basename(path) !== STT_LARGE_MODEL_FILE);
+  // W31a / L7-178 / F-39 / F23b: skipLarge / prefer-small must not fall back
+  // onto large when small is missing. Only-large stays unavailable.
+  if (skipLarge) {
+    return nonLarge;
+  }
+  return nonLarge ?? existing[0];
+}
+
+/** F23b: skip L7-125 large preference when F-39 fallback-to-small is permanent. */
+function preferSmallAfterLargeFallback(largePath: string, env: NodeJS.ProcessEnv): boolean {
+  if (env.STT_LARGE_FALLBACK === '1') {
+    return true;
+  }
+  for (const dir of largeFallbackMarkerDirs(env, [largePath])) {
+    if (readFallbackMarkerForPathPick(dir)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * I26a: path picking treats non-corrupt marker I/O (EACCES/EISDIR/…) as no
+ * marker so {@link resolveWhisperPaths} can return undefined/paths instead of
+ * throwing. Corrupt JSON still throws; F16b fail-loud on unreadable stays in
+ * the engine factory when large is actually selected.
+ */
+function readFallbackMarkerForPathPick(dir: string): boolean {
+  try {
+    return readLargeFallbackSync(dir);
+  } catch (error) {
+    if (isUnreadableLargeFallbackError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 export function whisperAvailable(env: NodeJS.ProcessEnv = process.env): boolean {
-  return resolveWhisperPaths(env) !== undefined;
+  // L7-215: same model pick as resolveWhisperPaths — only-large + prefer-small
+  // must not report available. L7-176: a corrupt/unreadable marker still
+  // returns true so auto-select stays whisper and the factory fail-louds (F16b).
+  if (!whisperCandidateBins(env).some((path) => existsSync(path))) {
+    return false;
+  }
+  const existing = whisperCandidateModels(env).filter((path) => isExistingRegularFile(path));
+  if (existing.length === 0) {
+    return false;
+  }
+  try {
+    return pickPreferredWhisperModel(existing, env) !== undefined;
+  } catch (error) {
+    if (isLargeFallbackError(error)) {
+      return true;
+    }
+    throw error;
+  }
 }
 
 function parseWhisperText(stdout: string, txtFile?: string): string {
@@ -311,17 +463,73 @@ export async function runWhisperCli(options: {
   }
 }
 
+/** L7-108: cap first-use persist retries for the engine lifetime. */
+export const FIRST_USE_RETRY_LIMIT = 3;
+/**
+ * L7-108: after two failed persists, wait before another attempt.
+ * 250ms was shorter than Windows whisper-cli stub spawn, so a sequential
+ * third finalize always slipped through (CI: expected 2, received 3).
+ */
+export const FIRST_USE_BACKOFF_MS = 2_000;
+export const FIRST_USE_BACKOFF_MAX_MS = 8_000;
+
+/**
+ * L7-008: first-use latency persistence must not fail transcription.
+ * L7-043: returns false when the hook fails so firstUseNoted can retry.
+ */
+export async function notifyFirstUseLatency(
+  hook: ((latencyMs: number) => void | Promise<void>) | undefined,
+  latencyMs: number,
+  warnOnFinalFailure = false
+): Promise<boolean> {
+  if (hook === undefined) {
+    return true;
+  }
+  try {
+    await hook(latencyMs);
+    return true;
+  } catch (error) {
+    // L7-199: one-shot warning on the last failed persist attempt only.
+    if (warnOnFinalFailure) {
+      console.warn(
+        '[spyglass] first-use latency persist failed:',
+        error instanceof Error ? error.message : error
+      );
+    }
+    return false;
+  }
+}
+
+/** F8a: AbortError and AbortSignal cancellation are not first-use samples. */
+export function isCancelledTranscription(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted === true) {
+    return true;
+  }
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
+}
+
 export function createWhisperEngine(options: {
   bin: string;
   model: string;
   language?: string;
   timeoutMs?: number;
+  /** F-39: first completed (success or failure) large-model latency. F8a: not abort. */
+  onFirstUseLatency?: (latencyMs: number) => void | Promise<void>;
 }): SttEngine {
   const language = options.language ?? 'fr';
   const timeoutMs = options.timeoutMs ?? WHISPER_TIMEOUT_MS_DEFAULT;
   const open = new Map<string, Utterance>();
   const controllers = new Map<string, AbortController>();
   const jobs = new Set<WhisperJob>();
+  let firstUseNoted = false;
+  let firstUsePending: Promise<void> | undefined;
+  let firstUseQueuedSample: number | undefined;
+  let firstUseAttempts = 0;
+  let firstUseBackoffUntil = 0;
 
   const killJobs = (utteranceId?: string): void => {
     for (const job of [...jobs]) {
@@ -348,6 +556,71 @@ export function createWhisperEngine(options: {
     controllers.clear();
   };
 
+  const noteFirstUse = async (latencyMs: number): Promise<void> => {
+    const hook = options.onFirstUseLatency;
+    if (hook === undefined) {
+      return;
+    }
+    if (firstUseNoted || firstUseAttempts >= FIRST_USE_RETRY_LIMIT) {
+      return;
+    }
+    // L7-127: a hanging persist must not spawn an awaiter per finalize.
+    // Keep one queued sample; the in-flight noteFirstUse drains it.
+    if (firstUsePending !== undefined) {
+      firstUseQueuedSample = latencyMs;
+      return;
+    }
+    let sample = latencyMs;
+    let skipBackoff = false;
+    while (!firstUseNoted && firstUseAttempts < FIRST_USE_RETRY_LIMIT) {
+      if (!skipBackoff && Date.now() < firstUseBackoffUntil) {
+        return;
+      }
+      skipBackoff = false;
+      // L7-097: persist this call's sample; do not reuse the first latencyMs
+      // after joining a failed in-flight hook.
+      const pending = (async () => {
+        firstUseAttempts += 1;
+        const noted = await notifyFirstUseLatency(
+          hook,
+          sample,
+          firstUseAttempts >= FIRST_USE_RETRY_LIMIT
+        );
+        if (noted) {
+          firstUseNoted = true;
+          return;
+        }
+        // L7-097: do not back off after the first failed persist so a second
+        // finalize can still write its own sample when the two finals did not overlap.
+        if (firstUseAttempts >= 2) {
+          const delayMs = Math.min(
+            FIRST_USE_BACKOFF_MS * 2 ** (firstUseAttempts - 2),
+            FIRST_USE_BACKOFF_MAX_MS
+          );
+          firstUseBackoffUntil = Date.now() + delayMs;
+        }
+      })();
+      firstUsePending = pending;
+      try {
+        await pending;
+      } finally {
+        if (firstUsePending === pending) {
+          firstUsePending = undefined;
+        }
+      }
+      if (firstUseNoted) {
+        firstUseQueuedSample = undefined;
+        return;
+      }
+      if (firstUseQueuedSample === undefined) {
+        break;
+      }
+      sample = firstUseQueuedSample;
+      firstUseQueuedSample = undefined;
+      skipBackoff = true;
+    }
+  };
+
   const transcribe = async (utteranceId: string, pcm: Buffer): Promise<string> => {
     if (pcm.length < 3200) {
       return '';
@@ -356,8 +629,9 @@ export function createWhisperEngine(options: {
     const controller = new AbortController();
     controllers.set(utteranceId, controller);
     const wav = pcm16ToWav(pcm, STT_SAMPLE_RATE);
+    const started = performance.now();
     try {
-      return await runWhisperCli({
+      const text = await runWhisperCli({
         bin: options.bin,
         model: options.model,
         wav,
@@ -372,6 +646,16 @@ export function createWhisperEngine(options: {
           });
         }
       });
+      if (!controller.signal.aborted) {
+        // L7-081: do not block transcribe() on a hanging onFirstUseLatency hook.
+        void noteFirstUse(performance.now() - started);
+      }
+      return text;
+    } catch (error) {
+      if (!isCancelledTranscription(error, controller.signal)) {
+        void noteFirstUse(performance.now() - started);
+      }
+      throw error;
     } finally {
       controllers.delete(utteranceId);
     }

@@ -1,11 +1,15 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { RefinedStep } from '@spyglass/contracts';
 import { createMockTransport, LlmGateway } from '@spyglass/llm';
-import { MemoryPageDriver } from '@spyglass/runner';
+import { extractScenarioParameters, MemoryPageDriver } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
-import { loadFinalizedScenario, ReplayEngine } from './replay-engine.ts';
+import {
+  loadFinalizedScenario,
+  loadFinalizedScenarioWithPath,
+  ReplayEngine
+} from './replay-engine.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
 
 function clickStep(selector: string): RefinedStep {
@@ -101,6 +105,102 @@ describe('ReplayEngine', () => {
     });
     const refused = await engine.start();
     expect(refused.ok).toBe(false);
+  });
+
+  it('exposes the generated or revision path actually loaded (L7-118)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-l7118-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    const fromRev = await loadFinalizedScenarioWithPath(dir);
+    expect(fromRev.scenarioPath).toBe(join(dir, 'refined', 'rev-1.json'));
+    expect(fromRev.scenario.steps[0]?.action.descriptor.selector).toBe('#go');
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        startUrl: 'https://exemple.test/generated',
+        steps: [clickStep('#from-generated')]
+      }),
+      'utf8'
+    );
+    const fromGenerated = await loadFinalizedScenarioWithPath(dir);
+    expect(fromGenerated.scenarioPath).toBe(join(dir, 'generated', 'scenario.json'));
+    expect(fromGenerated.scenario.steps[0]?.action.descriptor.selector).toBe('#from-generated');
+  });
+
+  it('does not beginReplay when scenario load fails (B10b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-b10b-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    let begins = 0;
+    let ends = 0;
+    const session = {
+      snapshot: () => ({ state: 'finalized', since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        begins += 1;
+      },
+      endReplay: () => {
+        ends += 1;
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () => new MemoryPageDriver({ elements: [{ selector: '#go', visible: true }] }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = await engine.start({ noAi: true });
+    expect(started.ok).toBe(false);
+    if (!started.ok) {
+      expect(started.error).toMatch(/no finalized revision/);
+    }
+    expect(begins).toBe(0);
+    expect(ends).toBe(0);
   });
 
   it('ignores leftover generated unless the latest rev is finalized (G56a / L6-056)', async () => {
@@ -248,6 +348,108 @@ describe('ReplayEngine', () => {
     expect(state).toBe('finalized');
   });
 
+  it('applies replay-start datasetPath to parameterized fills (R32b)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-r32b-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await mkdir(join(dir, 'generated'), { recursive: true });
+    const extracted = extractScenarioParameters({
+      schemaVersion: 1,
+      sessionId: 'ses_r',
+      startUrl: 'https://exemple.test/login',
+      steps: [
+        {
+          index: 0,
+          intent: 'Je saisis',
+          action: {
+            type: 'fill',
+            descriptor: { type: 'fill', selector: '#user', arguments: ['alice'] }
+          },
+          verification: {
+            type: 'elementVisible',
+            expected: '#user',
+            strength: 'strong',
+            confirmedByUser: true
+          },
+          sourceEvents: ['evt_000001']
+        }
+      ]
+    });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/login' }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#go')]
+      }),
+      'utf8'
+    );
+    await writeFile(
+      join(dir, 'generated', 'scenario.json'),
+      `${JSON.stringify(extracted.scenario, null, 2)}\n`,
+      'utf8'
+    );
+    const datasetPath = join(dir, 'bob.json');
+    await writeFile(
+      datasetPath,
+      `${JSON.stringify({ schemaVersion: 1, name: 'bob', values: { user: 'bob' }, secrets: [] }, null, 2)}\n`,
+      'utf8'
+    );
+    let state = 'finalized';
+    const driver = new MemoryPageDriver({
+      url: 'https://exemple.test/login',
+      elements: [{ selector: '#user', visible: true, value: '' }]
+    });
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () => driver,
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = await engine.start({ noAi: true, datasetPath });
+    expect(started.ok).toBe(true);
+    expect(driver.fills.map((row) => row.value)).toEqual(['bob']);
+  });
+
   it('returns ok:false when the run exits non-zero (L5-ADV-04)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-'));
     await mkdir(join(dir, 'refined'), { recursive: true });
@@ -353,14 +555,18 @@ describe('ReplayEngine', () => {
     await expect(loadFinalizedScenario(dir)).rejects.toThrow(/invalid scenario/i);
 
     let state = 'finalized';
+    let begins = 0;
+    let ends = 0;
     const session = {
       snapshot: () => ({ state, since: 0 }),
       currentSessionDir: () => dir,
       currentSessionId: () => 'ses_r',
       beginReplay: () => {
+        begins += 1;
         state = 'replaying';
       },
       endReplay: () => {
+        ends += 1;
         state = 'finalized';
       }
     };
@@ -391,6 +597,8 @@ describe('ReplayEngine', () => {
       expect(started.error).toMatch(/invalid scenario/i);
     }
     expect(state).toBe('finalized');
+    expect(begins).toBe(0);
+    expect(ends).toBe(0);
   });
 
   it('picks the highest-numbered finalized rev when generated is missing (L6-022)', async () => {
@@ -513,5 +721,281 @@ describe('ReplayEngine', () => {
       'utf8'
     );
     await expect(loadFinalizedScenario(dir)).rejects.toThrow(/corrupt revision rev-2\.json/);
+  });
+
+  it('consumes next/stop issued before the step gate is installed (L7-004)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-pending-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    const second: RefinedStep = {
+      ...clickStep('#b'),
+      index: 1,
+      sourceEvents: ['evt_000002'],
+      verification: {
+        type: 'elementVisible',
+        expected: '#b',
+        strength: 'strong',
+        confirmedByUser: true
+      }
+    };
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#a'), second]
+      }),
+      'utf8'
+    );
+    let state = 'finalized';
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () =>
+        new MemoryPageDriver({
+          elements: [
+            { selector: '#a', visible: true },
+            { selector: '#b', visible: true }
+          ]
+        }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = engine.start({ noAi: true, stepByStep: true });
+    engine.next();
+    engine.next();
+    const result = await started;
+    expect(result.ok).toBe(true);
+
+    const stopped = engine.start({ noAi: true, stepByStep: true });
+    engine.next();
+    engine.stop();
+    const halted = await stopped;
+    expect(halted.ok).toBe(true);
+    if (halted.ok) {
+      expect(halted.status).toBe('cancelled');
+    }
+  });
+
+  it('does not orphan a prior stepGate waiter (L7-249)', async () => {
+    const src = await readFile(new URL('./replay-engine.ts', import.meta.url), 'utf8');
+    const start = src.indexOf('stepGate: {');
+    const end = src.indexOf('if (result.exitCode !== 0)');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const wait = src.slice(start, end);
+    expect(wait).toContain('at most one waiter');
+    expect(wait).toContain('this.waiting !== undefined');
+    expect(wait).toContain("this.waiting('stop')");
+  });
+
+  it('ignores idle stop/next so the next stepwise run is not aborted at step 0 (L7-021)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-idle-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    const second: RefinedStep = {
+      ...clickStep('#b'),
+      index: 1,
+      sourceEvents: ['evt_000002'],
+      verification: {
+        type: 'elementVisible',
+        expected: '#b',
+        strength: 'strong',
+        confirmedByUser: true
+      }
+    };
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#a'), second]
+      }),
+      'utf8'
+    );
+    let state = 'finalized';
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () =>
+        new MemoryPageDriver({
+          elements: [
+            { selector: '#a', visible: true },
+            { selector: '#b', visible: true }
+          ]
+        }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    engine.stop();
+    engine.next();
+    engine.next();
+    const started = engine.start({ noAi: true, stepByStep: true });
+    engine.next();
+    engine.next();
+    const result = await started;
+    expect(result.ok).toBe(true);
+  });
+
+  it('honours stop on a non-stepwise run instead of returning success (L7-192)', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'spyglass-replay-l7192-'));
+    await mkdir(join(dir, 'refined'), { recursive: true });
+    await writeFile(
+      join(dir, 'meta.json'),
+      JSON.stringify({ startUrl: 'https://exemple.test/start' }),
+      'utf8'
+    );
+    const second: RefinedStep = {
+      ...clickStep('#b'),
+      index: 1,
+      sourceEvents: ['evt_000002'],
+      verification: {
+        type: 'elementVisible',
+        expected: '#b',
+        strength: 'strong',
+        confirmedByUser: true
+      }
+    };
+    await writeFile(
+      join(dir, 'refined', 'rev-1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessionId: 'ses_r',
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        aggressiveness: 'balanced',
+        model: 'claude-sonnet-4-5-20250929',
+        status: 'finalized',
+        observeEnrichment: false,
+        estimatedTokens: 1,
+        actualTokens: 1,
+        source: 'smart',
+        steps: [clickStep('#a'), second]
+      }),
+      'utf8'
+    );
+    let state = 'finalized';
+    const session = {
+      snapshot: () => ({ state, since: 0 }),
+      currentSessionDir: () => dir,
+      currentSessionId: () => 'ses_r',
+      beginReplay: () => {
+        state = 'replaying';
+      },
+      endReplay: () => {
+        state = 'finalized';
+      }
+    };
+    const engine = new ReplayEngine({
+      session: () => session as unknown as SessionOrchestrator,
+      driver: () =>
+        new MemoryPageDriver({
+          elements: [
+            { selector: '#a', visible: true },
+            { selector: '#b', visible: true }
+          ]
+        }),
+      gateway: () =>
+        new LlmGateway({
+          transport: createMockTransport({ delayMs: 1 }),
+          profiles: () => ({
+            fast: { provider: 'x', model: 'x', baseUrl: '', apiKey: '', timeoutMs: 10 },
+            smart: {
+              provider: 'x',
+              model: 'claude-sonnet-4-5-20250929',
+              baseUrl: '',
+              apiKey: '',
+              timeoutMs: 10
+            }
+          })
+        }),
+      model: () => 'claude-sonnet-4-5-20250929',
+      env: { CI: '1' },
+      onProgress: () => undefined
+    });
+    const started = engine.start({ noAi: true });
+    engine.stop();
+    const halted = await started;
+    expect(halted.ok).toBe(true);
+    if (halted.ok) {
+      expect(halted.status).toBe('cancelled');
+    }
+    expect(state).toBe('finalized');
   });
 });

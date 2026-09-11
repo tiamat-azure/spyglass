@@ -15,12 +15,14 @@ import type {
   RefineRevisionView,
   RefineRunResponse,
   RefineStatePayload,
+  ReplayControlResponse,
   ReplayProgressPayload,
   ReplayStartResponse,
   SessionStatePayload,
   StagehandActResponse,
   StagehandCdpResponse,
   StagehandObserveResponse,
+  SttUpgradeDecideResponse,
   UsagePayload,
   VoiceFinalPayload,
   VoiceLevelPayload,
@@ -29,7 +31,7 @@ import type {
 } from '../shared/ipc.ts';
 
 export type SpyglassPreloadApi = {
-  lot: '5';
+  lot: '7';
   versions: {
     electron: string;
     chrome: string;
@@ -103,8 +105,35 @@ export type SpyglassPreloadApi = {
     onState: (callback: (payload: RefineStatePayload) => void) => () => void;
   };
   replay: {
-    start: (forceAi?: boolean, noAi?: boolean) => Promise<ReplayStartResponse>;
+    start: (
+      forceAi?: boolean,
+      noAi?: boolean,
+      stepByStep?: boolean,
+      datasetPath?: string
+    ) => Promise<ReplayStartResponse>;
+    next: () => Promise<ReplayControlResponse>;
+    stop: () => Promise<ReplayControlResponse>;
     onProgress: (callback: (payload: ReplayProgressPayload) => void) => () => void;
+  };
+  sessionBundle: {
+    exportSession: () => Promise<
+      { ok: true; dest: string; sessionId: string } | { ok: false; error: string }
+    >;
+    importSession: () => Promise<
+      { ok: true; sessionId: string; sessionDir: string } | { ok: false; error: string }
+    >;
+  };
+  sttUpgrade: {
+    status: () => Promise<{
+      correctionCount: number;
+      refusedPermanently: boolean;
+      largeAvailable: boolean;
+      propose: boolean;
+      fallback: boolean;
+      error?: string;
+    }>;
+    decide: (action: 'accept' | 'refuse') => Promise<SttUpgradeDecideResponse>;
+    onOffer: (callback: (payload: { propose: boolean }) => void) => () => void;
   };
 };
 

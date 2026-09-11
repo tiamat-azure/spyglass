@@ -55,10 +55,12 @@ describe('screenshotFormatForPath (L6-018)', () => {
     };
     const driver = new PlaywrightPageDriver(page as unknown as Page, undefined);
     await driver.screenshot('/tmp/evidence.png');
+    await driver.screenshot({ path: '/tmp/headed-run.png' });
     await driver.screenshot('/tmp/step-1-fail.jpg');
     expect(calls[0]).toMatchObject({ path: '/tmp/evidence.png', type: 'png', fullPage: false });
     expect(calls[0]).not.toHaveProperty('quality');
-    expect(calls[1]).toMatchObject({
+    expect(calls[1]).toMatchObject({ path: '/tmp/headed-run.png', type: 'png', fullPage: false });
+    expect(calls[2]).toMatchObject({
       path: '/tmp/step-1-fail.jpg',
       type: 'jpeg',
       quality: 80,

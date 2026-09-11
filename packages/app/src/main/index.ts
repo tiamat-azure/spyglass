@@ -1,7 +1,19 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { toObserveResult } from '@spyglass/probe';
-import { app, BrowserWindow, ipcMain, type Session, type WebContents } from 'electron';
+import { exportSessionFolder, importSessionFolder } from '@spyglass/runner';
+import {
+  downloadUrlToFileAtomic,
+  existingVerifiedDownloadOk,
+  largeModelPath,
+  readLargeFallback,
+  STT_LARGE_MIN_BYTES,
+  STT_LARGE_MODEL_FILE,
+  STT_LARGE_MODEL_URL,
+  sttLargeDownloadTimeoutMs,
+  writeFileAtomic
+} from '@spyglass/stt';
+import { app, BrowserWindow, dialog, ipcMain, type Session, type WebContents } from 'electron';
 import type {
   NavState,
   PopupRedirectedPayload,
@@ -43,8 +55,10 @@ import {
   parseReplayStartPayload,
   parseRetractPayload,
   parseSessionStartPayload,
+  parseSttUpgradeDecide,
   parseVoiceEditPayload,
-  parseVoiceStartPayload
+  parseVoiceStartPayload,
+  sessionBundleIpcError
 } from './ipc-validate.ts';
 import { clampBrowserBoundsToChrome, fallbackBrowserBounds, roundBrowserBounds } from './layout.ts';
 import { isLlmOffline } from './llm-transport.ts';
@@ -56,6 +70,12 @@ import { SessionOrchestrator, sessionsDirFromEnv } from './session-orchestrator.
 import { emptyConfig } from './settings-store.ts';
 import { runStagehandAct } from './stagehand-act.ts';
 import { runStagehandObserve } from './stagehand-bridge.ts';
+import {
+  publishResolvedSttModelDir,
+  resolveSttLargeExpectedSha256,
+  sttUpgradeFakeEnabled
+} from './stt-upgrade-policy.ts';
+import { SttUpgradeStore, sttUpgradeStorePath } from './stt-upgrade-store.ts';
 import { VoiceBridge } from './voice-bridge.ts';
 import { installWebContentsSecurityDefaults } from './web-security-install.ts';
 
@@ -101,6 +121,10 @@ let observerRuntime: ObserverRuntime | undefined;
 let activeRefine: RefineEngine | undefined;
 let activeReplay: ReplayEngine | undefined;
 let voiceBridge: VoiceBridge | undefined;
+let sttUpgradeStore: SttUpgradeStore | undefined;
+let sttUpgradeStoreLoading: Promise<SttUpgradeStore> | undefined;
+/** L7-165: serialize accept/refuse so a concurrent accept cannot start a large download after refuse. */
+let sttUpgradeDecideQueue: Promise<unknown> = Promise.resolve();
 let ipcRegistered = false;
 let pinnedChromeTargetId: string | undefined;
 const netCompletedBound = new WeakSet<Session>();
@@ -274,6 +298,69 @@ function createWindow(): BrowserWindow {
       sandbox: true
     }
   });
+}
+
+async function ensureSttUpgradeStore(): Promise<SttUpgradeStore> {
+  if (sttUpgradeStore !== undefined) {
+    return sttUpgradeStore;
+  }
+  if (sttUpgradeStoreLoading === undefined) {
+    sttUpgradeStoreLoading = (async () => {
+      const store = new SttUpgradeStore(sttUpgradeStorePath(app.getPath('userData')), process.env);
+      await store.load();
+      sttUpgradeStore = store;
+      return store;
+    })();
+  }
+  try {
+    return await sttUpgradeStoreLoading;
+  } catch (error) {
+    sttUpgradeStoreLoading = undefined;
+    throw error;
+  }
+}
+
+/** L7-264: in-flight decide (accept download) — do not re-emit offer from voice-edit. */
+let sttUpgradeDecideInFlight = 0;
+
+function enqueueSttUpgradeDecide<T>(task: () => Promise<T>): Promise<T> {
+  sttUpgradeDecideInFlight += 1;
+  const run = sttUpgradeDecideQueue.then(task, task);
+  sttUpgradeDecideQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run.finally(() => {
+    sttUpgradeDecideInFlight -= 1;
+  });
+}
+
+function resolveSttModelDir(): string {
+  return publishResolvedSttModelDir(process.env, join(app.getPath('userData'), 'whisper'));
+}
+
+async function pickSessionDirectory(
+  win: BrowserWindow | undefined,
+  title: string,
+  allowCreate: boolean
+): Promise<string | undefined> {
+  const properties: Array<'openDirectory' | 'createDirectory'> = ['openDirectory'];
+  if (allowCreate) {
+    properties.push('createDirectory');
+  }
+  const options = {
+    title,
+    properties
+  };
+  const picked =
+    win !== undefined && !win.isDestroyed()
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+  if (picked.canceled) {
+    return undefined;
+  }
+  const path = picked.filePaths[0];
+  return path !== undefined && path.length > 0 ? path : undefined;
 }
 
 function emitToChrome(win: BrowserWindow, channel: string, payload: unknown): void {
@@ -782,6 +869,27 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: false };
     }
     const edited = await requireSession().recordVoiceEdited(payload.eventId, payload.text);
+    if (edited !== undefined) {
+      try {
+        const store = await ensureSttUpgradeStore();
+        const modelDir = resolveSttModelDir();
+        const before = store.snapshot(modelDir);
+        await store.recordCorrection();
+        const snap = store.snapshot(modelDir);
+        const newlyProposed = snap.decision === 'propose' && before.decision !== 'propose';
+        const win = winRef.current;
+        if (win !== undefined && newlyProposed && sttUpgradeDecideInFlight === 0) {
+          emitToChrome(win, IPC.sttUpgradeOffer, { propose: true });
+        }
+      } catch (error) {
+        /* L7-022: upgrade bookkeeping must not fail voice-edit */
+        /* L7-190: log/emit store failures instead of a silent discard */
+        console.error(
+          '[spyglass] STT upgrade bookkeeping failed:',
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
     return { ok: edited !== undefined };
   });
 
@@ -887,7 +995,185 @@ function registerIpc(cdpPort: number, winRef: { current: BrowserWindow | undefin
       return { ok: false, error: 'replay engine missing' };
     }
     const payload = parseReplayStartPayload(raw);
+    if (payload === undefined) {
+      return { ok: false, error: 'invalid payload' };
+    }
     return await activeReplay.start(payload);
+  });
+
+  ipcMain.handle(IPC.replayNext, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.replayNext)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    if (activeReplay === undefined) {
+      return { ok: false, error: 'inactive' };
+    }
+    try {
+      activeReplay.next();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(IPC.replayStop, (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.replayStop)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    if (activeReplay === undefined) {
+      return { ok: false, error: 'inactive' };
+    }
+    try {
+      activeReplay.stop();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle(IPC.sessionExport, async (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionExport)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const sessionDir = activeSession?.currentSessionDir();
+    if (sessionDir === undefined) {
+      return { ok: false, error: 'no session' };
+    }
+    const destDir = await pickSessionDirectory(winRef.current, 'Exporter la session', true);
+    if (destDir === undefined) {
+      return { ok: false, error: 'cancelled' };
+    }
+    try {
+      const exported = await exportSessionFolder(sessionDir, destDir);
+      return { ok: true, dest: exported.dest, sessionId: exported.sessionId };
+    } catch (error) {
+      return { ok: false, error: sessionBundleIpcError(error, 'export-failed') };
+    }
+  });
+
+  ipcMain.handle(IPC.sessionImport, async (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.sessionImport)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const bundleDir = await pickSessionDirectory(winRef.current, 'Importer une session', false);
+    if (bundleDir === undefined) {
+      return { ok: false, error: 'cancelled' };
+    }
+    try {
+      const imported = await importSessionFolder(
+        bundleDir,
+        sessionsDirFromEnv(app.getPath('userData'))
+      );
+      return { ok: true, sessionId: imported.sessionId, sessionDir: imported.sessionDir };
+    } catch (error) {
+      return { ok: false, error: sessionBundleIpcError(error, 'import-failed') };
+    }
+  });
+
+  ipcMain.handle(IPC.sttUpgradeStatus, async (event) => {
+    if (rejectForeignIpc(event, winRef, IPC.sttUpgradeStatus)) {
+      return {
+        correctionCount: 0,
+        refusedPermanently: false,
+        largeAvailable: false,
+        propose: false,
+        fallback: false
+      };
+    }
+    try {
+      const store = await ensureSttUpgradeStore();
+      const modelDir = resolveSttModelDir();
+      const snap = store.snapshot(modelDir);
+      try {
+        const fallback = await readLargeFallback(modelDir);
+        return {
+          correctionCount: snap.correctionCount,
+          refusedPermanently: snap.refusedPermanently,
+          largeAvailable: snap.largeAvailable,
+          propose: snap.decision === 'propose',
+          fallback
+        };
+      } catch {
+        return {
+          correctionCount: snap.correctionCount,
+          refusedPermanently: snap.refusedPermanently,
+          largeAvailable: snap.largeAvailable,
+          propose: snap.decision === 'propose',
+          fallback: false,
+          error: 'fallback-unreadable'
+        };
+      }
+    } catch {
+      return {
+        correctionCount: 0,
+        refusedPermanently: false,
+        largeAvailable: false,
+        propose: false,
+        fallback: false,
+        error: 'store-unavailable'
+      };
+    }
+  });
+
+  ipcMain.handle(IPC.sttUpgradeDecide, async (event, raw: unknown) => {
+    if (rejectForeignIpc(event, winRef, IPC.sttUpgradeDecide)) {
+      return { ok: false, error: 'forbidden' };
+    }
+    const action = parseSttUpgradeDecide(raw);
+    if (action === undefined) {
+      return { ok: false, error: 'bad-request' };
+    }
+    return enqueueSttUpgradeDecide(async () => {
+      let store: SttUpgradeStore;
+      try {
+        store = await ensureSttUpgradeStore();
+        if (action === 'refuse') {
+          await store.refusePermanently();
+          return { ok: true };
+        }
+        if (store.snapshot(resolveSttModelDir()).refusedPermanently) {
+          return { ok: false, error: 'refused' };
+        }
+      } catch {
+        return { ok: false, error: 'store-unavailable' };
+      }
+      const modelDir = resolveSttModelDir();
+      // L7-221 / L7-263: skip only a regular file that already meets the same
+      // minBytes + SHA-256 checks as a real large download. Stubs/truncated
+      // files are removed and the fetch continues. FAKE stays E18a-gated.
+      // L7-271: hash/read of an existing dest stays inside this try so I/O
+      // failures become download-failed, not an unhandled rejection.
+      const dest = largeModelPath(modelDir);
+      const expectedSha256 = resolveSttLargeExpectedSha256(process.env, app.isPackaged);
+      try {
+        const alreadyOk = await existingVerifiedDownloadOk({
+          dest,
+          minBytes: STT_LARGE_MIN_BYTES,
+          expectedSha256
+        });
+        if (alreadyOk) {
+          return { ok: true };
+        }
+        await rm(dest, { force: true }).catch(() => undefined);
+        await mkdir(modelDir, { recursive: true });
+        if (sttUpgradeFakeEnabled(process.env, app.isPackaged)) {
+          await writeFileAtomic(dest, Buffer.from(`${STT_LARGE_MODEL_FILE}\n`));
+          return { ok: true };
+        }
+        await downloadUrlToFileAtomic({
+          dest,
+          url: STT_LARGE_MODEL_URL,
+          timeoutMs: sttLargeDownloadTimeoutMs(process.env),
+          expectedSha256: resolveSttLargeExpectedSha256(process.env, app.isPackaged),
+          minBytes: STT_LARGE_MIN_BYTES
+        });
+        return { ok: true };
+      } catch (error) {
+        const timedOut =
+          error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        return { ok: false, error: timedOut ? 'timeout' : 'download-failed' };
+      }
+    });
   });
 }
 
@@ -899,6 +1185,7 @@ void (async () => {
   }
 
   await app.whenReady();
+  resolveSttModelDir();
 
   const winRef: { current: BrowserWindow | undefined } = { current: undefined };
   registerIpc(cdpPort, winRef);
@@ -1017,6 +1304,7 @@ void (async () => {
     );
     activeSession.attachProbe();
     const sttEnv: NodeJS.ProcessEnv = { ...process.env };
+    sttEnv.STT_MODEL_DIR = resolveSttModelDir();
     if (sttEnv.SPYGLASS_STT_RESOURCES === undefined || sttEnv.SPYGLASS_STT_RESOURCES.length === 0) {
       sttEnv.SPYGLASS_STT_RESOURCES = app.isPackaged
         ? join(process.resourcesPath, 'stt')

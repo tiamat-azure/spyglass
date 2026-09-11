@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spyglassRunHelpText } from './help-text.ts';
 import { launchPlaywrightRun, resolveReportDir } from './launch.ts';
@@ -11,7 +11,13 @@ export async function runCli(
   argv: readonly string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env
 ): Promise<number> {
-  const parsed = parseRunnerArgv(argv, env);
+  let parsed: ReturnType<typeof parseRunnerArgv>;
+  try {
+    parsed = parseRunnerArgv(argv, env);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 2;
+  }
   if (parsed.help) {
     process.stdout.write(spyglassRunHelpText());
     return 0;
@@ -21,6 +27,19 @@ export async function runCli(
     return 2;
   }
   const scenarioPath = resolve(parsed.scenarioPath);
+  parsed.scenarioPath = scenarioPath;
+  if (parsed.repo !== undefined) {
+    parsed.repo = resolve(parsed.repo);
+  }
+  if (parsed.sessionDir !== undefined) {
+    parsed.sessionDir = resolve(parsed.sessionDir);
+  }
+  if (parsed.datasetPath !== undefined && parsed.datasetPath.length > 0) {
+    // D27a: relative --dataset from dirname(scenario.json), not process.cwd().
+    parsed.datasetPath = isAbsolute(parsed.datasetPath)
+      ? parsed.datasetPath
+      : resolve(dirname(scenarioPath), parsed.datasetPath);
+  }
   try {
     const scenario = await loadScenarioFile(scenarioPath);
     const runId = newRunId();

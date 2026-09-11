@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 /** @spyglass/app package root; `package.json` `"main"` is `./out/main/index.js`. */
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,6 +61,8 @@ async function guestWindow(
 
 test.describe('Lot 0 two-zone shell', () => {
   test('launches URL bar, chat pane, and WebContentsView', async () => {
+    // L7-292: chrome wait + close timeout + kill grace + launch margin.
+    test.setTimeout(ELECTRON_E2E_TEST_TIMEOUT_MS);
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -75,7 +78,7 @@ test.describe('Lot 0 two-zone shell', () => {
 
       await expect(chrome).toHaveTitle(/Spyglass/);
       await expect(chrome.locator('h1')).toHaveText('Spyglass');
-      await expect(chrome.locator('.tagline')).toContainText('Lot 5');
+      await expect(chrome.locator('.tagline')).toContainText('Lot 7');
       await expect(chrome.locator('#url')).toBeVisible();
       await expect(chrome.locator('#back')).toBeVisible();
       await expect(chrome.locator('#forward')).toBeVisible();
@@ -87,7 +90,9 @@ test.describe('Lot 0 two-zone shell', () => {
       await expect(chrome.locator('#versions')).toContainText(/Electron/i);
       await expect(guest.locator('h1')).toHaveText('Spyglass start page');
 
-      await expect.poll(async () => chrome.locator('#url').inputValue()).toMatch(/start\.html/);
+      await expect
+        .poll(async () => chrome.locator('#url').inputValue(), { timeout: 20_000 })
+        .toMatch(/start\.html/);
 
       const shotDir = process.env.SPYGLASS_E2E_SCREENSHOT_DIR;
       if (shotDir !== undefined && shotDir.length > 0) {
@@ -99,11 +104,12 @@ test.describe('Lot 0 two-zone shell', () => {
         });
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
   test('manual navigation and popup redirect stay in one page', async () => {
+    test.setTimeout(ELECTRON_E2E_TEST_TIMEOUT_MS);
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -117,9 +123,14 @@ test.describe('Lot 0 two-zone shell', () => {
       const chrome = await chromeWindow(electronApp);
       const guest = await guestWindow(electronApp);
 
-      await guest.locator('#popup-link').click();
-      await expect(chrome.locator('#log')).toContainText('nav.popup-redirected');
-      await expect(guest.locator('#popup-target')).toBeVisible();
+      // App denies the popup and loads in the same WebContentsView. Without
+      // noWaitAfter, Playwright waits for a new window that never appears
+      // (macOS CI: full test timeout, then hung electronApp.close()).
+      await guest.locator('#popup-link').click({ noWaitAfter: true });
+      await expect(chrome.locator('#log')).toContainText('nav.popup-redirected', {
+        timeout: 15_000
+      });
+      await expect(guest.locator('#popup-target')).toBeVisible({ timeout: 15_000 });
 
       await chrome.locator('#url').fill('https://example.com');
       await chrome.locator('#url-form').evaluate((form) => {
@@ -142,23 +153,26 @@ test.describe('Lot 0 two-zone shell', () => {
       const infoPath = env.SPYGLASS_CDP_INFO;
       if (infoPath !== undefined) {
         await expect
-          .poll(async () => {
-            try {
-              const raw = await readFile(infoPath, 'utf8');
-              return raw.includes('example.com');
-            } catch {
-              return false;
-            }
-          })
+          .poll(
+            async () => {
+              try {
+                const raw = await readFile(infoPath, 'utf8');
+                return raw.includes('example.com');
+              } catch {
+                return false;
+              }
+            },
+            { timeout: 15_000 }
+          )
           .toBe(true);
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
   test('Stagehand observe attaches to the displayed page', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -181,7 +195,7 @@ test.describe('Lot 0 two-zone shell', () => {
         });
       }
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -70,7 +71,7 @@ async function guestWindow(
 
 test.describe('Lot 4 refine', () => {
   test('refine from fixture raw: strong/weak, routine vs doubtful, blocked finalize, sourceEvents', async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(Math.max(180_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -185,12 +186,12 @@ test.describe('Lot 4 refine', () => {
       expect(rev2.aggressiveness).toBe('aggressive');
       expect(rev2.steps[0]?.sourceEvents[0]).toMatch(/^evt_/);
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 
   test('offline smart transport cannot enter refining', async () => {
-    test.setTimeout(120_000);
+    test.setTimeout(Math.max(120_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv({
       SPYGLASS_LLM_OFFLINE: '1',
       SPYGLASS_LLM_TRANSPORT: 'offline'
@@ -221,7 +222,7 @@ test.describe('Lot 4 refine', () => {
         }
       );
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

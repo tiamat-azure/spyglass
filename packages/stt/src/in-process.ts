@@ -1,5 +1,9 @@
 import type { SttEngine } from './engine.ts';
-import { createEngineFromEnv } from './resolve-engine.ts';
+import {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 
 type LiveUtterance = {
   utteranceId: string;
@@ -23,17 +27,20 @@ export type InProcessStt = {
   dispose: () => void;
 };
 
-/**
- * Engine session used by Electron main when the sidecar runs in-process
- * (CI / e2e / missing binary). Transport is still main-owned; the renderer
- * never opens a socket (ADR-0005).
- */
-export function createInProcessStt(
-  env: NodeJS.ProcessEnv = process.env,
-  engine: SttEngine = createEngineFromEnv(env)
-): InProcessStt {
+function wrapInProcessStt(engine: SttEngine): InProcessStt {
   let live: LiveUtterance | undefined;
   let pendingFinalizeId: string | undefined;
+  const abort = (): void => {
+    if (live !== undefined) {
+      engine.abort(live.utteranceId);
+      live = undefined;
+      return;
+    }
+    if (pendingFinalizeId !== undefined) {
+      engine.abort(pendingFinalizeId);
+      pendingFinalizeId = undefined;
+    }
+  };
   return {
     engine: engine.name,
     model: engine.model,
@@ -68,20 +75,43 @@ export function createInProcessStt(
         }
       }
     },
-    abort(): void {
-      if (live !== undefined) {
-        engine.abort(live.utteranceId);
-        live = undefined;
-        return;
-      }
-      if (pendingFinalizeId !== undefined) {
-        engine.abort(pendingFinalizeId);
-        pendingFinalizeId = undefined;
-      }
-    },
+    abort,
     dispose(): void {
-      this.abort();
+      abort();
       engine.dispose?.();
     }
   };
+}
+
+/**
+ * Engine session used by Electron main when the sidecar runs in-process
+ * (CI / e2e / missing binary). Transport is still main-owned; the renderer
+ * never opens a socket (ADR-0005).
+ *
+ * A5b: this factory is synchronous. Pass `provided` to wrap an existing
+ * engine (including whisper). Without `provided`, the non-whisper branch
+ * delegates to sync {@link createEngineFromEnv} (L7-197). Whisper requires
+ * {@link createInProcessSttFromEnv}.
+ */
+export function createInProcessStt(
+  env: NodeJS.ProcessEnv = process.env,
+  provided?: SttEngine
+): InProcessStt {
+  if (provided !== undefined) {
+    return wrapInProcessStt(provided);
+  }
+  if (resolveSttEngineName(env) === 'whisper') {
+    throw new Error(
+      'createInProcessStt is synchronous and cannot load whisper; call createInProcessSttFromEnv'
+    );
+  }
+  return wrapInProcessStt(createEngineFromEnv(env));
+}
+
+/** Async companion that awaits `createEngineFromEnvAsync` then wraps via the sync factory. */
+export async function createInProcessSttFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  provided?: SttEngine
+): Promise<InProcessStt> {
+  return createInProcessStt(env, provided ?? (await createEngineFromEnvAsync(env)));
 }

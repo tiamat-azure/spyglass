@@ -14,18 +14,12 @@ import {
   runScenario,
   scenarioFromRevision
 } from '@spyglass/runner';
+import type { ReplayStartRequest, ReplayStartResponse } from '../shared/ipc.ts';
 import { isLlmOffline } from './llm-transport.ts';
 import type { RefinedRevisionFile } from './refine-engine.ts';
 import type { SessionOrchestrator } from './session-orchestrator.ts';
 
-export type ReplayStartRequest = {
-  forceAi?: boolean;
-  noAi?: boolean;
-};
-
-export type ReplayStartResponse =
-  | { ok: true; runId: string }
-  | { ok: false; error: string; runId?: string };
+export type { ReplayStartResponse } from '../shared/ipc.ts';
 
 export type ReplayEngineDeps = {
   session: () => SessionOrchestrator;
@@ -43,8 +37,41 @@ export type ReplayEngineDeps = {
 
 export class ReplayEngine {
   private running = false;
+  private waiting: ((action: 'continue' | 'stop') => void) | undefined;
+  /** L7-004: next/stop before the gate is installed. Stop wins. */
+  private pendingContinues = 0;
+  private pendingStop = false;
 
   constructor(private readonly deps: ReplayEngineDeps) {}
+
+  next(): void {
+    if (!this.running || this.pendingStop) {
+      return;
+    }
+    const waiting = this.waiting;
+    this.waiting = undefined;
+    if (waiting !== undefined) {
+      waiting('continue');
+      return;
+    }
+    this.pendingContinues += 1;
+  }
+
+  stop(): void {
+    if (!this.running) {
+      return;
+    }
+    this.pendingStop = true;
+    this.pendingContinues = 0;
+    const waiting = this.waiting;
+    this.waiting = undefined;
+    if (waiting !== undefined) {
+      waiting('stop');
+      return;
+    }
+    // Non-stepwise: no gate waiter. pendingStop is honoured at the next
+    // step boundary and before returning success (L7-192).
+  }
 
   async start(request: ReplayStartRequest = {}): Promise<ReplayStartResponse> {
     if (this.running) {
@@ -60,28 +87,28 @@ export class ReplayEngine {
     if (sessionDir === undefined || sessionId === undefined) {
       return { ok: false, error: 'no session directory' };
     }
-    let scenario: Scenario;
-    try {
-      scenario = await loadFinalizedScenario(sessionDir);
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
-    const env = this.deps.env ?? process.env;
-    const aiRecovery = aiRecoveryEnabled({
-      noAi: request.noAi === true,
-      forceAi: request.forceAi === true,
-      env
-    });
-    const runId = newRunId();
-    const runDir = join(sessionDir, 'runs', runId);
-    await mkdir(runDir, { recursive: true });
-    const skipObserve = env.SPYGLASS_LLM_TRANSPORT === 'mock' || isLlmOffline(env);
-    const recoverer = aiRecovery
-      ? new LlmRecoverer(this.deps.gateway(), skipObserve ? undefined : this.deps.observe)
-      : undefined;
+    // L7-021: lock `running` before the first await so L7-004 queued next/stop
+    // still applies after load. B10b: beginReplay only after a successful load.
     this.running = true;
-    session.beginReplay();
+    let beganReplay = false;
     try {
+      const loaded = await loadFinalizedScenarioWithPath(sessionDir);
+      const scenario = loaded.scenario;
+      session.beginReplay();
+      beganReplay = true;
+      const env = this.deps.env ?? process.env;
+      const aiRecovery = aiRecoveryEnabled({
+        noAi: request.noAi === true,
+        forceAi: request.forceAi === true,
+        env
+      });
+      const runId = newRunId();
+      const runDir = join(sessionDir, 'runs', runId);
+      await mkdir(runDir, { recursive: true });
+      const skipObserve = env.SPYGLASS_LLM_TRANSPORT === 'mock' || isLlmOffline(env);
+      const recoverer = aiRecovery
+        ? new LlmRecoverer(this.deps.gateway(), skipObserve ? undefined : this.deps.observe)
+        : undefined;
       const result: RunScenarioResult = await runScenario(scenario, {
         driver: this.deps.driver(),
         aiRecovery,
@@ -90,9 +117,42 @@ export class ReplayEngine {
         env,
         runId,
         closeDriver: false,
+        sessionDir,
+        scenarioPath: loaded.scenarioPath,
+        // R32b: in-app replay forwards IPC datasetPath into runScenario (F-48).
+        ...(request.datasetPath !== undefined ? { datasetPath: request.datasetPath } : {}),
         ...(recoverer !== undefined ? { recoverer } : {}),
-        onProgress: this.deps.onProgress
+        onProgress: this.deps.onProgress,
+        stepGate: {
+          wait: async (): Promise<'continue' | 'stop'> => {
+            if (this.pendingStop) {
+              return 'stop';
+            }
+            if (request.stepByStep !== true) {
+              return 'continue';
+            }
+            if (this.pendingContinues > 0) {
+              this.pendingContinues -= 1;
+              return 'continue';
+            }
+            return await new Promise<'continue' | 'stop'>((resolve) => {
+              // L7-249: at most one waiter. A second wait must not orphan the first.
+              if (this.waiting !== undefined) {
+                this.waiting('stop');
+              }
+              this.waiting = resolve;
+            });
+          }
+        }
       });
+      // L36c-cancelled / L7-192: user stop is cancelled, not failed+exit 1.
+      if (result.cancelled === true || this.pendingStop) {
+        return {
+          ok: true,
+          runId: result.report.runId,
+          status: 'cancelled'
+        };
+      }
       if (result.exitCode !== 0) {
         const failed = result.report.steps.find((step) => step.status === 'failed');
         const error =
@@ -104,12 +164,29 @@ export class ReplayEngine {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     } finally {
       this.running = false;
-      session.endReplay();
+      this.waiting = undefined;
+      this.pendingContinues = 0;
+      this.pendingStop = false;
+      if (beganReplay) {
+        session.endReplay();
+      }
     }
   }
 }
 
+export type FinalizedScenarioLoad = {
+  scenario: Scenario;
+  scenarioPath: string;
+};
+
 export async function loadFinalizedScenario(sessionDir: string): Promise<Scenario> {
+  return (await loadFinalizedScenarioWithPath(sessionDir)).scenario;
+}
+
+/** L7-118: path is the file actually loaded (generated scenario or rev-N fallback). */
+export async function loadFinalizedScenarioWithPath(
+  sessionDir: string
+): Promise<FinalizedScenarioLoad> {
   const refinedDir = join(sessionDir, 'refined');
   const files = await listRefinedRevisionNames(refinedDir);
   const latestName = files.at(-1);
@@ -118,8 +195,12 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
   // G56a: leftover generated/ from generate-first is not authoritative unless
   // the latest rev-N is already finalized.
   if (latest?.status === 'finalized' && latest.steps.length > 0) {
+    const generatedPath = generatedScenarioJsonPath(sessionDir);
     try {
-      return await loadScenarioFile(generatedScenarioJsonPath(sessionDir));
+      return {
+        scenario: await loadScenarioFile(generatedPath),
+        scenarioPath: generatedPath
+      };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT') {
@@ -137,7 +218,10 @@ export async function loadFinalizedScenario(sessionDir: string): Promise<Scenari
     }
     const revision = name === latestName ? latest : await readRevisionFile(refinedDir, name);
     if (revision !== undefined && revision.status === 'finalized' && revision.steps.length > 0) {
-      return scenarioFromRevision(revision, startUrl);
+      return {
+        scenario: scenarioFromRevision(revision, startUrl),
+        scenarioPath: join(refinedDir, name)
+      };
     }
   }
   throw new Error('no finalized revision');

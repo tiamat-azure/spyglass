@@ -23,6 +23,8 @@ import { screenshotFileName, traceFileName } from './paths.ts';
 import { runScenario } from './run.ts';
 import { asScenario, loadScenarioFile } from './scenario.ts';
 
+const generatedTsExecMs = process.platform === 'win32' ? 30_000 : 15_000;
+
 function clickStep(): RefinedStep {
   return {
     index: 0,
@@ -86,6 +88,8 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(readme).toContain('--ai');
     expect(readme).toContain('--report');
     expect(readme).toMatch(/pas.*process\.cwd\(\)|A19a/i);
+    expect(readme).toContain('--dataset');
+    expect(readme).toContain('D27a');
     expect(readme).toContain('--trace');
     expect(readme).toContain(RUNNER_PACKAGE);
     const manifest = JSON.parse(await readFile(paths.packageJson, 'utf8')) as {
@@ -573,37 +577,41 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     expect(json.startUrl).not.toBe('https://exemple.test/start');
   });
 
-  it('generated scenario.ts --help does not print exit JSON (L6-031)', async () => {
-    const source = generatedScenarioTsSource();
-    expect(source).toContain('generatedHelpText()');
-    expect(source).toContain("argv.includes('--help')");
-    expect(source).toContain("argv.includes('-h')");
-    expect(source).toContain("argv.includes('--headless')");
-    expect(source).not.toContain("process.argv.includes('--headless')");
-    expect(source.indexOf('process.exit(0)')).toBeLessThan(
-      source.indexOf('JSON.stringify({ exitCode')
-    );
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-help-'));
-    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
-    const { mkdir, symlink } = await import('node:fs/promises');
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
-    await symlink(
-      join(repoRoot(), 'packages/runner'),
-      join(paths.dir, 'node_modules', '@spyglass', 'runner')
-    );
-    const execFileAsync = promisify(execFile);
-    const { stdout } = await execFileAsync(
-      process.execPath,
-      ['--experimental-transform-types', 'scenario.ts', '--help'],
-      { cwd: paths.dir, timeout: 15_000 }
-    );
-    expect(stdout).toMatch(/--headless/);
-    expect(stdout).toMatch(/--no-ai/);
-    expect(stdout).not.toMatch(/"exitCode"/);
-    expect(stdout).not.toMatch(/"runDir"/);
-  });
+  it(
+    'generated scenario.ts --help does not print exit JSON (L6-031)',
+    async () => {
+      const source = generatedScenarioTsSource();
+      expect(source).toContain('generatedHelpText()');
+      expect(source).toContain("argv.includes('--help')");
+      expect(source).toContain("argv.includes('-h')");
+      expect(source).toContain("argv.includes('--headless')");
+      expect(source).not.toContain("process.argv.includes('--headless')");
+      expect(source.indexOf('process.exit(0)')).toBeLessThan(
+        source.indexOf('JSON.stringify({ exitCode')
+      );
+      const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-help-'));
+      const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+      const { mkdir, symlink } = await import('node:fs/promises');
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
+      await symlink(
+        join(repoRoot(), 'packages/runner'),
+        join(paths.dir, 'node_modules', '@spyglass', 'runner')
+      );
+      const execFileAsync = promisify(execFile);
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ['--experimental-transform-types', 'scenario.ts', '--help'],
+        { cwd: paths.dir, timeout: generatedTsExecMs }
+      );
+      expect(stdout).toMatch(/--headless/);
+      expect(stdout).toMatch(/--no-ai/);
+      expect(stdout).not.toMatch(/"exitCode"/);
+      expect(stdout).not.toMatch(/"runDir"/);
+    },
+    generatedTsExecMs + 5_000
+  );
 
   it('generate-cli main entry catches unhandled rejections (L6-039)', async () => {
     const source = await readFile(join(repoRoot(), 'packages/runner/src/generate-cli.ts'), 'utf8');
@@ -672,43 +680,47 @@ describe('Lot 6 generated package (ADR-0006 / F-45)', () => {
     }
   });
 
-  it('generated scenario.ts validates JSON.parse with asScenario before runScenario (V59a / L6-059)', async () => {
-    const source = generatedScenarioTsSource();
-    expect(source).toMatch(
-      /import \{ asScenario, generatedHelpText, runScenario \} from '@spyglass\/runner'/
-    );
-    expect(source).toContain(
-      "asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'))"
-    );
-    expect(source.indexOf('asScenario(')).toBeLessThan(source.indexOf('await runScenario('));
-
-    const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-v59a-'));
-    const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
-    await writeFile(
-      paths.scenarioJson,
-      JSON.stringify({ schemaVersion: 1, sessionId: 'ses_x', steps: scenario().steps }),
-      'utf8'
-    );
-    const { mkdir, symlink } = await import('node:fs/promises');
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
-    await symlink(
-      join(repoRoot(), 'packages/runner'),
-      join(paths.dir, 'node_modules', '@spyglass', 'runner')
-    );
-    const execFileAsync = promisify(execFile);
-    try {
-      await execFileAsync(
-        process.execPath,
-        ['--experimental-transform-types', 'scenario.ts', '--headless', '--no-ai'],
-        { cwd: paths.dir, timeout: 15_000 }
+  it(
+    'generated scenario.ts validates JSON.parse with asScenario before runScenario (V59a / L6-059)',
+    async () => {
+      const source = generatedScenarioTsSource();
+      expect(source).toMatch(
+        /import \{ asScenario, generatedHelpText, runScenario \} from '@spyglass\/runner'/
       );
-      throw new Error('hand-edited scenario.json without startUrl must fail closed');
-    } catch (error) {
-      const failed = error as NodeJS.ErrnoException & { stderr?: string; code?: number };
-      expect(failed.code).toBe(1);
-      expect(String(failed.stderr ?? '')).toMatch(/missing startUrl/);
-    }
-  });
+      expect(source).toContain(
+        "asScenario(JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'))"
+      );
+      expect(source.indexOf('asScenario(')).toBeLessThan(source.indexOf('await runScenario('));
+
+      const sessionDir = await mkdtemp(join(tmpdir(), 'spyglass-lot6-v59a-'));
+      const paths = await writeGeneratedPackage({ sessionDir, scenario: scenario() });
+      await writeFile(
+        paths.scenarioJson,
+        JSON.stringify({ schemaVersion: 1, sessionId: 'ses_x', steps: scenario().steps }),
+        'utf8'
+      );
+      const { mkdir, symlink } = await import('node:fs/promises');
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      await mkdir(join(paths.dir, 'node_modules', '@spyglass'), { recursive: true });
+      await symlink(
+        join(repoRoot(), 'packages/runner'),
+        join(paths.dir, 'node_modules', '@spyglass', 'runner')
+      );
+      const execFileAsync = promisify(execFile);
+      try {
+        await execFileAsync(
+          process.execPath,
+          ['--experimental-transform-types', 'scenario.ts', '--headless', '--no-ai'],
+          { cwd: paths.dir, timeout: generatedTsExecMs }
+        );
+        throw new Error('hand-edited scenario.json without startUrl must fail closed');
+      } catch (error) {
+        const failed = error as NodeJS.ErrnoException & { stderr?: string; code?: number };
+        expect(failed.code).toBe(1);
+        expect(String(failed.stderr ?? '')).toMatch(/missing startUrl/);
+      }
+    },
+    generatedTsExecMs + 5_000
+  );
 });

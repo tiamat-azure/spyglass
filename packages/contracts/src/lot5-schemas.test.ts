@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { schemaFromFixtureName, validateScenario, validateSuggestedPatch } from './validate.ts';
+import {
+  schemaFromFixtureName,
+  validateExecutionReport,
+  validateScenario,
+  validateSuggestedPatch
+} from './validate.ts';
 
 describe('schemaFromFixtureName', () => {
   it('maps lot 5 prefixes', () => {
@@ -46,5 +51,38 @@ describe('validateSuggestedPatch', () => {
         patches: []
       }).valid
     ).toBe(false);
+  });
+});
+
+describe('validateExecutionReport', () => {
+  it('accepts cancelled step status (L36c-cancelled)', () => {
+    expect(
+      validateExecutionReport({
+        schemaVersion: 1,
+        runId: 'run_x',
+        sessionId: 'ses_x',
+        startedAt: '2026-09-09T00:00:00.000Z',
+        finishedAt: '2026-09-09T00:00:01.000Z',
+        exitCode: 0,
+        headless: true,
+        aiRecovery: false,
+        maxAiRetries: 3,
+        smartModel: 'claude-sonnet-4-5-20250929',
+        multimodal: true,
+        warnings: [],
+        steps: [
+          {
+            index: 0,
+            intent: 'Je clique',
+            status: 'cancelled',
+            durationMs: 10,
+            mode: 'script',
+            attempts: 1,
+            verificationOk: false,
+            error: 'replay stopped by user'
+          }
+        ]
+      }).valid
+    ).toBe(true);
   });
 });

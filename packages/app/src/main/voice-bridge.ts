@@ -2,12 +2,13 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  createInProcessStt,
+  createInProcessSttFromEnv,
   createVadState,
   frameDurationMs,
   gateVadUtterance,
   type InProcessStt,
   parseServerMessage,
+  parseVoiceFlushMs,
   pcmRms,
   type ServerMessage,
   type SidecarHandle,
@@ -15,7 +16,6 @@ import {
   type SttEngineName,
   startSidecarServer,
   type VadState,
-  VOICE_FLUSH_MS,
   type VoiceMode
 } from '@spyglass/stt';
 
@@ -181,7 +181,7 @@ export class VoiceBridge {
       }
     }
     this.vad = createVadState();
-    await Promise.race([Promise.all(this.pendingFinals), sleep(VOICE_FLUSH_MS)]);
+    await Promise.race([Promise.all(this.pendingFinals), sleep(parseVoiceFlushMs(this.env))]);
   }
 
   private nextUtteranceId(): string {
@@ -223,7 +223,12 @@ export class VoiceBridge {
   private async connect(): Promise<VoiceBridgeStatus> {
     await this.releaseSidecarTransport();
     if (this.preferInProcess()) {
-      this.inProcess = createInProcessStt(this.env);
+      try {
+        this.inProcess = await createInProcessSttFromEnv(this.env);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(`STT in-process engine failed: ${detail}`);
+      }
       this.status = {
         engine: this.inProcess.engine === 'whisper' ? 'whisper' : 'mock',
         model: this.inProcess.model,
@@ -466,7 +471,7 @@ export class VoiceBridge {
     this.trackFinal(
       new Promise<void>((resolve) => {
         this.finalWaiters.set(live.id, resolve);
-        setTimeout(resolve, VOICE_FLUSH_MS);
+        setTimeout(resolve, parseVoiceFlushMs(this.env));
       })
     );
   }

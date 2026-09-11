@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { SessionBundleError } from '@spyglass/runner';
 import { describe, expect, it } from 'vitest';
 import { refineSourceBanner } from '../shared/ipc.ts';
 import {
@@ -17,7 +19,8 @@ import {
   parseRetractPayload,
   parseSessionStartPayload,
   parseVoiceEditPayload,
-  parseVoiceStartPayload
+  parseVoiceStartPayload,
+  sessionBundleIpcError
 } from './ipc-validate.ts';
 import {
   clampBrowserBoundsToChrome,
@@ -101,7 +104,52 @@ describe('session payload validation', () => {
     });
     expect(parseReplayStartPayload({ forceAi: true })).toEqual({ forceAi: true });
     expect(parseReplayStartPayload({ noAi: true })).toEqual({ noAi: true });
-    expect(parseReplayStartPayload(null)).toEqual({});
+    expect(parseReplayStartPayload(undefined)).toEqual({});
+    expect(parseReplayStartPayload(null)).toBeUndefined();
+    expect(parseReplayStartPayload('nope')).toBeUndefined();
+    expect(parseReplayStartPayload(['stepByStep'])).toBeUndefined();
+    expect(parseReplayStartPayload({ datasetPath: '/tmp/ds.json', stepByStep: true })).toEqual({
+      stepByStep: true,
+      datasetPath: '/tmp/ds.json'
+    });
+    expect(parseReplayStartPayload({ datasetPath: '  datasets/example.json  ' })).toEqual({
+      datasetPath: 'datasets/example.json'
+    });
+    expect(parseReplayStartPayload({ datasetPath: '   ', stepByStep: true })).toEqual({
+      stepByStep: true
+    });
+    expect(parseReplayStartPayload({ datasetPath: 12, stepByStep: true })).toEqual({
+      stepByStep: true
+    });
+  });
+
+  it('forwards datasetPath on replay-start instead of dropping it (R32b)', () => {
+    expect(
+      parseReplayStartPayload({ datasetPath: '/tmp/ds.json', forceAi: true, stepByStep: true })
+    ).toEqual({
+      forceAi: true,
+      stepByStep: true,
+      datasetPath: '/tmp/ds.json'
+    });
+    const src = readFileSync(new URL('./ipc-validate.ts', import.meta.url), 'utf8');
+    const fnStart = src.indexOf('export function parseReplayStartPayload');
+    const fnEnd = src.indexOf('export function asPcmFrame');
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(fnEnd).toBeGreaterThan(fnStart);
+    const body = src.slice(fnStart, fnEnd);
+    expect(body).toContain('input === null');
+    expect(body).toContain('datasetPath');
+    expect(body).toContain('result.datasetPath');
+    expect(body).not.toMatch(/datasetPath \(renderer does not expose it\)/);
+  });
+
+  it('documents datasetPath on spyglass:replay:start (L7-240)', () => {
+    const ipcMd = readFileSync(
+      new URL('../../../../docs/contracts/ipc.md', import.meta.url),
+      'utf8'
+    );
+    expect(ipcMd).toMatch(/spyglass:replay:start/);
+    expect(ipcMd).toMatch(/datasetPath\?/);
   });
 });
 
@@ -207,5 +255,67 @@ describe('refineSourceBanner (LOT4-R1)', () => {
     expect(smart.tone).toBe('smart');
     expect(smart.text).toMatch(/smart/i);
     expect(smart.text).not.toMatch(/repli/i);
+  });
+});
+
+describe('sessionBundleIpcError (L7-088)', () => {
+  it('maps known bundle refusals to stable codes without leaking paths', () => {
+    expect(
+      sessionBundleIpcError(new Error('export refused: destination is not empty'), 'export-failed')
+    ).toBe('dest-not-empty');
+    expect(
+      sessionBundleIpcError(
+        new Error('export refused: destination is not a directory'),
+        'export-failed'
+      )
+    ).toBe('dest-not-directory');
+    expect(
+      sessionBundleIpcError(new Error('import refused: session already exists'), 'import-failed')
+    ).toBe('session-exists');
+    expect(
+      sessionBundleIpcError(new Error('import refused: invalid sessionId'), 'import-failed')
+    ).toBe('invalid-session');
+    expect(
+      sessionBundleIpcError(new Error('ENOENT: no such file /home/alice/secret'), 'export-failed')
+    ).toBe('export-failed');
+    const missing = new Error('no such file /abs/path/session') as NodeJS.ErrnoException;
+    missing.code = 'ENOENT';
+    expect(sessionBundleIpcError(missing, 'import-failed')).toBe('not-found');
+    expect(
+      sessionBundleIpcError(new Error('import refused: symlinks are not allowed'), 'import-failed')
+    ).toBe('symlink');
+  });
+
+  it('prefers SessionBundleError.bundleCode over Error.message (L7-233)', () => {
+    const error = new SessionBundleError(
+      'dest-not-directory',
+      'unrelated wording that would not match substrings'
+    );
+    expect(sessionBundleIpcError(error, 'export-failed')).toBe('dest-not-directory');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('session-exists', 'destination is not empty'),
+        'import-failed'
+      )
+    ).toBe('session-exists');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('invalid-meta', 'import refused: missing spyglass-session.json'),
+        'import-failed'
+      )
+    ).toBe('invalid-meta');
+    expect(
+      sessionBundleIpcError(
+        new SessionBundleError('symlink', 'export refused: special files are not allowed'),
+        'export-failed'
+      )
+    ).toBe('symlink');
+  });
+
+  it('returns the fallback when the rejection is null, undefined, or not an object (L7-092)', () => {
+    expect(sessionBundleIpcError(null, 'export-failed')).toBe('export-failed');
+    expect(sessionBundleIpcError(undefined, 'import-failed')).toBe('import-failed');
+    expect(sessionBundleIpcError('boom', 'export-failed')).toBe('export-failed');
+    expect(sessionBundleIpcError(42, 'import-failed')).toBe('import-failed');
   });
 });

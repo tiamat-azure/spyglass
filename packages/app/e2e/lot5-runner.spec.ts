@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { closeElectron, ELECTRON_E2E_TEST_TIMEOUT_MS } from './close-electron.ts';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -100,7 +101,7 @@ async function latestSessionDir(sessionsDir: string): Promise<string> {
 
 test.describe('Lot 5 runner', () => {
   test('deterministic replay, AI recovery patch unapplied, --no-ai fail-clean', async () => {
-    test.setTimeout(240_000);
+    test.setTimeout(Math.max(240_000, ELECTRON_E2E_TEST_TIMEOUT_MS));
     const env = await launchEnv();
     const electronApp = await electron.launch({
       cwd: appDir,
@@ -232,7 +233,7 @@ test.describe('Lot 5 runner', () => {
         path: join(shotDir, 'no-ai-fail-clean.png')
       });
     } finally {
-      await electronApp.close();
+      await closeElectron(electronApp);
     }
   });
 });

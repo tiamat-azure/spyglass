@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "ses_20260907_demo",
+  "status": "healthy",
+  "appliedPatches": 0,
+  "patchCandidates": [
+    {
+      "stepIndex": 0,
+      "descriptorHash": "sha256:abc",
+      "consecutiveRuns": 33,
+      "lastRunId": "run_0001",
+      "runIds": ["run_0001"]
+    }
+  ]
+}

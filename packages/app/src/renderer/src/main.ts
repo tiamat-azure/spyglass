@@ -494,8 +494,23 @@ const refineSteps = requireEl<HTMLOListElement>('refine-steps');
 const replayPanel = requireEl<HTMLElement>('replay-panel');
 const replayStatus = requireEl<HTMLElement>('replay-status');
 const replayAi = requireEl<HTMLInputElement>('replay-ai');
+const replayStepwise = requireEl<HTMLInputElement>('replay-stepwise');
+const replayDataset = requireEl<HTMLInputElement>('replay-dataset');
 const replayRunBtn = requireEl<HTMLButtonElement>('replay-run');
+const replayNextBtn = requireEl<HTMLButtonElement>('replay-next');
+const replayHaltBtn = requireEl<HTMLButtonElement>('replay-halt');
 const replaySteps = requireEl<HTMLOListElement>('replay-steps');
+/** L7-204: halt must keep next disabled even if next()'s finally runs later. */
+let replayHalted = false;
+/** L7-234: re-enable Suivant only while stepwise replay is still in flight. */
+let replayStepwiseActive = false;
+const sessionExportBtn = requireEl<HTMLButtonElement>('session-export');
+const sessionImportBtn = requireEl<HTMLButtonElement>('session-import');
+const sttUpgrade = requireEl<HTMLElement>('stt-upgrade');
+const sttUpgradeCopy = requireEl<HTMLElement>('stt-upgrade-copy');
+const sttUpgradeCopyDefault = sttUpgradeCopy.innerHTML;
+const sttUpgradeAccept = requireEl<HTMLButtonElement>('stt-upgrade-accept');
+const sttUpgradeRefuse = requireEl<HTMLButtonElement>('stt-upgrade-refuse');
 
 if (api === undefined) {
   versions.textContent = 'preload bridge unavailable';
@@ -633,9 +648,27 @@ if (api !== undefined) {
     item.dataset.mode = payload.mode;
     item.dataset.index = String(payload.stepIndex);
     item.textContent = `étape ${String(payload.stepIndex)} · ${payload.mode} · ${payload.status} · ${payload.message}`;
+    replaySteps.querySelectorAll('.replay-step[data-current="true"]').forEach((el) => {
+      el.removeAttribute('data-current');
+    });
+    item.dataset.current = 'true';
     replaySteps.append(item);
     replayStatus.textContent = payload.message;
   });
+
+  api.sttUpgrade.onOffer((payload) => {
+    sttUpgradeCopy.innerHTML = sttUpgradeCopyDefault;
+    sttUpgrade.hidden = !payload.propose;
+  });
+  void api.sttUpgrade
+    .status()
+    .then((status) => {
+      sttUpgrade.hidden = !status.propose;
+    })
+    .catch(() => {
+      sttUpgrade.hidden = true;
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    });
 
   void api.stagehand.cdp().then((info) => {
     if (info.port <= 0 || info.cdpUrl.length === 0) {
@@ -802,19 +835,180 @@ replayRunBtn.addEventListener('click', () => {
   replayRunBtn.disabled = true;
   replaySteps.replaceChildren();
   const forceAi = replayAi.checked;
+  const stepByStep = replayStepwise.checked;
+  const datasetRaw = replayDataset.value.trim();
+  const datasetPath = datasetRaw.length > 0 ? datasetRaw : undefined;
+  replayHalted = false;
+  replayStepwiseActive = stepByStep;
+  replayNextBtn.disabled = !stepByStep;
+  replayHaltBtn.disabled = !stepByStep;
   void api.replay
-    .start(forceAi, !forceAi)
+    .start(forceAi, !forceAi, stepByStep, datasetPath)
     .then((result) => {
       if (!result.ok) {
         replayStatus.textContent = result.error;
         appendLog(log, `replay failed: ${result.error}`);
         return;
       }
+      if (result.status === 'cancelled') {
+        replayStatus.textContent = 'replay stopped by user';
+        replayPanel.dataset.runId = result.runId;
+        return;
+      }
       replayStatus.textContent = `run ${result.runId}`;
       replayPanel.dataset.runId = result.runId;
     })
     .finally(() => {
+      replayStepwiseActive = false;
       replayRunBtn.disabled = false;
+      replayNextBtn.disabled = true;
+      replayHaltBtn.disabled = true;
+    });
+});
+
+replayNextBtn.addEventListener('click', () => {
+  if (api === undefined || replayNextBtn.disabled) {
+    return;
+  }
+  replayNextBtn.disabled = true;
+  void api.replay
+    .next()
+    .then((result) => {
+      if (!result.ok) {
+        replayStatus.textContent = result.error;
+      }
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    })
+    .finally(() => {
+      if (!replayHalted && replayStepwiseActive) {
+        replayNextBtn.disabled = false;
+      }
+    });
+});
+
+replayHaltBtn.addEventListener('click', () => {
+  if (api === undefined || replayHaltBtn.disabled) {
+    return;
+  }
+  const stepwiseBeforeHalt = replayStepwiseActive;
+  replayHalted = true;
+  replayStepwiseActive = false;
+  replayNextBtn.disabled = true;
+  replayHaltBtn.disabled = true;
+  const restoreHaltUi = (): void => {
+    replayHalted = false;
+    replayStepwiseActive = stepwiseBeforeHalt;
+    replayHaltBtn.disabled = false;
+    replayNextBtn.disabled = !stepwiseBeforeHalt;
+  };
+  void api.replay
+    .stop()
+    .then((result) => {
+      if (!result.ok) {
+        replayStatus.textContent = result.error;
+        restoreHaltUi();
+      }
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+      restoreHaltUi();
+    });
+});
+
+sessionExportBtn.addEventListener('click', () => {
+  if (api === undefined || sessionExportBtn.disabled || sessionImportBtn.disabled) {
+    return;
+  }
+  sessionExportBtn.disabled = true;
+  sessionImportBtn.disabled = true;
+  void api.sessionBundle
+    .exportSession()
+    .then((result) => {
+      if (!result.ok && result.error === 'cancelled') {
+        return;
+      }
+      replayStatus.textContent = result.ok ? `export ${result.sessionId}` : result.error;
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    })
+    .finally(() => {
+      sessionExportBtn.disabled = false;
+      sessionImportBtn.disabled = false;
+    });
+});
+
+sessionImportBtn.addEventListener('click', () => {
+  if (api === undefined || sessionExportBtn.disabled || sessionImportBtn.disabled) {
+    return;
+  }
+  sessionExportBtn.disabled = true;
+  sessionImportBtn.disabled = true;
+  void api.sessionBundle
+    .importSession()
+    .then((result) => {
+      if (!result.ok && result.error === 'cancelled') {
+        return;
+      }
+      replayStatus.textContent = result.ok ? `import ${result.sessionId}` : result.error;
+    })
+    .catch((error: unknown) => {
+      replayStatus.textContent = error instanceof Error ? error.message : String(error);
+    })
+    .finally(() => {
+      sessionExportBtn.disabled = false;
+      sessionImportBtn.disabled = false;
+    });
+});
+
+sttUpgradeAccept.addEventListener('click', () => {
+  if (api === undefined || sttUpgradeAccept.disabled || sttUpgradeRefuse.disabled) {
+    return;
+  }
+  sttUpgradeAccept.disabled = true;
+  sttUpgradeRefuse.disabled = true;
+  sttUpgradeCopy.textContent = 'Téléchargement en cours…';
+  void api.sttUpgrade
+    .decide('accept')
+    .then((result) => {
+      if (result.ok) {
+        sttUpgrade.hidden = true;
+        return;
+      }
+      sttUpgradeCopy.textContent = result.error ?? 'Mise à jour vocale indisponible. Réessayez.';
+    })
+    .catch(() => {
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    })
+    .finally(() => {
+      sttUpgradeAccept.disabled = false;
+      sttUpgradeRefuse.disabled = false;
+    });
+});
+
+sttUpgradeRefuse.addEventListener('click', () => {
+  if (api === undefined || sttUpgradeAccept.disabled || sttUpgradeRefuse.disabled) {
+    return;
+  }
+  sttUpgradeAccept.disabled = true;
+  sttUpgradeRefuse.disabled = true;
+  void api.sttUpgrade
+    .decide('refuse')
+    .then((result) => {
+      if (result.ok) {
+        sttUpgrade.hidden = true;
+        return;
+      }
+      sttUpgradeCopy.textContent = result.error ?? 'Mise à jour vocale indisponible. Réessayez.';
+    })
+    .catch(() => {
+      sttUpgradeCopy.textContent = 'Mise à jour vocale indisponible. Réessayez.';
+    })
+    .finally(() => {
+      sttUpgradeAccept.disabled = false;
+      sttUpgradeRefuse.disabled = false;
     });
 });
 

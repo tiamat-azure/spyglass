@@ -5,9 +5,20 @@
 export const STT_PACKAGE = '@spyglass/stt' as const;
 
 export { correlateVoiceSegment } from './correlate.ts';
+export {
+  downloadResponseToFileAtomic,
+  downloadUrlToFileAtomic,
+  existingVerifiedDownloadOk,
+  STT_LARGE_DOWNLOAD_TIMEOUT_MS,
+  STT_LARGE_MIN_BYTES,
+  STT_STREAM_MAX_BYTES,
+  streamToFileAtomic,
+  sttLargeDownloadTimeoutMs,
+  writeFileAtomic
+} from './download-model.ts';
 export type { SttEngine } from './engine.ts';
 export type { InProcessFinal, InProcessStt } from './in-process.ts';
-export { createInProcessStt } from './in-process.ts';
+export { createInProcessStt, createInProcessSttFromEnv } from './in-process.ts';
 export { createMockEngine } from './mock-engine.ts';
 export type {
   AudioRetention,
@@ -27,15 +38,44 @@ export {
   parseCorrelationMarginMs,
   parseMockTranscripts,
   parseServerMessage,
+  parseVoiceFlushMs,
+  parseWhisperTimeoutMs,
   STT_CHANNELS,
   STT_SAMPLE_RATE,
   VOICE_CORRELATION_MS_DEFAULT,
+  VOICE_FLUSH_MARGIN_MS,
   VOICE_FLUSH_MS,
   WHISPER_TIMEOUT_MS_DEFAULT
 } from './protocol.ts';
-export { createEngineFromEnv, resolveSttEngineName } from './resolve-engine.ts';
+export {
+  createEngineFromEnv,
+  createEngineFromEnvAsync,
+  resolveSttEngineName
+} from './resolve-engine.ts';
 export type { SidecarHandle } from './sidecar.ts';
 export { runSidecarMain, startSidecarServer } from './sidecar.ts';
+export type { SttModelChoice, SttUpgradeDecision } from './upgrade.ts';
+export {
+  chooseWhisperModel,
+  isLargeFallbackError,
+  isUnreadableLargeFallbackError,
+  LARGE_FALLBACK_ERROR_TAG,
+  LargeFallbackError,
+  largeModelPath,
+  largeModelPresent,
+  parseMaxLatencyMs,
+  parseUpgradePromptAfter,
+  readLargeFallback,
+  readLargeFallbackSync,
+  recordFirstUseLatency,
+  STT_LARGE_MODEL_FILE,
+  STT_LARGE_MODEL_URL,
+  STT_LARGE_SHA256,
+  STT_MAX_LATENCY_MS_DEFAULT,
+  STT_SMALL_MODEL_FILE,
+  STT_UPGRADE_PROMPT_AFTER_DEFAULT,
+  shouldProposeUpgrade
+} from './upgrade.ts';
 export type { VadState, VadUtteranceGate } from './vad.ts';
 export {
   createVadState,
@@ -50,6 +90,11 @@ export { concatPcm, pcm16ToWav } from './wav.ts';
 export type { WhisperPaths } from './whisper-engine.ts';
 export {
   createWhisperEngine,
+  FIRST_USE_BACKOFF_MS,
+  FIRST_USE_RETRY_LIMIT,
+  isCancelledTranscription,
+  notifyFirstUseLatency,
+  pickPreferredWhisperModel,
   resolveWhisperPaths,
   runWhisperCli,
   whisperAvailable,

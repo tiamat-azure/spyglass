@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spyglass.dev/schemas/suggested-patch.v1.json",
   "title": "Patch suggéré Spyglass",
-  "description": "runs/<runId>/suggested-patch.json. Jamais appliqué (F-57, ADR-0008). Lot 5 s'arrête à la production.",
+  "description": "Jamais appliqué (F-57). Lot 5 produit le fichier ; Lot 7 peut ouvrir une PR git sans muter `applied` (reste false).",
   "type": "object",
   "required": ["schemaVersion", "runId", "sessionId", "applied", "patches"],
   "additionalProperties": false,

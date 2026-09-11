@@ -2,11 +2,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import Ajv2020, { type ErrorObject, type ValidateFunction } from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import { migrateHealthPatchCandidates } from './health-migrate.ts';
 import { examplesDir, type SchemaName, schemaDir, schemaFiles } from './paths.ts';
 
 export type ValidationResult = {
   valid: boolean;
   errors: ErrorObject[] | null;
+  /** L7-241: `validateHealth` sets this to the migrated payload. */
+  data?: unknown;
 };
 
 let cachedAjv: Ajv2020 | undefined;
@@ -194,7 +197,11 @@ export function validateRefinedStep(data: unknown): ValidationResult {
 }
 
 export function validateHealth(data: unknown): ValidationResult {
-  return validateUnknown('health', data);
+  // R28a: migrate missing runIds before schema checks (H21a load path).
+  // L7-241: return the migrated payload so callers do not keep legacy-without-runIds after ok.
+  const migrated = migrateHealthPatchCandidates(data);
+  const result = validateUnknown('health', migrated);
+  return { valid: result.valid, errors: result.errors, data: migrated };
 }
 
 export function validateScenario(data: unknown): ValidationResult {

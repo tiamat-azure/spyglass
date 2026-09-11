@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import type {
   ExecutionReport,
   ExecutionStepReport,
@@ -11,8 +12,10 @@ import type {
 } from '@spyglass/contracts';
 import { isMultimodal, pinSmartModel } from '@spyglass/llm';
 import { performAction } from './act.ts';
+import type { CreatePr, HasOpenPr, PreparePr } from './assisted-apply.ts';
 import { applyBaseUrl } from './base-url.ts';
 import type { PageDriver } from './driver.ts';
+import type { GitExec } from './git-repo.ts';
 import { generatedHelpText } from './help-text.ts';
 import {
   parseGeneratedArgv,
@@ -21,20 +24,35 @@ import {
   resolveRunnerOptions,
   SMART_MODEL_PIN
 } from './options.ts';
+import { applyDataset, assertParameterRefsResolved, parseDataset } from './parameters.ts';
+import { resolvePatchPolicy } from './patch-config.ts';
+import { loadDatasetFile, processSuggestedPatch } from './patch-lifecycle.ts';
+import {
+  findStepByIndex,
+  hasParameterRef,
+  originalDescriptorForPatch,
+  originalWithoutLiveFillArgs,
+  overlayLiveArgumentsForRecovery,
+  redactSuggestedPatchForPersistence
+} from './patch-redact.ts';
 import { runPath, screenshotFileName } from './paths.ts';
 import type { Recoverer, RecoveryAttempt } from './recover.ts';
 import { sanitizeRecoveredDescriptor } from './recover-sanitize.ts';
 import { writeRunArtifacts } from './report.ts';
-import { cloneDescriptor } from './scenario.ts';
 import { verifyStep } from './verify.ts';
 
 export type ReplayProgress = {
   runId: string;
   stepIndex: number;
-  status: 'running' | 'passed' | 'failed' | 'recovering';
+  status: 'running' | 'passed' | 'failed' | 'recovering' | 'cancelled';
   mode: 'script' | 'AI';
   attempt: number;
   message: string;
+};
+
+/** F-59: wait before each step for in-app pas-à-pas replay. */
+export type StepGate = {
+  wait: (stepIndex: number) => Promise<'continue' | 'stop'>;
 };
 
 export type RunScenarioHooks = RunScenarioOptions & {
@@ -52,6 +70,11 @@ export type RunScenarioHooks = RunScenarioOptions & {
   /** F-58 flags for the driver-less generated-script path. */
   argv?: readonly string[];
   scriptDir?: string;
+  stepGate?: StepGate;
+  git?: GitExec;
+  preparePr?: PreparePr;
+  hasOpenPr?: HasOpenPr;
+  createPr?: CreatePr;
 };
 
 const TEXT_ONLY_WARNING =
@@ -115,6 +138,18 @@ async function runScenarioStandalone(
   if (options.reportDir !== undefined) {
     parsed.reportDir = options.reportDir;
   }
+  if (options.repo !== undefined) {
+    parsed.repo = options.repo;
+  }
+  if (options.datasetPath !== undefined) {
+    parsed.datasetPath = options.datasetPath;
+  }
+  if (options.sessionDir !== undefined) {
+    parsed.sessionDir = options.sessionDir;
+  }
+  if (options.scenarioPath !== undefined) {
+    parsed.scenarioPath = options.scenarioPath;
+  }
   if (parsed.help) {
     process.stdout.write(generatedHelpText());
     const runId = options.runId ?? newRunId();
@@ -150,7 +185,10 @@ async function runScenarioStandalone(
     runId,
     ...(proof !== undefined && proof.length > 0 ? { proofScreenshot: proof } : {}),
     ...(options.recoverer !== undefined ? { recoverer: options.recoverer } : {}),
-    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
+    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {}),
+    ...(options.stepGate !== undefined ? { stepGate: options.stepGate } : {}),
+    // D27a: do not pass cwd as scriptDir or relative --dataset would follow cwd.
+    ...(options.scriptDir !== undefined ? { scriptDir: options.scriptDir } : {})
   });
 }
 
@@ -167,16 +205,33 @@ async function runScenarioOnDriver(
   }
   const runId = options.runId ?? newRunId();
   const startedAt = new Date();
-  const original = scenario.steps.map((step) => cloneDescriptor(step.action.descriptor));
+  let executable: Scenario;
+  try {
+    executable = await scenarioWithDataset(scenario, resolved, options);
+  } catch (error) {
+    return await datasetLoadFailure({
+      scenario,
+      resolved,
+      options,
+      error,
+      runId,
+      startedAt,
+      smartModel,
+      multimodal,
+      warnings
+    });
+  }
   const stepReports: ExecutionStepReport[] = [];
   const patches: SuggestedPatchEntry[] = [];
   let failed = false;
+  let cancelled = false;
 
-  const startUrl = joinBaseUrl(resolved.baseUrl, scenario.startUrl);
+  const startUrl = joinBaseUrl(resolved.baseUrl, executable.startUrl);
   await options.driver.goto(startUrl);
+  const skipSecretShots = skipParameterizedScreenshots(executable);
 
-  for (let index = 0; index < scenario.steps.length; index += 1) {
-    const step = scenario.steps[index];
+  for (let index = 0; index < executable.steps.length; index += 1) {
+    const step = executable.steps[index];
     if (step === undefined) {
       continue;
     }
@@ -193,6 +248,38 @@ async function runScenarioOnDriver(
       attempt: 1,
       message: `script · ${step.intent}`
     });
+    if (options.stepGate !== undefined) {
+      const gate = await options.stepGate.wait(step.index);
+      if (gate === 'stop') {
+        cancelled = true;
+        stepReports.push({
+          index: step.index,
+          intent: step.intent,
+          status: 'cancelled',
+          durationMs: Date.now() - stepStarted,
+          mode: 'script',
+          attempts: 1,
+          verificationOk: false,
+          error: 'replay stopped by user'
+        });
+        emit(options, {
+          runId,
+          stepIndex: step.index,
+          status: 'cancelled',
+          mode: 'script',
+          attempt: 1,
+          message: 'replay stopped by user'
+        });
+        for (let rest = index + 1; rest < executable.steps.length; rest += 1) {
+          const skipped = executable.steps[rest];
+          if (skipped !== undefined) {
+            stepReports.push(skippedReport(skipped, 'skipped after user stop'));
+          }
+        }
+        break;
+      }
+    }
+    const recordedStep = findStepByIndex(scenario, step.index);
     const timeoutMs = step.verification.timeoutMs ?? resolved.timeoutMs;
     const beforeDom = await options.driver.snapshot();
     const acted = await performAction(options.driver, step.action.descriptor);
@@ -205,7 +292,14 @@ async function runScenarioOnDriver(
     let screenshotRef: string | undefined;
 
     if (!verify.ok) {
-      screenshotRef = await captureFailure(options.driver, resolved.reportDir, step.index, 'fail');
+      if (!skipSecretShots) {
+        screenshotRef = await captureFailure(
+          options.driver,
+          resolved.reportDir,
+          step.index,
+          'fail'
+        );
+      }
       if (!resolved.aiRecovery || options.recoverer === undefined) {
         failed = true;
         const report = failedStepReport({
@@ -231,8 +325,9 @@ async function runScenarioOnDriver(
         warnings.push(TEXT_ONLY_WARNING);
       }
       const recovered = await recoverStep({
-        scenario,
-        step,
+        scenario: scenarioForRecovery(scenario),
+        argumentScenario: executable,
+        step: stepForRecovery(recordedStep ?? step),
         driver: options.driver,
         recoverer: options.recoverer,
         timeoutMs,
@@ -241,6 +336,7 @@ async function runScenarioOnDriver(
         beforeDom,
         originalError: error ?? 'verification failed',
         runId,
+        skipScreenshots: skipSecretShots,
         ...(resolved.reportDir !== undefined ? { reportDir: resolved.reportDir } : {}),
         ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
       });
@@ -252,7 +348,10 @@ async function runScenarioOnDriver(
         patches.push({
           stepIndex: step.index,
           scope: 'action.descriptor',
-          original: original[index] ?? cloneDescriptor(step.action.descriptor),
+          original:
+            recordedStep !== undefined
+              ? originalDescriptorForPatch(recordedStep)
+              : originalWithoutLiveFillArgs(step.action.descriptor),
           suggested: recovered.descriptor,
           diagnosis: recovered.diagnosis,
           confidence: recovered.confidence
@@ -270,7 +369,9 @@ async function runScenarioOnDriver(
         error = recovered.error;
         screenshotRef =
           recovered.screenshotRef ??
-          (await captureFailure(options.driver, resolved.reportDir, step.index, 'recover'));
+          (skipSecretShots
+            ? undefined
+            : await captureFailure(options.driver, resolved.reportDir, step.index, 'recover'));
         emit(options, {
           runId,
           stepIndex: step.index,
@@ -313,7 +414,7 @@ async function runScenarioOnDriver(
   const report: ExecutionReport = {
     schemaVersion: 1,
     runId,
-    sessionId: scenario.sessionId,
+    sessionId: executable.sessionId,
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     exitCode: failed ? 1 : 0,
@@ -325,16 +426,18 @@ async function runScenarioOnDriver(
     warnings: unique(warnings),
     steps: stepReports
   };
-  const suggestedPatch: SuggestedPatch | undefined =
-    patches.length > 0
-      ? {
-          schemaVersion: 1,
-          runId,
-          sessionId: scenario.sessionId,
-          applied: false,
-          patches
-        }
-      : undefined;
+  const liveSuggested: SuggestedPatch = {
+    schemaVersion: 1,
+    runId,
+    sessionId: executable.sessionId,
+    applied: false,
+    patches
+  };
+  const suggestedPatch: SuggestedPatch = redactSuggestedPatchForPersistence(
+    liveSuggested,
+    scenario,
+    executable.steps
+  );
 
   let runDir: string | undefined;
   if (resolved.reportDir !== undefined) {
@@ -342,7 +445,8 @@ async function runScenarioOnDriver(
     await writeRunArtifacts({
       runDir,
       report,
-      ...(suggestedPatch !== undefined ? { suggestedPatch } : {})
+      scenario,
+      ...(patches.length > 0 ? { suggestedPatch } : {})
     });
   }
 
@@ -351,8 +455,65 @@ async function runScenarioOnDriver(
   }
 
   const result: RunScenarioResult = { exitCode: report.exitCode, report };
-  if (suggestedPatch !== undefined) {
+  if (cancelled) {
+    result.cancelled = true;
+  }
+  if (patches.length > 0) {
     result.suggestedPatch = suggestedPatch;
+  }
+  const lifecycleInput: Parameters<typeof processSuggestedPatch>[0] = {
+    suggested: liveSuggested,
+    // L7-019: persist the recorded scenario, not dataset-materialized secrets.
+    scenario,
+    policy: resolvePatchPolicy(options.env ?? process.env, {
+      ...(resolved.repo !== undefined ? { repo: resolved.repo } : {})
+    })
+  };
+  if (options.env !== undefined) {
+    lifecycleInput.env = options.env;
+  }
+  if (resolved.reportDir !== undefined) {
+    lifecycleInput.reportDir = resolved.reportDir;
+  }
+  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+  if (scenarioPath !== undefined) {
+    lifecycleInput.scenarioPath = scenarioPath;
+  }
+  const sessionDir = resolved.sessionDir ?? options.sessionDir;
+  if (sessionDir !== undefined) {
+    lifecycleInput.sessionDir = sessionDir;
+  }
+  if (options.git !== undefined) {
+    lifecycleInput.git = options.git;
+  }
+  if (options.preparePr !== undefined) {
+    lifecycleInput.preparePr = options.preparePr;
+  }
+  if (options.hasOpenPr !== undefined) {
+    lifecycleInput.hasOpenPr = options.hasOpenPr;
+  }
+  if (options.createPr !== undefined) {
+    lifecycleInput.createPr = options.createPr;
+  }
+  // L7-153: empty patches reset F-63 candidates only on a successful (clean) run.
+  // L36c-cancelled: user-stop is not a clean success (do not reset candidates).
+  // L7-216: health load/write must not crash after report/suggested-patch exist.
+  if (suggestedPatch.patches.length > 0 || (report.exitCode === 0 && !cancelled)) {
+    try {
+      const lifecycle = await processSuggestedPatch(lifecycleInput);
+      if (lifecycle.healthPath !== undefined) {
+        result.healthPath = lifecycle.healthPath;
+      }
+      if (lifecycle.healthWriteError !== undefined) {
+        result.healthWriteError = lifecycle.healthWriteError;
+      }
+      if (lifecycle.assistedApply !== undefined) {
+        result.assistedApply = lifecycle.assistedApply;
+      }
+    } catch (error) {
+      // L7-282: remaining throws are health I/O (or equivalent), not apply-after-L7-266.
+      result.healthWriteError = error instanceof Error ? error.message : String(error);
+    }
   }
   if (runDir !== undefined) {
     result.runDir = runDir;
@@ -362,6 +523,8 @@ async function runScenarioOnDriver(
 
 async function recoverStep(input: {
   scenario: Scenario;
+  /** L7-085: un-stripped scenario (dataset args / remaining recorded args) for text redaction. */
+  argumentScenario?: Scenario;
   step: RefinedStep;
   driver: PageDriver;
   recoverer: Recoverer;
@@ -373,6 +536,8 @@ async function recoverStep(input: {
   originalError: string;
   onProgress?: (event: ReplayProgress) => void;
   runId: string;
+  /** S11a: skip screenshot files when parameterized secrets may be on screen. */
+  skipScreenshots?: boolean;
 }): Promise<
   | {
       ok: true;
@@ -398,19 +563,18 @@ async function recoverStep(input: {
       message: `AI recovery attempt ${String(attempt)}/${String(input.maxAiRetries)}${textOnly}`
     });
     const afterDom = await input.driver.snapshot();
-    screenshotRef = await captureFailure(
-      input.driver,
-      input.reportDir,
-      input.step.index,
-      'recover'
-    );
+    screenshotRef = input.skipScreenshots
+      ? undefined
+      : await captureFailure(input.driver, input.reportDir, input.step.index, 'recover');
+    const redactFrom = input.argumentScenario ?? input.scenario;
+    const secrets = collectParameterSecrets(redactFrom, [input.beforeDom, afterDom]);
     const context = {
       scenario: input.scenario,
       step: input.step,
       attempt,
-      error: lastError,
-      beforeDom: input.beforeDom,
-      afterDom,
+      error: redactTextWithSecrets(lastError, secrets),
+      beforeDom: redactSnapshotForRecovery(input.beforeDom, redactFrom, secrets),
+      afterDom: redactSnapshotForRecovery(afterDom, redactFrom, secrets),
       multimodal: input.multimodal,
       ...(screenshotRef !== undefined ? { screenshotPath: screenshotRef } : {})
     };
@@ -419,8 +583,21 @@ async function recoverStep(input: {
       lastError = `recovery produced no patch (attempt ${String(attempt)})`;
       continue;
     }
+    const liveStep = findStepByIndex(input.argumentScenario, input.step.index);
+    if (
+      input.argumentScenario !== undefined &&
+      hasParameterRef(input.step) &&
+      liveStep === undefined
+    ) {
+      return {
+        ok: false,
+        error: `ambiguous or missing recorded step ${String(input.step.index)} for parameterized recovery`,
+        attempts: attempt,
+        ...(screenshotRef !== undefined ? { screenshotRef } : {})
+      };
+    }
     const descriptor = sanitizeRecoveredDescriptor(
-      input.step.action.descriptor,
+      overlayLiveArgumentsForRecovery(input.step.action.descriptor, liveStep),
       recovered.descriptor
     );
     const acted = await performAction(input.driver, descriptor);
@@ -463,7 +640,10 @@ function emit(
   options.onProgress?.(event);
 }
 
-function skippedReport(step: RefinedStep): ExecutionStepReport {
+function skippedReport(
+  step: RefinedStep,
+  reason = 'skipped after previous failure'
+): ExecutionStepReport {
   return {
     index: step.index,
     intent: step.intent,
@@ -472,7 +652,7 @@ function skippedReport(step: RefinedStep): ExecutionStepReport {
     mode: 'script',
     attempts: 1,
     verificationOk: false,
-    error: 'skipped after previous failure'
+    error: reason
   };
 }
 
@@ -529,4 +709,183 @@ function joinBaseUrl(baseUrl: string | undefined, startUrl: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+/** S11a: do not write fail/recover screenshots when filled parameter values may be visible. */
+function skipParameterizedScreenshots(scenario: Scenario): boolean {
+  return scenario.steps.some(hasParameterRef);
+}
+
+/** L7-037: AI recovery sees the recorded/redacted scenario, not dataset-materialized secrets. */
+function scenarioForRecovery(scenario: Scenario): Scenario {
+  return {
+    ...scenario,
+    steps: scenario.steps.map((step) => stepForRecovery(step))
+  };
+}
+
+function stepForRecovery(step: RefinedStep): RefinedStep {
+  return {
+    ...step,
+    action: {
+      ...step.action,
+      descriptor: originalDescriptorForPatch(step)
+    }
+  };
+}
+
+function redactSnapshotForRecovery(
+  snapshot: { url: string; title: string; text: string; values: Record<string, string> },
+  scenario: Scenario,
+  secrets: string[]
+): { url: string; title: string; text: string; values: Record<string, string> } {
+  if (!scenario.steps.some(hasParameterRef)) {
+    return snapshot;
+  }
+  const text = redactTextWithSecrets(snapshot.text, secrets);
+  const url = redactTextWithSecrets(snapshot.url, secrets);
+  const title = redactTextWithSecrets(snapshot.title, secrets);
+  // R19a / L7-161: parameterized recovery must not ship live field values.
+  // Blank the entire map — do not rely on exact raw selector key match.
+  const values: Record<string, string> = {};
+  for (const key of Object.keys(snapshot.values)) {
+    values[key] = '';
+  }
+  return { ...snapshot, values, text, url, title };
+}
+
+/** L7-228: word-boundary redaction must not treat a single OTP digit as a secret. */
+const PARAMETER_SECRET_MIN_LENGTH = 2;
+
+/** L7-194: same parameter-derived secret set for snapshots and lastError. */
+function collectParameterSecrets(
+  scenario: Scenario,
+  snapshots: Array<{ values: Record<string, string> }>
+): string[] {
+  const parameterized = scenario.steps.filter(hasParameterRef);
+  if (parameterized.length === 0) {
+    return [];
+  }
+  const secrets = new Set<string>();
+  for (const step of parameterized) {
+    const selector = step.action.descriptor.selector;
+    for (const snapshot of snapshots) {
+      const live = snapshot.values[selector];
+      if (live !== undefined && live.length >= PARAMETER_SECRET_MIN_LENGTH) {
+        secrets.add(live);
+      }
+    }
+    for (const argument of step.action.descriptor.arguments ?? []) {
+      if (typeof argument === 'string' && argument.length >= PARAMETER_SECRET_MIN_LENGTH) {
+        secrets.add(argument);
+      }
+    }
+  }
+  return [...secrets].sort((left, right) => right.length - left.length);
+}
+
+function redactTextWithSecrets(text: string, secrets: string[]): string {
+  let out = text;
+  for (const secret of secrets) {
+    out = redactSecretFromText(out, secret);
+  }
+  return out;
+}
+
+/** L7-124: redact PIN/OTP/tokens without substring-stripping unrelated words. */
+function redactSecretFromText(text: string, secret: string): string {
+  if (secret.length < PARAMETER_SECRET_MIN_LENGTH) {
+    return text;
+  }
+  const escaped = secret.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'gu');
+  return text.replace(pattern, '');
+}
+
+/** L7-256: dataset-load failure uses the same per-run folder as success. */
+function runArtifactsDir(reportDir: string, runId: string): string {
+  return basename(reportDir) === runId ? reportDir : runPath(reportDir, runId);
+}
+
+async function datasetLoadFailure(input: {
+  scenario: Scenario;
+  resolved: ReturnType<typeof resolveRunnerOptions>;
+  options: RunScenarioHooks & { driver: PageDriver };
+  error: unknown;
+  runId: string;
+  startedAt: Date;
+  smartModel: string;
+  multimodal: boolean;
+  warnings: string[];
+}): Promise<RunScenarioResult> {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  input.warnings.push(`dataset: ${message}`);
+  const report: ExecutionReport = {
+    schemaVersion: 1,
+    runId: input.runId,
+    sessionId: input.scenario.sessionId,
+    startedAt: input.startedAt.toISOString(),
+    finishedAt: new Date().toISOString(),
+    exitCode: 1,
+    headless: input.resolved.headless,
+    aiRecovery: input.resolved.aiRecovery,
+    maxAiRetries: input.resolved.maxAiRetries,
+    smartModel: input.smartModel,
+    multimodal: input.multimodal,
+    warnings: unique(input.warnings),
+    steps: []
+  };
+  let runDir: string | undefined;
+  if (input.resolved.reportDir !== undefined) {
+    runDir = runArtifactsDir(input.resolved.reportDir, input.runId);
+    await writeRunArtifacts({ runDir, report, scenario: input.scenario });
+  }
+  if (input.options.closeDriver === true) {
+    await input.options.driver.close();
+  }
+  const result: RunScenarioResult = { exitCode: 1, report };
+  if (runDir !== undefined) {
+    result.runDir = runDir;
+  }
+  return result;
+}
+
+async function scenarioWithDataset(
+  scenario: Scenario,
+  resolved: ReturnType<typeof resolveRunnerOptions>,
+  options: RunScenarioHooks
+): Promise<Scenario> {
+  const datasetPath = resolved.datasetPath ?? options.datasetPath;
+  if (datasetPath === undefined || datasetPath.length === 0) {
+    assertParameterRefsResolved(scenario);
+    return scenario;
+  }
+  const absolute = resolveDatasetPath(datasetPath, resolved, options);
+  const raw = await loadDatasetFile(absolute);
+  return applyDataset(scenario, parseDataset(raw));
+}
+
+/**
+ * D27a: relative `--dataset` is resolved from `dirname(scenarioPath)` (generated
+ * `scriptDir` when the scenario file path is absent), never `process.cwd()`.
+ */
+function resolveDatasetPath(
+  datasetPath: string,
+  resolved: ReturnType<typeof resolveRunnerOptions>,
+  options: RunScenarioHooks
+): string {
+  if (isAbsolute(datasetPath)) {
+    return resolve(datasetPath);
+  }
+  const scenarioPath = resolved.scenarioPath ?? options.scenarioPath;
+  if (scenarioPath !== undefined && scenarioPath.length > 0) {
+    return resolve(dirname(resolve(scenarioPath)), datasetPath);
+  }
+  const scriptDir = options.scriptDir;
+  if (scriptDir !== undefined && scriptDir.length > 0) {
+    return resolve(scriptDir, datasetPath);
+  }
+  throw new Error(
+    'relative --dataset is resolved from dirname(scenario.json), not process.cwd() (D27a)'
+  );
 }

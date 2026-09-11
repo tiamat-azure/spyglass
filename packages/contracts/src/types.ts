@@ -140,6 +140,8 @@ export type ScenarioHealth = {
     descriptorHash: string;
     consecutiveRuns: number;
     lastRunId: string;
+    /** Distinct ordered run IDs that produced this descriptor (F-63 / L7-001 / L7-128). */
+    runIds: string[];
   }>;
 };
 
@@ -155,7 +157,7 @@ export type Scenario = {
 
 export type ExecutionStepMode = 'script' | 'AI';
 
-export type ExecutionStepStatus = 'passed' | 'failed' | 'skipped';
+export type ExecutionStepStatus = 'passed' | 'failed' | 'skipped' | 'cancelled';
 
 export type ExecutionStepReport = {
   index: number;
@@ -194,7 +196,7 @@ export type SuggestedPatchEntry = {
   confidence: number;
 };
 
-/** F-57 / ADR-0008: written on successful recovery, never auto-applied (Lot 5). */
+/** F-57 / ADR-0008: written on successful recovery, never auto-applied. Lot 7 assisted apply is a git PR, not this flag. */
 export type SuggestedPatch = {
   schemaVersion: 1;
   runId: string;
